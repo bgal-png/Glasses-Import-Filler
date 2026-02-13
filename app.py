@@ -51,7 +51,6 @@ else:
 def get_col_by_id(df, target_id):
     """Finds a column name in the user's file that contains a specific ID number."""
     for col in df.columns:
-        # Looks for "ID: 13" or "ID:13" or "ID 13" in the header string
         if re.search(f"ID[:\s]+{target_id}\\b", col):
             return col
     return None
@@ -73,32 +72,66 @@ def apply_hs_code(row, type_col, mat_col, sport_col):
             return "90049090", f"Type: Sport ({sport_type})"
     return "", "No Match"
 
+def apply_item_description(row, type_col, mat_col):
+    """Logic for Rule 2: Item Description"""
+    g_type = str(row.get(type_col, '')).strip() if type_col else ""
+    material = str(row.get(mat_col, '')).strip().lower() if mat_col else ""
+
+    # Eyeglasses category
+    if g_type in ["Frames", "PC Glasses without power", "Driving Glasses without power", "Reading glasses"]:
+        return "Eyeglasses", f"Match: {g_type}"
+    
+    # Sunglasses category
+    if g_type == "Sunglasses":
+        if "plastic" in material:
+            return "Sunglasses, plastic frame", "Sunglasses + Plastic"
+        if "metal" in material:
+            return "Sunglasses, metal frame", "Sunglasses + Metal"
+        return "Sunglasses", "Sunglasses (Unknown Material)"
+    
+    # Sport glasses
+    if g_type == "Sport glasses":
+        return "Sport glasses", "Exact match: Sport glasses"
+        
+    return "", "No Match"
+
 def run_auto_fill(user_df):
-    # 1. Identify Columns by ID so we don't care about the text name
+    # 1. Identify Columns by ID
     type_col = get_col_by_id(user_df, "13")      # Glasses type
     material_col = get_col_by_id(user_df, "53")  # Main material
     sport_col = get_col_by_id(user_df, "89")     # Sport glasses
-    hs_col = get_col_by_id(user_df, "AO") or "HS Code" # Check for AO or clean name
-
-    # 2. Add HS Code column if it truly doesn't exist at all
-    if hs_col not in user_df.columns:
-        user_df[hs_col] = ""
-
-    # 3. Apply Rules
-    results = user_df.apply(lambda row: apply_hs_code(row, type_col, material_col, sport_col), axis=1)
-    user_df[hs_col] = [r[0] for r in results]
-    reasons = [r[1] for r in results]
     
-    # 4. Generate Report (Using the ID-found columns for display)
+    # Find Item Description (AP) and HS Code (AO) columns
+    # We look for ID: AO/AP or the specific text names
+    hs_col = get_col_by_id(user_df, "AO") or "HS Code"
+    desc_col = get_col_by_id(user_df, "AP") or "Item description"
+
+    # Ensure columns exist
+    if hs_col not in user_df.columns: user_df[hs_col] = ""
+    if desc_col not in user_df.columns: user_df[desc_col] = ""
+
+    # 2. Apply Rule 1: HS Code
+    hs_results = user_df.apply(lambda row: apply_hs_code(row, type_col, material_col, sport_col), axis=1)
+    user_df[hs_col] = [r[0] for r in hs_results]
+    hs_reasons = [r[1] for r in hs_results]
+
+    # 3. Apply Rule 2: Item Description
+    desc_results = user_df.apply(lambda row: apply_item_description(row, type_col, material_col), axis=1)
+    user_df[desc_col] = [r[0] for r in desc_results]
+    desc_reasons = [r[1] for r in desc_results]
+    
+    # 4. Generate Combined Report
     report_df = pd.DataFrame({
-        'Input Type': user_df[type_col] if type_col else "Not Found",
-        'Input Material': user_df[material_col] if material_col else "Not Found",
-        'Result HS Code': user_df[hs_col],
-        'Logic Used': reasons
+        'Type (ID:13)': user_df[type_col] if type_col else "Not Found",
+        'HS Code': user_df[hs_col],
+        'Item Description': user_df[desc_col],
+        'Description Logic': desc_reasons
     })
-    filled_only = report_df[report_df['Result HS Code'] != ""]
     
-    return user_df, filled_only
+    # Show rows where either rule did something
+    modified_rows = report_df[(report_df['HS Code'] != "") | (report_df['Item Description'] != "")]
+    
+    return user_df, modified_rows
 
 # ==========================================
 # 📤 USER INTERFACE
@@ -109,24 +142,23 @@ uploaded_file = st.file_uploader("Choose Excel File", type=['xlsx'])
 
 if uploaded_file:
     user_df = pd.read_excel(uploaded_file, dtype=str)
-    st.write(f"Loaded {len(user_df)} rows. Found {len(user_df.columns)} columns.")
+    st.write(f"Loaded {len(user_df)} rows. Headers preserved.")
 
     st.divider()
     st.subheader("2. Run Auto-Fill")
     
     if st.button("✨ Auto-Fill Data", type="primary"):
-        with st.spinner("Applying rules..."):
-            # We work on a copy to keep the original safe
+        with st.spinner("Applying Rules 1 & 2..."):
             working_df = user_df.copy()
             filled_df, report = run_auto_fill(working_df)
             
             st.success(f"✅ Processing Complete!")
             
-            with st.expander("📊 View Processing Report (Testing Mode)", expanded=True):
+            with st.expander("📊 View Processing Report (Rules 1 & 2)", expanded=True):
                 if not report.empty:
                     st.dataframe(report, use_container_width=True)
                 else:
-                    st.info("No HS Codes were filled based on Rule 1 logic.")
+                    st.info("No rules were triggered for this file.")
             
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
@@ -134,7 +166,7 @@ if uploaded_file:
             buffer.seek(0)
             
             st.download_button(
-                label="📥 Download Ready-to-Import File",
+                label="📥 Download Formatted Excel",
                 data=buffer,
                 file_name="filled_glasses_data.xlsx",
                 mime="application/vnd.ms-excel"
