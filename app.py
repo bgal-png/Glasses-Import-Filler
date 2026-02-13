@@ -10,7 +10,6 @@ st.title("⚡ Excel Data Filler: Glasses Edition")
 # ==========================================
 # 🔒 INDESTRUCTIBLE LOADER (LOCKED VERSION)
 # 🛑 WARNING: DO NOT MODIFY THIS FUNCTION UNDER ANY CIRCUMSTANCES.
-# 🛑 THIS IS THE ONLY VERSION THAT WORKS RELIABLY.
 # ==========================================
 @st.cache_data
 def load_master():
@@ -70,10 +69,19 @@ def load_master():
 # 🛑 END OF LOCKED LOADER
 # ==========================================
 
-# Load Master immediately
-master_df = load_master()
-if not master_df.empty:
-    st.success(f"✅ Brain Loaded: {len(master_df)} rows from Master Database")
+# 1. Load the raw data (Safe)
+raw_master_df = load_master()
+
+# 2. Apply Filter (Outside the loader, so the loader never breaks)
+target_col = next((c for c in raw_master_df.columns if "Items type" in c), None)
+
+if target_col:
+    # Keep only rows where 'Items type' is 'Glasses'
+    master_df = raw_master_df[raw_master_df[target_col] == "Glasses"]
+    st.success(f"✅ Brain Loaded: {len(master_df)} valid glasses rows (Filtered from {len(raw_master_df)} total).")
+else:
+    st.error("❌ 'Items type' column missing in Master File. Cannot filter.")
+    st.stop()
 
 # ==========================================
 # 🧠 THE BRAIN: FILLING LOGIC
