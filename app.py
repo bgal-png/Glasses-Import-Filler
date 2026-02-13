@@ -39,7 +39,7 @@ def load_master():
     df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
     return df
 
-# Load and Filter Master
+# Load Master Data
 raw_master_df = load_master()
 target_col = next((c for c in raw_master_df.columns if "items type" in c.lower()), None)
 if target_col:
@@ -70,7 +70,11 @@ def apply_hs_code(row):
     return "", "No Match"
 
 def run_auto_fill(user_df):
-    TARGET_COLUMNS = [
+    """
+    Standardizes the file WITHOUT changing the original column order.
+    """
+    # All 35 columns we care about
+    REQUIRED_COLUMNS = [
         "Glasses type", "Manufacturer", "Brand", "Producing company",
         "Glasses size: glasses width", "Glasses size: temple length", 
         "Glasses size: lens height", "Glasses size: lens width", "Glasses size: bridge",
@@ -86,23 +90,23 @@ def run_auto_fill(user_df):
         "HS Code", "Item description"
     ]
     
-    for col in TARGET_COLUMNS:
+    # 1. ADD MISSING COLUMNS (Only if they don't exist in the uploaded file)
+    for col in REQUIRED_COLUMNS:
         if col not in user_df.columns:
             user_df[col] = "" 
             
-    # Apply Rule 1 and collect report data
+    # 2. APPLY RULES (Directly onto existing columns)
     results = user_df.apply(apply_hs_code, axis=1)
     user_df['HS Code'] = [r[0] for r in results]
     reasons = [r[1] for r in results]
     
-    # Create a summary report for testing
+    # 3. GENERATE REPORT (For Testing)
     report_df = user_df[['Glasses type', 'Glasses main material', 'HS Code']].copy()
     report_df['Reason/Logic'] = reasons
-    # Only show rows where an HS Code was actually filled
     filled_only = report_df[report_df['HS Code'] != ""]
     
-    final_cols = TARGET_COLUMNS + [c for c in user_df.columns if c not in TARGET_COLUMNS]
-    return user_df[final_cols], filled_only
+    # 4. RETURN (User's order is preserved naturally)
+    return user_df, filled_only
 
 # ==========================================
 # 📤 USER INTERFACE
@@ -113,7 +117,7 @@ uploaded_file = st.file_uploader("Choose Excel File", type=['xlsx'])
 
 if uploaded_file:
     user_df = pd.read_excel(uploaded_file, dtype=str)
-    st.write(f"Loaded {len(user_df)} rows.")
+    st.write(f"Loaded {len(user_df)} rows with columns: {list(user_df.columns)}")
 
     st.divider()
     st.subheader("2. Run Auto-Fill")
@@ -126,8 +130,10 @@ if uploaded_file:
             
             # --- TESTING REPORT SECTION ---
             with st.expander("📊 View Processing Report (Testing Mode)", expanded=True):
-                st.write(f"I filled **{len(report)}** HS Codes based on your rules:")
-                st.dataframe(report, use_container_width=True)
+                if not report.empty:
+                    st.dataframe(report, use_container_width=True)
+                else:
+                    st.info("No HS Codes were filled based on Rule 1.")
             
             # DOWNLOAD
             buffer = io.BytesIO()
@@ -136,7 +142,7 @@ if uploaded_file:
             buffer.seek(0)
             
             st.download_button(
-                label="📥 Download Ready-to-Import File",
+                label="📥 Download Formatted Excel",
                 data=buffer,
                 file_name="filled_glasses_data.xlsx",
                 mime="application/vnd.ms-excel"
