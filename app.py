@@ -20,7 +20,6 @@ def load_master():
     3. If that fails, tries CSV with comma/semicolon explicitly.
     """
     current_dir = os.getcwd()
-    # Find the master file (ignoring temp files like ~$)
     candidates = [f for f in os.listdir(current_dir) if (f.endswith('.xlsx') or f.endswith('.csv')) and "master_clean" in f and not f.startswith('~$')]
     
     if not candidates:
@@ -35,27 +34,19 @@ def load_master():
     except Exception:
         # ATTEMPT 2: CSV (Fallback loop)
         strategies = [
-            {'sep': None, 'engine': 'python'}, # Auto-detect
-            {'sep': ',', 'engine': 'c'},       # Standard Comma
-            {'sep': ';', 'engine': 'c'},       # Semicolon
-            {'sep': '\t', 'engine': 'c'}       # Tab
+            {'sep': None, 'engine': 'python'}, 
+            {'sep': ',', 'engine': 'c'},       
+            {'sep': ';', 'engine': 'c'},       
+            {'sep': '\t', 'engine': 'c'}       
         ]
         
         for enc in ['utf-8', 'cp1252', 'latin1']:
             for strat in strategies:
                 try:
-                    df = pd.read_csv(
-                        file_path, 
-                        dtype=str, 
-                        encoding=enc, 
-                        on_bad_lines='skip', 
-                        **strat
-                    )
+                    df = pd.read_csv(file_path, dtype=str, encoding=enc, on_bad_lines='skip', **strat)
                     break
-                except:
-                    continue
-            if df is not None:
-                break
+                except: continue
+            if df is not None: break
     
     if df is None:
         st.error(f"❌ Could not read '{file_path}'. Tried Excel and all CSV formats.")
@@ -72,25 +63,23 @@ def load_master():
 # 1. Load the raw data (Safe)
 raw_master_df = load_master()
 
-# 2. Apply Filter (Outside the loader, so the loader never breaks)
-target_col = next((c for c in raw_master_df.columns if "Items type" in c), None)
+# 2. Apply Filter (Smart Case-Insensitive Search)
+# Looks for 'items type' regardless of Capital Letters (Items Type, ITEMS TYPE, etc.)
+target_col = next((c for c in raw_master_df.columns if "items type" in c.lower()), None)
 
 if target_col:
-    # Keep only rows where 'Items type' is 'Glasses'
-    master_df = raw_master_df[raw_master_df[target_col] == "Glasses"]
-    st.success(f"✅ Brain Loaded: {len(master_df)} valid glasses rows (Filtered from {len(raw_master_df)} total).")
+    # Keep only rows where the found column says 'Glasses' (also fuzzy match just in case)
+    master_df = raw_master_df[raw_master_df[target_col].str.lower().str.strip() == "glasses"]
+    st.success(f"✅ Brain Loaded: {len(master_df)} valid glasses rows.")
 else:
-    st.error("❌ 'Items type' column missing in Master File. Cannot filter.")
+    # If it fails, show the user what columns IT DID find, so we can debug.
+    st.error(f"❌ Could not find 'Items type' column. I see these columns: {list(raw_master_df.columns)}")
     st.stop()
 
 # ==========================================
 # 🧠 THE BRAIN: FILLING LOGIC
 # ==========================================
 def run_auto_fill(user_df, master_df):
-    """
-    Takes the user's partial data and fills in the blanks.
-    """
-    # 1. DEFINE TARGET COLUMNS
     TARGET_COLUMNS = [
         "Glasses type", "Manufacturer", "Brand", "Producing company",
         "Glasses size: glasses width", "Glasses size: temple length", 
@@ -106,15 +95,13 @@ def run_auto_fill(user_df, master_df):
         "Glasses lenses no-orders", "Glasses other info"
     ]
     
-    # 2. CREATE MISSING COLUMNS
     for col in TARGET_COLUMNS:
         if col not in user_df.columns:
             user_df[col] = "" 
             
-    # 3. APPLY RULES (Placeholder)
-    user_df['Items type'] = 'Glasses' # Default Rule
+    # Default Rule
+    user_df['Items type'] = 'Glasses' 
     
-    # 4. REORDER
     final_cols = TARGET_COLUMNS + [c for c in user_df.columns if c not in TARGET_COLUMNS]
     return user_df[final_cols]
 
@@ -141,7 +128,6 @@ if uploaded_file:
             filled_df = run_auto_fill(user_df, master_df)
             st.success("✅ Done!")
             
-            # DOWNLOAD
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                 filled_df.to_excel(writer, index=False)
