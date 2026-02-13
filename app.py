@@ -8,7 +8,9 @@ st.set_page_config(page_title="Excel Auto-Filler", layout="wide")
 st.title("⚡ Excel Data Filler: Glasses Edition")
 
 # ==========================================
-# 🔒 INDESTRUCTIBLE LOADER (With Filter)
+# 🔒 INDESTRUCTIBLE LOADER (LOCKED VERSION)
+# 🛑 WARNING: DO NOT MODIFY THIS FUNCTION UNDER ANY CIRCUMSTANCES.
+# 🛑 THIS IS THE ONLY VERSION THAT WORKS RELIABLY.
 # ==========================================
 @st.cache_data
 def load_master():
@@ -17,7 +19,6 @@ def load_master():
     1. Tries Excel (.xlsx)
     2. If that fails, tries CSV with Auto-Separator.
     3. If that fails, tries CSV with comma/semicolon explicitly.
-    4. FINALLY: Filters for 'Glasses' in 'Items type'
     """
     current_dir = os.getcwd()
     # Find the master file (ignoring temp files like ~$)
@@ -29,7 +30,6 @@ def load_master():
     file_path = candidates[0]
     df = None
     
-    # --- START OF INDESTRUCTIBLE LOADING LOGIC (UNTOUCHED) ---
     # ATTEMPT 1: EXCEL (Standard)
     try:
         df = pd.read_excel(file_path, dtype=str, engine='openpyxl')
@@ -61,29 +61,22 @@ def load_master():
     if df is None:
         st.error(f"❌ Could not read '{file_path}'. Tried Excel and all CSV formats.")
         st.stop()
-    # --- END OF INDESTRUCTIBLE LOADING LOGIC ---
 
     # Clean headers (Standardize)
     df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
     
-    # 🔍 FILTER LOGIC (Added here at the end)
-    # We look for "Items type" (Column V) and keep only "Glasses"
-    target_col = next((c for c in df.columns if "Items type" in c), None)
-    
-    if target_col:
-        df = df[df[target_col] == "Glasses"]
-    else:
-        st.error("❌ 'Items type' column missing in Master File."); st.stop()
-    
     return df
+# ==========================================
+# 🛑 END OF LOCKED LOADER
+# ==========================================
 
-# Load Master immediately to check if it works
+# Load Master immediately
 master_df = load_master()
 if not master_df.empty:
-    st.success(f"✅ Brain Loaded: {len(master_df)} valid glasses rows.")
+    st.success(f"✅ Brain Loaded: {len(master_df)} rows from Master Database")
 
 # ==========================================
-# 🧠 THE BRAIN: FILLING LOGIC (Placeholder for now)
+# 🧠 THE BRAIN: FILLING LOGIC
 # ==========================================
 def run_auto_fill(user_df, master_df):
     """
@@ -110,7 +103,7 @@ def run_auto_fill(user_df, master_df):
         if col not in user_df.columns:
             user_df[col] = "" 
             
-    # 3. APPLY RULES (We will add these next!)
+    # 3. APPLY RULES (Placeholder)
     user_df['Items type'] = 'Glasses' # Default Rule
     
     # 4. REORDER
