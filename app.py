@@ -8,15 +8,20 @@ st.set_page_config(page_title="Excel Auto-Filler", layout="wide")
 st.title("⚡ Excel Data Filler: Glasses Edition")
 
 # ==========================================
-# 🔒 LOADER: Indestructible + Filtered
+# 🔒 INDESTRUCTIBLE LOADER (LOCKED)
+# DO NOT MODIFY THIS FUNCTION - IT IS CRITICAL FOR STABILITY
 # ==========================================
 @st.cache_data
 def load_master():
     """
-    1. Loads master_clean.xlsx (Indestructible Mode)
-    2. Filters ONLY for 'Glasses' rows (Just like Validator)
+    TRULY INDESTRUCTIBLE LOADER
+    1. Tries Excel (.xlsx)
+    2. If that fails, tries CSV with Auto-Separator.
+    3. If that fails, tries CSV with comma/semicolon explicitly.
+    4. Filters ONLY for 'Glasses' rows.
     """
     current_dir = os.getcwd()
+    # Find the master file (ignoring temp files like ~$)
     candidates = [f for f in os.listdir(current_dir) if (f.endswith('.xlsx') or f.endswith('.csv')) and "master_clean" in f and not f.startswith('~$')]
     
     if not candidates:
@@ -25,32 +30,42 @@ def load_master():
     file_path = candidates[0]
     df = None
     
-    # ATTEMPT 1: EXCEL
+    # ATTEMPT 1: EXCEL (Standard)
     try:
         df = pd.read_excel(file_path, dtype=str, engine='openpyxl')
     except Exception:
-        # ATTEMPT 2: CSV
+        # ATTEMPT 2: CSV (Fallback loop)
         strategies = [
-            {'sep': None, 'engine': 'python'}, 
-            {'sep': ',', 'engine': 'c'}, 
-            {'sep': ';', 'engine': 'c'}, 
-            {'sep': '\t', 'engine': 'c'}
+            {'sep': None, 'engine': 'python'}, # Auto-detect
+            {'sep': ',', 'engine': 'c'},       # Standard Comma
+            {'sep': ';', 'engine': 'c'},       # Semicolon
+            {'sep': '\t', 'engine': 'c'}       # Tab
         ]
+        
         for enc in ['utf-8', 'cp1252', 'latin1']:
             for strat in strategies:
                 try:
-                    df = pd.read_csv(file_path, dtype=str, encoding=enc, on_bad_lines='skip', **strat)
+                    df = pd.read_csv(
+                        file_path, 
+                        dtype=str, 
+                        encoding=enc, 
+                        on_bad_lines='skip', 
+                        **strat
+                    )
                     break
-                except: continue
-            if df is not None: break
+                except:
+                    continue
+            if df is not None:
+                break
     
     if df is None:
-        st.error(f"❌ Could not read '{file_path}'."); st.stop()
+        st.error(f"❌ Could not read '{file_path}'. Tried Excel and all CSV formats.")
+        st.stop()
 
-    # Clean headers
+    # Clean headers (Standardize)
     df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
     
-    # 🔍 FILTER LOGIC (The new part)
+    # 🔍 FILTER LOGIC
     target_col = next((c for c in df.columns if "Items type" in c), None)
     if target_col:
         # Only keep rows where Items type is "Glasses"
@@ -90,13 +105,12 @@ def run_auto_fill(user_df, master_df):
     # 2. CREATE MISSING COLUMNS
     for col in TARGET_COLUMNS:
         if col not in user_df.columns:
-            user_df[col] = "" # Create empty column if missing
+            user_df[col] = "" 
             
-    # 3. APPLY RULES (We will add your real rules here next!)
-    user_df['Items type'] = 'Glasses' # Default Rule
+    # 3. APPLY RULES (Currently Default)
+    user_df['Items type'] = 'Glasses'
     
     # 4. REORDER
-    # Puts the 33 standard columns first, keeps any extra user columns at the end
     final_cols = TARGET_COLUMNS + [c for c in user_df.columns if c not in TARGET_COLUMNS]
     return user_df[final_cols]
 
