@@ -54,7 +54,6 @@ def load_master():
 
     # Clean headers (Standardize)
     df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
-    
     return df
 # ==========================================
 # 🛑 END OF LOCKED LOADER
@@ -64,15 +63,12 @@ def load_master():
 raw_master_df = load_master()
 
 # 2. Apply Filter (Smart Case-Insensitive Search)
-# Looks for 'items type' regardless of Capital Letters (Items Type, ITEMS TYPE, etc.)
 target_col = next((c for c in raw_master_df.columns if "items type" in c.lower()), None)
-
 if target_col:
-    # Keep only rows where the found column says 'Glasses' (also fuzzy match just in case)
+    # Keep only rows where 'Items type' is 'Glasses'
     master_df = raw_master_df[raw_master_df[target_col].str.lower().str.strip() == "glasses"]
     st.success(f"✅ Brain Loaded: {len(master_df)} valid glasses rows.")
 else:
-    # If it fails, show the user what columns IT DID find, so we can debug.
     st.error(f"❌ Could not find 'Items type' column. I see these columns: {list(raw_master_df.columns)}")
     st.stop()
 
@@ -80,28 +76,40 @@ else:
 # 🧠 THE BRAIN: FILLING LOGIC
 # ==========================================
 def run_auto_fill(user_df, master_df):
+    """
+    Takes the user's partial data and standardizes the columns.
+    """
+    # 1. DEFINE TARGET COLUMNS (33 Standard + 2 New)
     TARGET_COLUMNS = [
         "Glasses type", "Manufacturer", "Brand", "Producing company",
         "Glasses size: glasses width", "Glasses size: temple length", 
         "Glasses size: lens height", "Glasses size: lens width", "Glasses size: bridge",
-        "Glasses shape", "Glasses frame type", "Glasses frame color", 
-        "Glasses temple color", "Glasses main material", 
+        "Glasses size: glasses to bend length", "Glasses shape", "Glasses frame type", 
+        "Glasses frame color", "Glasses temple color", "Glasses main material", 
         "Glasses lens color", "Glasses lens material", "Glasses lens effect",
         "Sunglasses filter", "UV filter", "SunGlasses RX lenses",
         "Glasses genre", "Glasses usable", "Glasses collection",
         "Items type", "Items packing", "Glasses contain", 
         "Sport glasses", "Glasses frame color effect", "Glasses other features",
         "Glasses clip-on lens color", "Glasses for your face shape", 
-        "Glasses lenses no-orders", "Glasses other info"
+        "Glasses lenses no-orders", "Glasses other info",
+        
+        # --- NEW COLUMNS (AO & AP) ---
+        "HS Code",           # Column AO
+        "Item description"   # Column AP
     ]
     
+    # 2. CREATE MISSING COLUMNS
+    # Ensures every output file has all headers, even if they start empty.
     for col in TARGET_COLUMNS:
         if col not in user_df.columns:
             user_df[col] = "" 
             
-    # Default Rule
-    user_df['Items type'] = 'Glasses' 
+    # 3. APPLY RULES (Ready for your first instruction!)
+    # We will add your rules here one by one.
     
+    # 4. REORDER
+    # This keeps our target 35 columns first in the specific order.
     final_cols = TARGET_COLUMNS + [c for c in user_df.columns if c not in TARGET_COLUMNS]
     return user_df[final_cols]
 
@@ -128,6 +136,7 @@ if uploaded_file:
             filled_df = run_auto_fill(user_df, master_df)
             st.success("✅ Done!")
             
+            # DOWNLOAD
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                 filled_df.to_excel(writer, index=False)
