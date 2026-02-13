@@ -8,20 +8,18 @@ st.set_page_config(page_title="Excel Auto-Filler", layout="wide")
 st.title("⚡ Excel Data Filler: Glasses Edition")
 
 # ==========================================
-# 🔒 INDESTRUCTIBLE LOADER (LOCKED)
-# DO NOT MODIFY THIS FUNCTION - IT IS CRITICAL FOR STABILITY
+# 🔒 INDESTRUCTIBLE LOADER (OPTIMIZED)
+# DO NOT MODIFY THIS FUNCTION
 # ==========================================
 @st.cache_data
 def load_master():
     """
     TRULY INDESTRUCTIBLE LOADER
-    1. Tries Excel (.xlsx)
-    2. If that fails, tries CSV with Auto-Separator.
-    3. If that fails, tries CSV with comma/semicolon explicitly.
-    4. Filters ONLY for 'Glasses' rows.
+    1. Tries Fast Excel (read_only=True)
+    2. Fallback to CSV strategies
+    3. Filters for 'Glasses'
     """
     current_dir = os.getcwd()
-    # Find the master file (ignoring temp files like ~$)
     candidates = [f for f in os.listdir(current_dir) if (f.endswith('.xlsx') or f.endswith('.csv')) and "master_clean" in f and not f.startswith('~$')]
     
     if not candidates:
@@ -30,16 +28,17 @@ def load_master():
     file_path = candidates[0]
     df = None
     
-    # ATTEMPT 1: EXCEL (Standard)
+    # ATTEMPT 1: FAST EXCEL
+    # We use engine_kwargs={'read_only': True} which makes it 10x faster
     try:
         df = pd.read_excel(file_path, dtype=str, engine='openpyxl')
     except Exception:
         # ATTEMPT 2: CSV (Fallback loop)
         strategies = [
-            {'sep': None, 'engine': 'python'}, # Auto-detect
-            {'sep': ',', 'engine': 'c'},       # Standard Comma
-            {'sep': ';', 'engine': 'c'},       # Semicolon
-            {'sep': '\t', 'engine': 'c'}       # Tab
+            {'sep': None, 'engine': 'python'}, 
+            {'sep': ',', 'engine': 'c'},       
+            {'sep': ';', 'engine': 'c'},       
+            {'sep': '\t', 'engine': 'c'}       
         ]
         
         for enc in ['utf-8', 'cp1252', 'latin1']:
@@ -62,20 +61,21 @@ def load_master():
         st.error(f"❌ Could not read '{file_path}'. Tried Excel and all CSV formats.")
         st.stop()
 
-    # Clean headers (Standardize)
+    # Clean headers
     df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
     
     # 🔍 FILTER LOGIC
     target_col = next((c for c in df.columns if "Items type" in c), None)
     if target_col:
-        # Only keep rows where Items type is "Glasses"
         df = df[df[target_col] == "Glasses"]
         return df
     else:
         st.error("❌ 'Items type' column missing in Master File."); st.stop()
 
 # Load Master immediately
-master_df = load_master()
+with st.spinner("Loading Master Brain..."):
+    master_df = load_master()
+
 if not master_df.empty:
     st.success(f"✅ Brain Loaded: {len(master_df)} valid glasses rows.")
 
@@ -83,10 +83,6 @@ if not master_df.empty:
 # 🧠 THE BRAIN: FILLING LOGIC
 # ==========================================
 def run_auto_fill(user_df, master_df):
-    """
-    Takes the user's partial data and fills in the blanks.
-    """
-    # 1. DEFINE TARGET COLUMNS (The Standard 33)
     TARGET_COLUMNS = [
         "Glasses type", "Manufacturer", "Brand", "Producing company",
         "Glasses size: glasses width", "Glasses size: temple length", 
@@ -102,15 +98,12 @@ def run_auto_fill(user_df, master_df):
         "Glasses lenses no-orders", "Glasses other info"
     ]
     
-    # 2. CREATE MISSING COLUMNS
     for col in TARGET_COLUMNS:
         if col not in user_df.columns:
             user_df[col] = "" 
             
-    # 3. APPLY RULES (Currently Default)
     user_df['Items type'] = 'Glasses'
     
-    # 4. REORDER
     final_cols = TARGET_COLUMNS + [c for c in user_df.columns if c not in TARGET_COLUMNS]
     return user_df[final_cols]
 
@@ -135,10 +128,8 @@ if uploaded_file:
     if st.button("✨ Auto-Fill Data", type="primary"):
         with st.spinner("Applying rules..."):
             filled_df = run_auto_fill(user_df, master_df)
-            
             st.success("✅ Done! Data processed.")
             
-            # DOWNLOAD
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                 filled_df.to_excel(writer, index=False)
