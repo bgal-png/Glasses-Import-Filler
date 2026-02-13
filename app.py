@@ -4,7 +4,7 @@ import io
 
 # 1. App Title
 st.set_page_config(page_title="Excel Filler Tool", layout="centered")
-st.title("⚡ Excel Auto-Filler (Prototype)")
+st.title("⚡ Ecel Auto-Filler (Prototype)")
 st.info("This tool will eventually fill in missing data automatically.")
 
 # 2. Input Section (Placeholder)
