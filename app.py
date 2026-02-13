@@ -9,16 +9,9 @@ st.title("⚡ Excel Data Filler: Glasses Edition")
 
 # ==========================================
 # 🔒 INDESTRUCTIBLE LOADER (LOCKED VERSION)
-# 🛑 WARNING: DO NOT MODIFY THIS FUNCTION UNDER ANY CIRCUMSTANCES.
 # ==========================================
 @st.cache_data
 def load_master():
-    """
-    TRULY INDESTRUCTIBLE LOADER
-    1. Tries Excel (.xlsx)
-    2. If that fails, tries CSV with Auto-Separator.
-    3. If that fails, tries CSV with comma/semicolon explicitly.
-    """
     current_dir = os.getcwd()
     candidates = [f for f in os.listdir(current_dir) if (f.endswith('.xlsx') or f.endswith('.csv')) and "master_clean" in f and not f.startswith('~$')]
     
@@ -28,18 +21,10 @@ def load_master():
     file_path = candidates[0]
     df = None
     
-    # ATTEMPT 1: EXCEL (Standard)
     try:
         df = pd.read_excel(file_path, dtype=str, engine='openpyxl')
     except Exception:
-        # ATTEMPT 2: CSV (Fallback loop)
-        strategies = [
-            {'sep': None, 'engine': 'python'}, 
-            {'sep': ',', 'engine': 'c'},       
-            {'sep': ';', 'engine': 'c'},       
-            {'sep': '\t', 'engine': 'c'}       
-        ]
-        
+        strategies = [{'sep': None, 'engine': 'python'}, {'sep': ',', 'engine': 'c'}, {'sep': ';', 'engine': 'c'}, {'sep': '\t', 'engine': 'c'}]
         for enc in ['utf-8', 'cp1252', 'latin1']:
             for strat in strategies:
                 try:
@@ -49,27 +34,19 @@ def load_master():
             if df is not None: break
     
     if df is None:
-        st.error(f"❌ Could not read '{file_path}'. Tried Excel and all CSV formats.")
-        st.stop()
+        st.error(f"❌ Could not read '{file_path}'."); st.stop()
 
-    # Clean headers (Standardize)
     df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
     return df
-# ==========================================
-# 🛑 END OF LOCKED LOADER
-# ==========================================
 
-# 1. Load the raw data (Safe)
+# Load and Filter Master
 raw_master_df = load_master()
-
-# 2. Apply Filter (Smart Case-Insensitive Search)
 target_col = next((c for c in raw_master_df.columns if "items type" in c.lower()), None)
 if target_col:
     master_df = raw_master_df[raw_master_df[target_col].str.lower().str.strip() == "glasses"]
     st.success(f"✅ Brain Loaded: {len(master_df)} valid glasses rows.")
 else:
-    st.error(f"❌ Could not find 'Items type' column. I see these columns: {list(raw_master_df.columns)}")
-    st.stop()
+    st.error("❌ 'Items type' column missing."); st.stop()
 
 # ==========================================
 # 🧠 THE BRAIN: FILLING LOGIC
@@ -80,30 +57,19 @@ def apply_hs_code(row):
     material = str(row.get('Glasses main material', '')).strip().lower()
     sport_type = str(row.get('Sport glasses', '')).strip().lower()
 
-    # 1. Sunglasses
     if g_type == "Sunglasses":
-        return "90041091"
-    
-    # 2. Frames + Plastic
+        return "90041091", "Type: Sunglasses"
     if g_type == "Frames" and "plastic" in material:
-        return "90031100"
-    
-    # 3. Frames + Metal
+        return "90031100", "Type: Frames + Material: Plastic"
     if g_type == "Frames" and "metal" in material:
-        return "90031900"
-    
-    # 4. Sport Glasses (Swim / Ski / Snowboard)
+        return "90031900", "Type: Frames + Material: Metal"
     if g_type == "Sport glasses":
-        if "swimm" in sport_type or "swim" in sport_type or "ski" in sport_type or "snowboard" in sport_type:
-            return "90049090"
+        if any(x in sport_type for x in ["swimm", "swim", "ski", "snowboard"]):
+            return "90049090", f"Type: Sport ({sport_type})"
             
-    return "" # Default empty if no rule matches
+    return "", "No Match"
 
-def run_auto_fill(user_df, master_df):
-    """
-    Takes the user's partial data and standardizes the columns.
-    """
-    # 1. DEFINE TARGET COLUMNS (33 Standard + 2 New)
+def run_auto_fill(user_df):
     TARGET_COLUMNS = [
         "Glasses type", "Manufacturer", "Brand", "Producing company",
         "Glasses size: glasses width", "Glasses size: temple length", 
@@ -120,18 +86,23 @@ def run_auto_fill(user_df, master_df):
         "HS Code", "Item description"
     ]
     
-    # 2. CREATE MISSING COLUMNS
     for col in TARGET_COLUMNS:
         if col not in user_df.columns:
             user_df[col] = "" 
             
-    # 3. APPLY RULES
-    # RULE 1: HS Code
-    user_df['HS Code'] = user_df.apply(apply_hs_code, axis=1)
+    # Apply Rule 1 and collect report data
+    results = user_df.apply(apply_hs_code, axis=1)
+    user_df['HS Code'] = [r[0] for r in results]
+    reasons = [r[1] for r in results]
     
-    # 4. REORDER
+    # Create a summary report for testing
+    report_df = user_df[['Glasses type', 'Glasses main material', 'HS Code']].copy()
+    report_df['Reason/Logic'] = reasons
+    # Only show rows where an HS Code was actually filled
+    filled_only = report_df[report_df['HS Code'] != ""]
+    
     final_cols = TARGET_COLUMNS + [c for c in user_df.columns if c not in TARGET_COLUMNS]
-    return user_df[final_cols]
+    return user_df[final_cols], filled_only
 
 # ==========================================
 # 📤 USER INTERFACE
@@ -141,11 +112,7 @@ st.subheader("1. Upload Partial Data")
 uploaded_file = st.file_uploader("Choose Excel File", type=['xlsx'])
 
 if uploaded_file:
-    try:
-        user_df = pd.read_excel(uploaded_file, dtype=str)
-    except:
-        user_df = pd.read_csv(uploaded_file, dtype=str)
-        
+    user_df = pd.read_excel(uploaded_file, dtype=str)
     st.write(f"Loaded {len(user_df)} rows.")
 
     st.divider()
@@ -153,8 +120,14 @@ if uploaded_file:
     
     if st.button("✨ Auto-Fill Data", type="primary"):
         with st.spinner("Applying rules..."):
-            filled_df = run_auto_fill(user_df, master_df)
-            st.success("✅ Done! Rule 1 Applied.")
+            filled_df, report = run_auto_fill(user_df)
+            
+            st.success(f"✅ Processing Complete!")
+            
+            # --- TESTING REPORT SECTION ---
+            with st.expander("📊 View Processing Report (Testing Mode)", expanded=True):
+                st.write(f"I filled **{len(report)}** HS Codes based on your rules:")
+                st.dataframe(report, use_container_width=True)
             
             # DOWNLOAD
             buffer = io.BytesIO()
