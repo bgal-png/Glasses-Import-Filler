@@ -65,7 +65,6 @@ raw_master_df = load_master()
 # 2. Apply Filter (Smart Case-Insensitive Search)
 target_col = next((c for c in raw_master_df.columns if "items type" in c.lower()), None)
 if target_col:
-    # Keep only rows where 'Items type' is 'Glasses'
     master_df = raw_master_df[raw_master_df[target_col].str.lower().str.strip() == "glasses"]
     st.success(f"✅ Brain Loaded: {len(master_df)} valid glasses rows.")
 else:
@@ -75,6 +74,31 @@ else:
 # ==========================================
 # 🧠 THE BRAIN: FILLING LOGIC
 # ==========================================
+def apply_hs_code(row):
+    """Logic for Rule 1: HS Code"""
+    g_type = str(row.get('Glasses type', '')).strip()
+    material = str(row.get('Glasses main material', '')).strip().lower()
+    sport_type = str(row.get('Sport glasses', '')).strip().lower()
+
+    # 1. Sunglasses
+    if g_type == "Sunglasses":
+        return "90041091"
+    
+    # 2. Frames + Plastic
+    if g_type == "Frames" and "plastic" in material:
+        return "90031100"
+    
+    # 3. Frames + Metal
+    if g_type == "Frames" and "metal" in material:
+        return "90031900"
+    
+    # 4. Sport Glasses (Swim / Ski / Snowboard)
+    if g_type == "Sport glasses":
+        if "swimm" in sport_type or "swim" in sport_type or "ski" in sport_type or "snowboard" in sport_type:
+            return "90049090"
+            
+    return "" # Default empty if no rule matches
+
 def run_auto_fill(user_df, master_df):
     """
     Takes the user's partial data and standardizes the columns.
@@ -93,23 +117,19 @@ def run_auto_fill(user_df, master_df):
         "Sport glasses", "Glasses frame color effect", "Glasses other features",
         "Glasses clip-on lens color", "Glasses for your face shape", 
         "Glasses lenses no-orders", "Glasses other info",
-        
-        # --- NEW COLUMNS (AO & AP) ---
-        "HS Code",           # Column AO
-        "Item description"   # Column AP
+        "HS Code", "Item description"
     ]
     
     # 2. CREATE MISSING COLUMNS
-    # Ensures every output file has all headers, even if they start empty.
     for col in TARGET_COLUMNS:
         if col not in user_df.columns:
             user_df[col] = "" 
             
-    # 3. APPLY RULES (Ready for your first instruction!)
-    # We will add your rules here one by one.
+    # 3. APPLY RULES
+    # RULE 1: HS Code
+    user_df['HS Code'] = user_df.apply(apply_hs_code, axis=1)
     
     # 4. REORDER
-    # This keeps our target 35 columns first in the specific order.
     final_cols = TARGET_COLUMNS + [c for c in user_df.columns if c not in TARGET_COLUMNS]
     return user_df[final_cols]
 
@@ -134,7 +154,7 @@ if uploaded_file:
     if st.button("✨ Auto-Fill Data", type="primary"):
         with st.spinner("Applying rules..."):
             filled_df = run_auto_fill(user_df, master_df)
-            st.success("✅ Done!")
+            st.success("✅ Done! Rule 1 Applied.")
             
             # DOWNLOAD
             buffer = io.BytesIO()
