@@ -4,8 +4,8 @@ import os
 import io
 import re
 
-# 1. Page Configuration
-st.set_config(page_title="Excel Auto-Filler", layout="wide")
+# 1. Page Configuration - FIXED: changed set_config to set_page_config
+st.set_page_config(page_title="Excel Auto-Filler", layout="wide")
 st.title("⚡ Excel Data Filler: Glasses Edition")
 
 # ==========================================
@@ -63,10 +63,9 @@ def apply_hs_code(row, type_col, mat_col, sport_col):
 
     # GROUP 1: Sunglasses & Sport Glasses logic
     if g_type in ["Sunglasses", "Sport glasses"]:
-        # If it's specifically Swim/Ski goggles, use the specialty code
+        # Specialty fallback for Swim/Ski
         if any(x in sport_val for x in ["swimm", "swim", "ski", "snowboard"]):
             return "90049090", "Sport Specialty (Swim/Ski)"
-        # Default for the Sunglasses/Sport group
         return "90041091", f"Group: Protection ({g_type})"
     
     # GROUP 2: Frames, Reading, Driving, PC Glasses
@@ -102,9 +101,9 @@ def apply_item_description(row, type_col, mat_col):
 
 def run_auto_fill(user_df):
     # 1. Identify Columns by ID
-    type_col = get_col_by_id(user_df, "13")      # Glasses type
-    material_col = get_col_by_id(user_df, "53")  # Main material
-    sport_col = get_col_by_id(user_df, "89")     # Sport glasses (for specialty HS check)
+    type_col = get_col_by_id(user_df, "13")      
+    material_col = get_col_by_id(user_df, "53")  
+    sport_col = get_col_by_id(user_df, "89")     
     
     hs_col = get_col_by_id(user_df, "AO") or "HS Code"
     desc_col = get_col_by_id(user_df, "AP") or "Item description"
@@ -112,12 +111,12 @@ def run_auto_fill(user_df):
     if hs_col not in user_df.columns: user_df[hs_col] = ""
     if desc_col not in user_df.columns: user_df[desc_col] = ""
 
-    # 2. Apply Rule 1: HS Code
+    # 2. Apply Rule 1
     hs_results = user_df.apply(lambda row: apply_hs_code(row, type_col, material_col, sport_col), axis=1)
     user_df[hs_col] = [r[0] for r in hs_results]
     hs_reasons = [r[1] for r in hs_results]
 
-    # 3. Apply Rule 2: Item Description
+    # 3. Apply Rule 2
     desc_results = user_df.apply(lambda row: apply_item_description(row, type_col, material_col), axis=1)
     user_df[desc_col] = [r[0] for r in desc_results]
     desc_reasons = [r[1] for r in desc_results]
