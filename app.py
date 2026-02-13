@@ -5,7 +5,7 @@ import io
 import re
 
 # 1. Page Configuration
-st.set_page_config(page_title="Excel Auto-Filler", layout="wide")
+st.set_config(page_title="Excel Auto-Filler", layout="wide")
 st.title("⚡ Excel Data Filler: Glasses Edition")
 
 # ==========================================
@@ -56,20 +56,28 @@ def get_col_by_id(df, target_id):
     return None
 
 def apply_hs_code(row, type_col, mat_col, sport_col):
-    """Logic for Rule 1: HS Code"""
+    """Revised Logic for Rule 1: HS Code Groups"""
     g_type = str(row.get(type_col, '')).strip() if type_col else ""
     material = str(row.get(mat_col, '')).strip().lower() if mat_col else ""
-    sport_type = str(row.get(sport_col, '')).strip().lower() if sport_col else ""
+    sport_val = str(row.get(sport_col, '')).strip().lower() if sport_col else ""
 
-    if g_type == "Sunglasses":
-        return "90041091", "Type: Sunglasses"
-    if g_type == "Frames" and "plastic" in material:
-        return "90031100", "Type: Frames + Material: Plastic"
-    if g_type == "Frames" and "metal" in material:
-        return "90031900", "Type: Frames + Material: Metal"
-    if g_type == "Sport glasses":
-        if any(x in sport_type for x in ["swimm", "swim", "ski", "snowboard"]):
-            return "90049090", f"Type: Sport ({sport_type})"
+    # GROUP 1: Sunglasses & Sport Glasses logic
+    if g_type in ["Sunglasses", "Sport glasses"]:
+        # If it's specifically Swim/Ski goggles, use the specialty code
+        if any(x in sport_val for x in ["swimm", "swim", "ski", "snowboard"]):
+            return "90049090", "Sport Specialty (Swim/Ski)"
+        # Default for the Sunglasses/Sport group
+        return "90041091", f"Group: Protection ({g_type})"
+    
+    # GROUP 2: Frames, Reading, Driving, PC Glasses
+    eyewear_group = ["Frames", "Reading glasses", "Driving Glasses without power", "PC Glasses without power"]
+    if g_type in eyewear_group:
+        if "plastic" in material:
+            return "90031100", f"Group: Eyewear ({g_type}) + Plastic"
+        if "metal" in material:
+            return "90031900", f"Group: Eyewear ({g_type}) + Metal"
+        return "", f"Group: Eyewear ({g_type}) - Missing Material"
+
     return "", "No Match"
 
 def apply_item_description(row, type_col, mat_col):
@@ -77,11 +85,9 @@ def apply_item_description(row, type_col, mat_col):
     g_type = str(row.get(type_col, '')).strip() if type_col else ""
     material = str(row.get(mat_col, '')).strip().lower() if mat_col else ""
 
-    # Eyeglasses category
     if g_type in ["Frames", "PC Glasses without power", "Driving Glasses without power", "Reading glasses"]:
         return "Eyeglasses", f"Match: {g_type}"
     
-    # Sunglasses category
     if g_type == "Sunglasses":
         if "plastic" in material:
             return "Sunglasses, plastic frame", "Sunglasses + Plastic"
@@ -89,7 +95,6 @@ def apply_item_description(row, type_col, mat_col):
             return "Sunglasses, metal frame", "Sunglasses + Metal"
         return "Sunglasses", "Sunglasses (Unknown Material)"
     
-    # Sport glasses
     if g_type == "Sport glasses":
         return "Sport glasses", "Exact match: Sport glasses"
         
@@ -99,14 +104,11 @@ def run_auto_fill(user_df):
     # 1. Identify Columns by ID
     type_col = get_col_by_id(user_df, "13")      # Glasses type
     material_col = get_col_by_id(user_df, "53")  # Main material
-    sport_col = get_col_by_id(user_df, "89")     # Sport glasses
+    sport_col = get_col_by_id(user_df, "89")     # Sport glasses (for specialty HS check)
     
-    # Find Item Description (AP) and HS Code (AO) columns
-    # We look for ID: AO/AP or the specific text names
     hs_col = get_col_by_id(user_df, "AO") or "HS Code"
     desc_col = get_col_by_id(user_df, "AP") or "Item description"
 
-    # Ensure columns exist
     if hs_col not in user_df.columns: user_df[hs_col] = ""
     if desc_col not in user_df.columns: user_df[desc_col] = ""
 
@@ -120,17 +122,16 @@ def run_auto_fill(user_df):
     user_df[desc_col] = [r[0] for r in desc_results]
     desc_reasons = [r[1] for r in desc_results]
     
-    # 4. Generate Combined Report
+    # 4. Generate Report
     report_df = pd.DataFrame({
         'Type (ID:13)': user_df[type_col] if type_col else "Not Found",
         'HS Code': user_df[hs_col],
+        'HS Logic': hs_reasons,
         'Item Description': user_df[desc_col],
-        'Description Logic': desc_reasons
+        'Desc Logic': desc_reasons
     })
     
-    # Show rows where either rule did something
     modified_rows = report_df[(report_df['HS Code'] != "") | (report_df['Item Description'] != "")]
-    
     return user_df, modified_rows
 
 # ==========================================
@@ -142,23 +143,23 @@ uploaded_file = st.file_uploader("Choose Excel File", type=['xlsx'])
 
 if uploaded_file:
     user_df = pd.read_excel(uploaded_file, dtype=str)
-    st.write(f"Loaded {len(user_df)} rows. Headers preserved.")
+    st.write(f"Loaded {len(user_df)} rows.")
 
     st.divider()
     st.subheader("2. Run Auto-Fill")
     
     if st.button("✨ Auto-Fill Data", type="primary"):
-        with st.spinner("Applying Rules 1 & 2..."):
+        with st.spinner("Applying Rules..."):
             working_df = user_df.copy()
             filled_df, report = run_auto_fill(working_df)
             
-            st.success(f"✅ Processing Complete!")
+            st.success(f"✅ Rules Applied!")
             
-            with st.expander("📊 View Processing Report (Rules 1 & 2)", expanded=True):
+            with st.expander("📊 View Processing Report", expanded=True):
                 if not report.empty:
                     st.dataframe(report, use_container_width=True)
                 else:
-                    st.info("No rules were triggered for this file.")
+                    st.info("No rows matched the current rules.")
             
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
@@ -166,7 +167,7 @@ if uploaded_file:
             buffer.seek(0)
             
             st.download_button(
-                label="📥 Download Formatted Excel",
+                label="📥 Download Updated Excel",
                 data=buffer,
                 file_name="filled_glasses_data.xlsx",
                 mime="application/vnd.ms-excel"
