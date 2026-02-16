@@ -46,3 +46,25 @@ BRAND_TO_COMPANY_MAP = {
     # Explicitly Empty Group (Brands that should have NO company filled)
     "": [] 
 }
+# NEW RULE: GLASSES USABLE
+BRAND_TO_USABLE_MAP = {
+    "Fashion glasses": [
+        "Botaniq", "Brioni", "Calvin Klein", "Carrera", "Coco song", "Crullé", 
+        "Dsquared2", "Fossil", "Guess", "Hawkers", "Hugo Boss", "BOSS", 
+        "Boss by Hugo Boss", "Julbo", "Kate Spade", "Kimikado", "Lacoste", 
+        "Levis", "Levi's", "Marc Jacobs", "Marisio", "Max Mara", "Max&Co.", 
+        "Michael Kors", "Persol", "Polaroid", "Police", "Puma", "Radley", 
+        "Ray-Ban", "Seventh Street", "Superdry", "Swarovski", "Swidoo", 
+        "Tommy Hilfiger", "Vogue", "Under Armour", "Armani Exchange", "Nike"
+    ],
+    "Luxury glasses": [
+        "Alexander McQueen", "Balenciaga", "Bottega Venetta", "Burberry", 
+        "Celine", "Chiara Ferreagni", "Chloe", "Christian Dior", "Dolce & Gabbana", 
+        "Emporio Armani", "Fendi", "Givenchy", "Gucci", "Impressio", 
+        "Jimmy Choo", "Liu Jo", "Missoni", "Moschino", "Love Moschino", "Myth", 
+        "Pierre Cardin", "Polo Ralph Lauren", "Ralph by Ralph Lauren", "Prada", 
+        "Saint Laurent", "Stella McCarteny", "Tiffany", "Tom Ford", "Versace", 
+        "Miu Miu", "Beron", "LeWish", "Giorgio Armani", "Carolina Herrera", 
+        "David Beckham", "Ralph Lauren", "Victoria Beckham"
+    ]
+}

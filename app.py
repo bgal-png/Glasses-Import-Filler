@@ -6,9 +6,9 @@ import re
 
 # IMPORT THE MAPPINGS
 try:
-    from mappings import BRAND_TO_COMPANY_MAP
+    from mappings import BRAND_TO_COMPANY_MAP, BRAND_TO_USABLE_MAP
 except ImportError:
-    st.error("❌ Critical Error: 'mappings.py' file is missing. Please create it.")
+    st.error("❌ Critical Error: 'mappings.py' file is missing or missing dictionaries.")
     st.stop()
 
 # 1. Page Configuration
@@ -55,11 +55,16 @@ else:
 # 🧠 THE BRAIN: FILLING LOGIC
 # ==========================================
 
-# Create a flattened lookup for faster processing (lowercase keys)
+# --- PREPARE LOOKUPS ---
 FLAT_BRAND_LOOKUP = {}
 for company, brands in BRAND_TO_COMPANY_MAP.items():
     for brand in brands:
         FLAT_BRAND_LOOKUP[brand.lower().strip()] = company
+
+FLAT_USABLE_LOOKUP = {}
+for category, brands in BRAND_TO_USABLE_MAP.items():
+    for brand in brands:
+        FLAT_USABLE_LOOKUP[brand.lower().strip()] = category
 
 def get_col_by_id(df, target_id):
     """Finds a column name in the user's file that contains a specific ID number."""
@@ -118,14 +123,43 @@ def apply_item_description(row, type_col, mat_col):
     return "", "No Match"
 
 def apply_producing_company(row, brand_col):
-    """Rule 3: Producing Company based on Brand (using imported mappings)"""
+    """Rule 3: Producing Company based on Brand"""
     brand_val = str(row.get(brand_col, '')).strip().lower()
     
     if brand_val in FLAT_BRAND_LOOKUP:
         company = FLAT_BRAND_LOOKUP[brand_val]
         return company, f"Matched Brand: {brand_val}"
-    
     return "", "Unknown Brand"
+
+def apply_glasses_usable(row, brand_col, type_col, effect_col, sport_col):
+    """Rule 4: Glasses Usable (Brand + Logic Combinations)"""
+    brand_val = str(row.get(brand_col, '')).strip().lower()
+    g_type = str(row.get(type_col, '')).strip()
+    effect_val = str(row.get(effect_col, '')).strip().lower()
+    sport_val = str(row.get(sport_col, '')).strip().lower()
+    
+    results = []
+    
+    # 1. Base Category from Brand
+    if brand_val in FLAT_USABLE_LOOKUP:
+        results.append(FLAT_USABLE_LOOKUP[brand_val])
+        
+    # 2. Logic Check: Driving vs Common Use
+    # Only applies if it contains "Sunglasses"
+    if check_type(g_type, "Sunglasses"):
+        is_polarized = "polarized" in effect_val
+        is_ski_swim = any(x in sport_val for x in ["swimm", "swim", "ski", "snowboard"])
+        
+        if is_polarized:
+            results.append("Driving glasses")
+        elif not is_ski_swim:
+            # Not Polarized AND Not Ski/Swim -> Common use
+            results.append("Common use")
+            
+    # Join with pipe separator
+    if not results:
+        return "", "No Match"
+    return "|".join(results), f"Combined: {results}"
 
 # --- MAIN EXECUTION ---
 
@@ -135,12 +169,14 @@ def run_auto_fill(user_df):
     material_col = get_col_by_id(user_df, "53")  
     sport_col = get_col_by_id(user_df, "89")
     brand_col = get_col_by_id(user_df, "11") 
+    effect_col = get_col_by_id(user_df, "37") # Lens Effect ID: 37
     
     hs_col = get_col_by_id(user_df, "AO") or "HS Code"
     desc_col = get_col_by_id(user_df, "AP") or "Item description"
     prod_col = get_col_by_id(user_df, "146") or "Producing company"
+    usable_col = get_col_by_id(user_df, "51") or "Glasses usable" # ID: 51
 
-    for col in [hs_col, desc_col, prod_col]:
+    for col in [hs_col, desc_col, prod_col, usable_col]:
         if col not in user_df.columns: user_df[col] = ""
 
     # 2. Apply Rule 1: HS Code
@@ -158,19 +194,25 @@ def run_auto_fill(user_df):
     user_df[prod_col] = [r[0] for r in prod_results]
     prod_reasons = [r[1] for r in prod_results]
     
-    # 5. Generate Report
+    # 5. Apply Rule 4: Glasses Usable
+    usable_results = user_df.apply(lambda row: apply_glasses_usable(row, brand_col, type_col, effect_col, sport_col), axis=1)
+    user_df[usable_col] = [r[0] for r in usable_results]
+    usable_reasons = [r[1] for r in usable_results]
+    
+    # 6. Generate Report
     report_df = pd.DataFrame({
-        'Brand (ID:11)': user_df[brand_col] if brand_col else "Not Found",
-        'Producing Company': user_df[prod_col],
-        'Company Logic': prod_reasons,
-        'HS Code': user_df[hs_col],
-        'Item Description': user_df[desc_col]
+        'Brand': user_df[brand_col] if brand_col else "N/A",
+        'Type': user_df[type_col] if type_col else "N/A",
+        'Usable (Z)': user_df[usable_col],
+        'Usable Logic': usable_reasons,
+        'Prod. Company': user_df[prod_col],
+        'HS Code': user_df[hs_col]
     })
     
     modified_rows = report_df[
         (report_df['HS Code'] != "") | 
-        (report_df['Item Description'] != "") |
-        (report_df['Company Logic'] != "Unknown Brand")
+        (report_df['Usable (Z)'] != "") |
+        (report_df['Prod. Company'] != "Unknown Brand")
     ]
     return user_df, modified_rows
 
@@ -189,7 +231,7 @@ if uploaded_file:
     st.subheader("2. Run Auto-Fill")
     
     if st.button("✨ Auto-Fill Data", type="primary"):
-        with st.spinner("Applying Rules 1, 2 & 3..."):
+        with st.spinner("Applying Rules 1, 2, 3 & 4..."):
             working_df = user_df.copy()
             filled_df, report = run_auto_fill(working_df)
             
