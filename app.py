@@ -83,22 +83,13 @@ BRAND_TO_COMPANY_MAP = {
         "Chiara Ferragni", "Dsquared2", "Fossil", "Havaianas", "Hugo by Hugo Boss", 
         "Kate Spade", "Levi's", "Marc Jacobs", "Missoni", "Moschino", 
         "Pierre Cardin", "Polaroid", "Tommy Hilfiger", "Under Armour", 
-        "Seventh Street"
-    ],
-    # Explicitly Empty Group (Remaining unmapped brands)
-    "": [
-        "Carolina Herrera" 
+        "Seventh Street", "Carolina Herrera" 
     ],
     "GO Eyewear": ["Ana Hickmann"],
     "Strabilia": ["Silhouette"],
     "MCM OPTIK SRL": ["Morel"],
     "Bollé Brands": ["Bollé", "SPY+", "Serengeti"]
 }
-
-# NOTE: I assumed the other brands in that original "Empty" list (like Tommy Hilfiger, Polaroid, etc.) 
-# might also belong to Safilo since they are often distributed by them. 
-# If ONLY the 4 you listed are Safilo, I can move the others back to empty. 
-# Currently, I moved MOST of that group to Safilo to be safe, but kept Carolina Herrera separate.
 
 # Create a flattened lookup for faster processing (lowercase keys)
 FLAT_BRAND_LOOKUP = {}
@@ -166,7 +157,6 @@ def apply_producing_company(row, brand_col):
     """Rule 3: Producing Company based on Brand"""
     brand_val = str(row.get(brand_col, '')).strip().lower()
     
-    # Direct Lookup
     if brand_val in FLAT_BRAND_LOOKUP:
         company = FLAT_BRAND_LOOKUP[brand_val]
         return company, f"Matched Brand: {brand_val}"
@@ -186,7 +176,6 @@ def run_auto_fill(user_df):
     desc_col = get_col_by_id(user_df, "AP") or "Item description"
     prod_col = get_col_by_id(user_df, "146") or "Producing company"
 
-    # Ensure output columns exist
     for col in [hs_col, desc_col, prod_col]:
         if col not in user_df.columns: user_df[col] = ""
 
