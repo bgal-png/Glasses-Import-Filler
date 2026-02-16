@@ -13,56 +13,92 @@ try:
         FACE_SHAPE_MAP
     )
 except ImportError:
-    st.error("❌ Critical Error: 'mappings.py' file is missing. Ensure it is in the same directory.")
+    st.error("❌ Critical Error: 'mappings.py' file is missing or missing dictionaries.")
     st.stop()
 
 # 1. Page Configuration
-st.set_page_config(page_title="Excel Auto-Filler Master", layout="wide")
-st.title("⚡ Glasses Data Automation: Full 12-Rule Suite")
-
-# Persistent Session State
-if 'filled_df' not in st.session_state:
-    st.session_state.filled_df = None
-if 'report_df' not in st.session_state:
-    st.session_state.report_df = None
+st.set_page_config(page_title="Excel Auto-Filler", layout="wide")
+st.title("⚡ Excel Data Filler: Glasses Edition")
 
 # ==========================================
-# 🔒 DATA LOADERS & HELPERS
+# 🔒 INDESTRUCTIBLE LOADER
 # ==========================================
 @st.cache_data
 def load_master():
     current_dir = os.getcwd()
-    candidates = [f for f in os.listdir(current_dir) if "master_clean" in f and not f.startswith('~$')]
+    candidates = [f for f in os.listdir(current_dir) if (f.endswith('.xlsx') or f.endswith('.csv')) and "master_clean" in f and not f.startswith('~$')]
     if not candidates:
-        st.error("❌ 'master_clean.xlsx' not found in repository.")
-        st.stop()
+        st.error("❌ 'master_clean.xlsx' not found in repository."); st.stop()
     file_path = candidates[0]
-    df = pd.read_excel(file_path, dtype=str, engine='openpyxl')
+    df = None
+    try:
+        df = pd.read_excel(file_path, dtype=str, engine='openpyxl')
+    except Exception:
+        strategies = [{'sep': None, 'engine': 'python'}, {'sep': ',', 'engine': 'c'}, {'sep': ';', 'engine': 'c'}, {'sep': '\t', 'engine': 'c'}]
+        for enc in ['utf-8', 'cp1252', 'latin1']:
+            for strat in strategies:
+                try:
+                    df = pd.read_csv(file_path, dtype=str, encoding=enc, on_bad_lines='skip', **strat)
+                    break
+                except: continue
+            if df is not None: break
+    if df is None:
+        st.error(f"❌ Could not read '{file_path}'."); st.stop()
     df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
     return df
 
+# Load Master Data
+raw_master_df = load_master()
+target_col = next((c for c in raw_master_df.columns if "items type" in c.lower()), None)
+if target_col:
+    master_df = raw_master_df[raw_master_df[target_col].str.lower().str.strip() == "glasses"]
+    st.success(f"✅ Brain Loaded: {len(master_df)} valid glasses rows.")
+else:
+    st.error("❌ 'Items type' column missing."); st.stop()
+
+# ==========================================
+# 🧠 THE BRAIN: FILLING LOGIC
+# ==========================================
+
+# --- PREPARE LOOKUPS ---
+FLAT_BRAND_LOOKUP = {}
+for company, brands in BRAND_TO_COMPANY_MAP.items():
+    for brand in brands:
+        FLAT_BRAND_LOOKUP[brand.lower().strip()] = company
+
+FLAT_USABLE_LOOKUP = {}
+for category, brands in BRAND_TO_USABLE_MAP.items():
+    for brand in brands:
+        FLAT_USABLE_LOOKUP[brand.lower().strip()] = category
+
+FLAT_COLLECTION_LOOKUP = {}
+for collection, brands in BRAND_TO_COLLECTION_MAP.items():
+    for brand in brands:
+        FLAT_COLLECTION_LOOKUP[brand.lower().strip()] = collection
+
+FLAT_FACE_LOOKUP = {}
+for face_shape, sources in FACE_SHAPE_MAP.items():
+    for source in sources:
+        FLAT_FACE_LOOKUP[source.lower().strip()] = face_shape
+
 def get_col_by_id(df, target_id):
-    """Finds a column name in the user's file that contains a specific ID number."""
     for col in df.columns:
         if re.search(f"ID[:\s]+{target_id}\\b", col):
             return col
     return None
 
 def check_type(value, target):
-    """Smart Check for multi-value types (Split by |)"""
     value = str(value).strip()
     parts = [p.strip() for p in value.split('|')]
     return target in parts
 
 def to_float(val):
-    """Safely convert string to float for measurements"""
     try:
         return float(str(val).replace(',', '.').strip())
     except:
         return 0.0
 
 def apply_safe_fill(df, target_col, calculated_results):
-    """SAFETY CHECK: Only fills if cell is currently empty."""
     current_vals = df[target_col].astype(str).fillna("")
     final_vals = []
     report_reasons = []
@@ -78,190 +114,312 @@ def apply_safe_fill(df, target_col, calculated_results):
             
     return final_vals, report_reasons
 
-# ==========================================
-# 🧠 THE BRAIN: RULE LOGIC
-# ==========================================
-
-# Pre-flattened lookups for Rule 3, 4, 5, 8
-FLAT_BRAND_LOOKUP = {b.lower().strip(): c for c, brands in BRAND_TO_COMPANY_MAP.items() for b in brands}
-FLAT_USABLE_LOOKUP = {b.lower().strip(): cat for cat, brands in BRAND_TO_USABLE_MAP.items() for b in brands}
-FLAT_COLLECTION_LOOKUP = {b.lower().strip(): coll for coll, brands in BRAND_TO_COLLECTION_MAP.items() for b in brands}
-FLAT_FACE_LOOKUP = {s.lower().strip(): face for face, sources in FACE_SHAPE_MAP.items() for s in sources}
+# --- RULE FUNCTIONS ---
 
 def apply_hs_code(row, type_col, mat_col, sport_col):
     g_type = str(row.get(type_col, '')).strip()
     material = str(row.get(mat_col, '')).strip().lower()
     sport_val = str(row.get(sport_col, '')).strip().lower()
-    if check_type(g_type, "Sunglasses"): return "90041091", "Sunglasses"
+
+    if check_type(g_type, "Sunglasses"):
+        return "90041091", "Group: Sunglasses"
     if check_type(g_type, "Sport glasses"):
-        if any(x in sport_val for x in ["swimm", "swim", "ski", "snowboard"]): return "90049090", "Sport Specialty"
-        return "90041091", "Sport Protection"
-    if "plastic" in material: return "90031100", "Eyewear + Plastic"
-    if "metal" in material: return "90031900", "Eyewear + Metal"
-    return "", ""
+        if any(x in sport_val for x in ["swimm", "swim", "ski", "snowboard"]):
+            return "90049090", "Sport Specialty (Swim/Ski)"
+        return "90041091", "Group: Sport (Protection)"
+    eyewear_targets = ["Frames", "Reading glasses", "Driving Glasses without power", "PC Glasses without power"]
+    if any(check_type(g_type, t) for t in eyewear_targets):
+        if "plastic" in material: return "90031100", "Group: Eyewear + Plastic"
+        if "metal" in material: return "90031900", "Group: Eyewear + Metal"
+        return "", "Group: Eyewear - Missing Material"
+    return "", "No Match"
 
 def apply_item_description(row, type_col, mat_col):
     g_type = str(row.get(type_col, '')).strip()
     material = str(row.get(mat_col, '')).strip().lower()
-    if any(check_type(g_type, t) for t in ["Frames", "PC Glasses", "Reading glasses"]): return "Eyeglasses", "Eyewear"
+    eyewear_targets = ["Frames", "PC Glasses without power", "Driving Glasses without power", "Reading glasses"]
+    if any(check_type(g_type, t) for t in eyewear_targets):
+        return "Eyeglasses", "Match: Eyewear Group"
     if check_type(g_type, "Sunglasses"):
-        return ("Sunglasses, plastic frame" if "plastic" in material else "Sunglasses, metal frame"), "Sunglasses"
-    return "Sport glasses", "Sport"
+        if "plastic" in material: return "Sunglasses, plastic frame", "Sunglasses + Plastic"
+        if "metal" in material: return "Sunglasses, metal frame", "Sunglasses + Metal"
+        return "Sunglasses", "Sunglasses (Unknown Material)"
+    if check_type(g_type, "Sport glasses"):
+        return "Sport glasses", "Exact match: Sport glasses"
+    return "", "No Match"
+
+def apply_producing_company(row, brand_col):
+    brand_val = str(row.get(brand_col, '')).strip().lower()
+    if brand_val in FLAT_BRAND_LOOKUP:
+        return FLAT_BRAND_LOOKUP[brand_val], f"Matched Brand: {brand_val}"
+    return "", "Unknown Brand"
 
 def apply_glasses_usable(row, brand_col, type_col, effect_col, sport_col):
-    brand = str(row.get(brand_col, '')).strip().lower()
-    g_type = str(row.get(type_col, ''))
-    effect = str(row.get(effect_col, '')).strip().lower()
-    sport = str(row.get(sport_col, '')).strip().lower()
-    res = [FLAT_USABLE_LOOKUP[brand]] if brand in FLAT_USABLE_LOOKUP else []
+    brand_val = str(row.get(brand_col, '')).strip().lower()
+    g_type = str(row.get(type_col, '')).strip()
+    effect_val = str(row.get(effect_col, '')).strip().lower()
+    sport_val = str(row.get(sport_col, '')).strip().lower()
+    results = []
+    if brand_val in FLAT_USABLE_LOOKUP:
+        results.append(FLAT_USABLE_LOOKUP[brand_val])
     if check_type(g_type, "Sunglasses"):
-        if "polarized" in effect: res.append("Driving glasses")
-        elif not any(x in sport for x in ["swim", "ski"]): res.append("Common use")
-    return ("|".join(res), "Matched") if res else ("", "")
+        is_polarized = "polarized" in effect_val
+        is_ski_swim = any(x in sport_val for x in ["swimm", "swim", "ski", "snowboard"])
+        if is_polarized: results.append("Driving glasses")
+        elif not is_ski_swim: results.append("Common use")
+    if not results: return "", "No Match"
+    return "|".join(results), f"Combined: {results}"
 
-def apply_glasses_gender(row, gen_col, color_col, shape_col, tl_col, lw_col):
-    curr = str(row.get(gen_col, '')).strip()
-    color, shape = str(row.get(color_col, '')).strip().lower(), str(row.get(shape_col, '')).strip().lower()
-    is_fem = "cat eye" in shape or any(x in color for x in ["pink", "purple"])
-    if "child" in curr.lower():
-        tl, lw = to_float(row.get(tl_col, 0)), to_float(row.get(lw_col, 0))
-        genders = ["Child-Girls"] if is_fem else ["Child-Boys", "Child-Girls"]
-        sizes = []
-        if 0 < tl <= 125 and 0 < lw <= 40: sizes.append("Toddlers")
-        if 115 <= tl <= 135 and 35 <= lw <= 48: sizes.append("PreschoolKids")
-        if 130 <= tl <= 145 and 45 <= lw <= 99: sizes.append("SchoolKids")
-        final = ["Child"] + genders + [f"{g}-{s}" for g in genders for s in sizes]
-        return "|".join(final), "Expanded Child"
-    if curr in ["", "nan"] and is_fem: return "Woman", "Inferred Woman"
-    return curr, ""
-
-def apply_lenses_no_order(row, ft_col, con_col):
-    ft, con = str(row.get(ft_col, '')), str(row.get(con_col, '')).lower()
-    res = []
-    if check_type(ft, "Half rim"): res += ["CoatingPolarized", "Glasses index 1.5"]
-    if check_type(ft, "Rimless"): res += ["CoatingPolarized", "Glasses index 1.5", "Glasses index 1.74"]
-    if "clip" in con: res.append("Glasses index 1.5")
-    return ("|".join(list(dict.fromkeys(res))), "Restriction") if res else ("", "")
-
-def apply_other_features(row, type_col, con_col, rx_col):
-    g_type, con, rx = str(row.get(type_col, '')), str(row.get(con_col, '')), str(row.get(rx_col, '')).lower()
-    features = []
-    has_clip = False
-    if check_type(g_type, "Sport glasses") and "clip" in con.lower(): features.append("Sport glasses with diopter clip")
-    clips = ["Magnetic sun clip-on p", "Magnetic sun clip-on", "Sun clip-on p", "Sun clip-on"]
-    for c in clips:
-        if check_type(con, c): features.append(c); has_clip = True
-    if check_type(g_type, "Frames") and has_clip: features.insert(0, "Glasses with sun clip-on")
-    if rx == "yes": features.append("Prescription sunglasses")
-    return ("|".join(list(dict.fromkeys(features))), "Logic Applied") if features else ("", "")
-
-def apply_glasses_model(row, name_col, brand_col):
-    n, b = str(row.get(name_col, '')).strip(), str(row.get(brand_col, '')).strip()
-    if b and n.lower().startswith(b.lower()): n = n[len(b):].strip()
-    if " " in n: n = n.rsplit(" ", 1)[0]
-    return n.strip(), "Extracted"
-
-def apply_color_code(row, name_col):
-    n = str(row.get(name_col, '')).strip()
-    if " " in n: return n.rsplit(" ", 1)[1].strip(), "Extracted"
+def apply_glasses_collection(row, brand_col):
+    brand_val = str(row.get(brand_col, '')).strip().lower()
+    if brand_val in FLAT_COLLECTION_LOOKUP:
+        return FLAT_COLLECTION_LOOKUP[brand_val], f"Collection Match: {brand_val}"
     return "", ""
 
-# ==========================================
-# 🚀 MAIN RUNNER
-# ==========================================
-def run_auto_fill(df):
-    # Locate all IDs
-    cols = {
-        'name': df.columns[0],
-        'brand': get_col_by_id(df, "11"),
-        'model': get_col_by_id(df, "12"),
-        'type': get_col_by_id(df, "13"),
-        'gender': get_col_by_id(df, "22"),
-        'shape': get_col_by_id(df, "25"),
-        'color': get_col_by_id(df, "26"),
-        'coll': get_col_by_id(df, "33"),
-        'effect': get_col_by_id(df, "37"),
-        'ft': get_col_by_id(df, "50"),
-        'usable': get_col_by_id(df, "51"),
-        'material': get_col_by_id(df, "53"),
-        'uv': get_col_by_id(df, "60"),
-        'tl': get_col_by_id(df, "70"),
-        'lw': get_col_by_id(df, "72"),
-        'con': get_col_by_id(df, "84"),
-        'sport': get_col_by_id(df, "89"),
-        'face': get_col_by_id(df, "94"),
-        'no_order': get_col_by_id(df, "103"),
-        'other': get_col_by_id(df, "104"),
-        'code': get_col_by_id(df, "107"),
-        'rx': get_col_by_id(df, "108"),
-        'hs': get_col_by_id(df, "AO") or "HS Code",
-        'desc': get_col_by_id(df, "AP") or "Item description",
-        'prod': get_col_by_id(df, "146") or "Producing company"
-    }
+def apply_uv_filter(row, type_col):
+    g_type = str(row.get(type_col, '')).strip()
+    if check_type(g_type, "Sunglasses"):
+        return "400", "Type is Sunglasses"
+    return "", ""
 
-    # Initialize target columns if missing
-    for k in ['hs', 'desc', 'prod', 'usable', 'coll', 'uv', 'gender', 'face', 'no_order', 'other', 'model', 'code']:
-        if cols[k] and cols[k] not in df.columns: df[cols[k]] = ""
+def apply_glasses_gender(row, gender_col, color_col, shape_col, tl_col, lw_col):
+    current_val = str(row.get(gender_col, '')).strip()
+    current_lower = current_val.lower()
+    color = str(row.get(color_col, '')).strip().lower()
+    shape = str(row.get(shape_col, '')).strip().lower()
+    is_female_specific = ("cat eye" in shape or "pink" in color or "purple" in color or "cat eye" in color)
+    if "child" in current_lower:
+        tl = to_float(row.get(tl_col, 0))
+        lw = to_float(row.get(lw_col, 0))
+        genders = ["Child-Girls"] if is_female_specific else ["Child-Boys", "Child-Girls"]
+        size_cats = []
+        if (0 < tl <= 125) and (0 < lw <= 40): size_cats.append("Toddlers")
+        if (115 <= tl <= 135) and (35 <= lw <= 48): size_cats.append("PreschoolKids")
+        if (130 <= tl <= 145) and (45 <= lw <= 99): size_cats.append("SchoolKids")
+        final_parts = ["Child"]
+        final_parts.extend(genders)
+        for gender in genders:
+            for size in size_cats:
+                final_parts.append(f"{gender}-{size}")
+        return "|".join(final_parts), f"Expanded Child"
+    if current_val == "" or current_lower == "nan":
+        if is_female_specific: return "Woman", "Inferred Woman"
+    return current_val, ""
 
-    # Execute Rules
-    df[cols['hs']], _ = apply_safe_fill(df, cols['hs'], df.apply(lambda r: apply_hs_code(r, cols['type'], cols['material'], cols['sport']), axis=1))
-    df[cols['desc']], _ = apply_safe_fill(df, cols['desc'], df.apply(lambda r: apply_item_description(r, cols['type'], cols['material']), axis=1))
-    df[cols['prod']], _ = apply_safe_fill(df, cols['prod'], df.apply(lambda r: apply_producing_company(r, cols['brand']), axis=1))
-    df[cols['usable']], _ = apply_safe_fill(df, cols['usable'], df.apply(lambda r: apply_glasses_usable(r, cols['brand'], cols['type'], cols['effect'], cols['sport']), axis=1))
-    df[cols['coll']], _ = apply_safe_fill(df, cols['coll'], df.apply(lambda r: apply_glasses_collection(r, cols['brand']), axis=1))
-    df[cols['uv']], _ = apply_safe_fill(df, cols['uv'], df.apply(lambda r: apply_uv_filter(r, cols['type']), axis=1))
+def apply_face_shape(row, shape_col):
+    shape_val = str(row.get(shape_col, '')).strip().lower()
+    if shape_val in FLAT_FACE_LOOKUP:
+        return FLAT_FACE_LOOKUP[shape_val], f"Match: {shape_val}"
+    return "", ""
+
+def apply_lenses_no_order(row, frame_type_col, contain_col):
+    frame_val = str(row.get(frame_type_col, '')).strip()
+    contain_val = str(row.get(contain_col, '')).strip()
+    restrictions = []
+    if check_type(frame_val, "Half rim"): restrictions.extend(["CoatingPolarized", "Glasses index 1.5"])
+    if check_type(frame_val, "Rimless"): restrictions.extend(["CoatingPolarized", "Glasses index 1.5", "Glasses index 1.74"])
+    if "clip" in contain_val.lower(): restrictions.append("Glasses index 1.5")
+    unique_restrictions = list(dict.fromkeys(restrictions))
+    if not unique_restrictions: return "", ""
+    return "|".join(unique_restrictions), f"Restrictions: {unique_restrictions}"
+
+def apply_other_features(row, type_col, contain_col, rx_col):
+    g_type = str(row.get(type_col, '')).strip()
+    contain_val = str(row.get(contain_col, '')).strip()
+    rx_val = str(row.get(rx_col, '')).strip().lower()
+    features = []
+    has_sun_clip = False
     
-    gen_res = df.apply(lambda r: apply_glasses_gender(r, cols['gender'], cols['color'], cols['shape'], cols['tl'], cols['lw']), axis=1)
-    df[cols['gender']] = [x[0] for x in gen_res]
+    if check_type(g_type, "Sport glasses") and "clip" in contain_val.lower():
+        features.append("Sport glasses with diopter clip")
     
-    df[cols['face']], face_log = apply_safe_fill(df, cols['face'], df.apply(lambda r: apply_face_shape(r, cols['shape']), axis=1))
-    df[cols['no_order']], no_log = apply_safe_fill(df, cols['no_order'], df.apply(lambda r: apply_lenses_no_order(r, cols['ft'], cols['con']), axis=1))
-    df[cols['other']], feat_log = apply_safe_fill(df, cols['other'], df.apply(lambda r: apply_other_features(r, cols['type'], cols['con'], cols['rx']), axis=1))
-    df[cols['model']], mod_log = apply_safe_fill(df, cols['model'], df.apply(lambda r: apply_glasses_model(r, cols['name'], cols['brand']), axis=1))
-    df[cols['code']], code_log = apply_safe_fill(df, cols['code'], df.apply(lambda r: apply_color_code(r, cols['name']), axis=1))
+    target_clips = ["Magnetic sun clip-on p", "Magnetic sun clip-on", "Sun clip-on p", "Sun clip-on"]
+    for clip in target_clips:
+        if check_type(contain_val, clip):
+            features.append(clip)
+            has_sun_clip = True
+            
+    if check_type(g_type, "Frames") and has_sun_clip:
+        features.insert(0, "Glasses with sun clip-on")
+        
+    if rx_val == "yes":
+        features.append("Prescription sunglasses")
+        
+    unique_features = list(dict.fromkeys(features))
+    if not unique_features: return "", ""
+    return "|".join(unique_features), f"Features: {unique_features}"
 
-    # STRICT CLIP: Find ID: 103 and drop everything after it
-    guillotine_col = get_col_by_id(df, "103")
-    if guillotine_col:
-        idx = df.columns.get_loc(guillotine_col)
-        df = df.iloc[:, :idx + 1]
+def apply_glasses_model(row, name_col, brand_col):
+    """Rule 11: Extract Model Name"""
+    full_name = str(row.get(name_col, '')).strip()
+    brand = str(row.get(brand_col, '')).strip()
+    if not full_name: return "", ""
+    if brand and full_name.lower().startswith(brand.lower()):
+        full_name = full_name[len(brand):].strip()
+    if " " in full_name:
+        full_name = full_name.rsplit(" ", 1)[0]
+    cleaned_model = full_name.strip()
+    if not cleaned_model: return "", "Result Empty"
+    return cleaned_model, "Extracted"
 
-    # Persistent Report
-    report = pd.DataFrame({
-        'Model Change': mod_log, 
-        'Code Change': code_log, 
-        'Features': feat_log,
-        'Face': face_log
-    }).replace("", pd.NA).dropna(how='all')
+def apply_color_code(row, name_col):
+    """Rule 12: Extract Color Code (No Tricks, just String)"""
+    full_name = str(row.get(name_col, '')).strip()
+    if not full_name: return "", ""
+    if " " in full_name:
+        # Extract the last part (e.g. "003")
+        color_code = full_name.rsplit(" ", 1)[1].strip()
+        return color_code, "Extracted"
+    return "", "No Space Found"
+
+# --- MAIN EXECUTION ---
+
+def run_auto_fill(user_df):
+    # Identify Columns
+    name_col = user_df.columns[0]
     
-    return df, report
+    type_col = get_col_by_id(user_df, "13")      
+    material_col = get_col_by_id(user_df, "53")  
+    sport_col = get_col_by_id(user_df, "89")
+    brand_col = get_col_by_id(user_df, "11") 
+    effect_col = get_col_by_id(user_df, "37") 
+    color_col = get_col_by_id(user_df, "26") 
+    shape_col = get_col_by_id(user_df, "25") 
+    tl_col = get_col_by_id(user_df, "70")    
+    lw_col = get_col_by_id(user_df, "72")    
+    frame_type_col = get_col_by_id(user_df, "50")
+    contain_col = get_col_by_id(user_df, "84")
+    rx_col = get_col_by_id(user_df, "108") or "SunGlasses RX lenses"
+    
+    hs_col = get_col_by_id(user_df, "AO") or "HS Code"
+    desc_col = get_col_by_id(user_df, "AP") or "Item description"
+    prod_col = get_col_by_id(user_df, "146") or "Producing company"
+    usable_col = get_col_by_id(user_df, "51") or "Glasses usable"
+    coll_col = get_col_by_id(user_df, "33") or "Glasses collection"
+    uv_col = get_col_by_id(user_df, "60") or "UV filter"
+    gender_col = get_col_by_id(user_df, "22") or "Glasses gendre"
+    face_col = get_col_by_id(user_df, "94") or "Glasses for your face shape"
+    no_order_col = get_col_by_id(user_df, "103") or "Glasses lenses no-orders"
+    features_col = get_col_by_id(user_df, "104") or "Glasses other features"
+    model_col = get_col_by_id(user_df, "12") or "Model" 
+    code_col = get_col_by_id(user_df, "107") or "Glasses color code"
+
+    target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col, no_order_col, features_col, model_col, code_col]
+    for col in target_cols:
+        if col not in user_df.columns: user_df[col] = ""
+
+    # Apply Rules
+    calc_hs = user_df.apply(lambda row: apply_hs_code(row, type_col, material_col, sport_col), axis=1)
+    user_df[hs_col], _ = apply_safe_fill(user_df, hs_col, calc_hs)
+
+    calc_desc = user_df.apply(lambda row: apply_item_description(row, type_col, material_col), axis=1)
+    user_df[desc_col], _ = apply_safe_fill(user_df, desc_col, calc_desc)
+    
+    calc_prod = user_df.apply(lambda row: apply_producing_company(row, brand_col), axis=1)
+    user_df[prod_col], _ = apply_safe_fill(user_df, prod_col, calc_prod)
+    
+    calc_usable = user_df.apply(lambda row: apply_glasses_usable(row, brand_col, type_col, effect_col, sport_col), axis=1)
+    user_df[usable_col], _ = apply_safe_fill(user_df, usable_col, calc_usable)
+
+    calc_coll = user_df.apply(lambda row: apply_glasses_collection(row, brand_col), axis=1)
+    user_df[coll_col], _ = apply_safe_fill(user_df, coll_col, calc_coll)
+
+    calc_uv = user_df.apply(lambda row: apply_uv_filter(row, type_col), axis=1)
+    user_df[uv_col], _ = apply_safe_fill(user_df, uv_col, calc_uv)
+    
+    gender_results = user_df.apply(lambda row: apply_glasses_gender(row, gender_col, color_col, shape_col, tl_col, lw_col), axis=1)
+    user_df[gender_col] = [r[0] for r in gender_results]
+    gender_reasons = [r[1] for r in gender_results]
+    
+    calc_face = user_df.apply(lambda row: apply_face_shape(row, shape_col), axis=1)
+    user_df[face_col], face_reasons = apply_safe_fill(user_df, face_col, calc_face)
+    
+    calc_no_order = user_df.apply(lambda row: apply_lenses_no_order(row, frame_type_col, contain_col), axis=1)
+    user_df[no_order_col], no_order_reasons = apply_safe_fill(user_df, no_order_col, calc_no_order)
+    
+    calc_features = user_df.apply(lambda row: apply_other_features(row, type_col, contain_col, rx_col), axis=1)
+    user_df[features_col], features_reasons = apply_safe_fill(user_df, features_col, calc_features)
+
+    calc_model = user_df.apply(lambda row: apply_glasses_model(row, name_col, brand_col), axis=1)
+    user_df[model_col], model_reasons = apply_safe_fill(user_df, model_col, calc_model)
+
+    calc_code = user_df.apply(lambda row: apply_color_code(row, name_col), axis=1)
+    user_df[code_col], code_reasons = apply_safe_fill(user_df, code_col, calc_code)
+
+    # Report
+    report_df = pd.DataFrame({
+        'Gender (Y)': user_df[gender_col],
+        'Gender Logic': gender_reasons,
+        'Model Name': user_df[model_col],
+        'Model Logic': model_reasons,
+        'Color Code': user_df[code_col],
+        'Code Logic': code_reasons
+    })
+    
+    modified_rows = report_df[
+        (report_df['Gender Logic'] != "") |
+        (report_df['Model Logic'] != "") |
+        (report_df['Code Logic'] != "")
+    ]
+    return user_df, modified_rows
 
 # ==========================================
-# 📤 STREAMLIT UI
+# 📤 USER INTERFACE
 # ==========================================
-uploaded_file = st.file_uploader("Upload Glasses Data", type=['xlsx'])
+st.divider()
+st.subheader("1. Upload Partial Data")
+uploaded_file = st.file_uploader("Choose Excel File", type=['xlsx'])
 
 if uploaded_file:
     user_df = pd.read_excel(uploaded_file, dtype=str)
-    if st.button("✨ Run Automation Suite"):
-        with st.spinner("Processing all 12 rules..."):
-            st.session_state.filled_df, st.session_state.report_df = run_auto_fill(user_df.copy())
-            st.success("✅ Complete. Extra columns clipped.")
+    st.write(f"Loaded {len(user_df)} rows.")
 
-    if st.session_state.filled_df is not None:
-        st.subheader("Processing Summary")
-        st.dataframe(st.session_state.report_df, use_container_width=True)
-        
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-            st.session_state.filled_df.to_excel(writer, index=False, sheet_name='Final_Export')
-            workbook, worksheet = writer.book, writer.sheets['Final_Export']
+    st.divider()
+    st.subheader("2. Run Auto-Fill")
+    
+    if st.button("✨ Auto-Fill Data", type="primary"):
+        with st.spinner("Applying Rules 1-12..."):
+            working_df = user_df.copy()
+            filled_df, report = run_auto_fill(working_df)
+            st.success(f"✅ Rules Applied!")
+
+            with st.expander("📊 View Processing Report", expanded=True):
+                if not report.empty:
+                    st.dataframe(report, use_container_width=True)
+                else:
+                    st.info("No rows matched the current rules.")
             
-            # FORCE TEXT FORMAT FOR ID: 107
-            text_format = workbook.add_format({'num_format': '@'})
-            code_col = get_col_by_id(st.session_state.filled_df, "107")
-            if code_col:
-                idx = st.session_state.filled_df.columns.get_loc(code_col)
-                worksheet.set_column(idx, idx, 15, text_format)
+            # --- STRICT EXCEL FORMATTING (NO APOSTROPHE, JUST TEXT) ---
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                # 1. Write the DataFrame
+                filled_df.to_excel(writer, index=False, sheet_name='Sheet1')
                 
-        st.download_button("📥 Download Finalized File", data=buffer.getvalue(), file_name="filled_glasses_final.xlsx")
+                # 2. Get Workbook & Worksheet objects
+                workbook = writer.book
+                worksheet = writer.sheets['Sheet1']
+                
+                # 3. Create the "Text" format (@)
+                text_format = workbook.add_format({'num_format': '@'})
+                
+                # 4. Find the exact column index for "Glasses color code"
+                code_col_name = None
+                for col in filled_df.columns:
+                    if "Glasses color code" in col or ("ID" in col and "107" in col):
+                        code_col_name = col
+                        break
+                
+                # 5. Apply the Text Format to that entire column
+                if code_col_name:
+                    col_idx = filled_df.columns.get_loc(code_col_name)
+                    # Set column width to 15 and apply text format
+                    worksheet.set_column(col_idx, col_idx, 15, text_format)
+            
+            buffer.seek(0)
+            
+            st.download_button(
+                label="📥 Download Updated Excel",
+                data=buffer,
+                file_name="filled_glasses_data.xlsx",
+                mime="application/vnd.ms-excel"
+            )
