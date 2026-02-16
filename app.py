@@ -263,12 +263,17 @@ def apply_glasses_model(row, name_col, brand_col):
     return cleaned_model, "Extracted"
 
 def apply_color_code(row, name_col):
-    """Rule 12: Extract Color Code"""
+    """Rule 12: Extract Color Code (With ' Trick for Excel)"""
     full_name = str(row.get(name_col, '')).strip()
     if not full_name: return "", ""
+    
     if " " in full_name:
-        color_code = full_name.rsplit(" ", 1)[1]
-        return color_code.strip(), "Extracted"
+        color_code = full_name.rsplit(" ", 1)[1].strip()
+        # If it looks like it has leading zeros (e.g., 003), prepend '
+        if color_code.startswith("0") and len(color_code) > 1:
+            return "'" + color_code, "Extracted (Text Forced)"
+        return color_code, "Extracted"
+        
     return "", "No Space Found"
 
 # --- MAIN EXECUTION ---
@@ -388,35 +393,10 @@ if uploaded_file:
                 else:
                     st.info("No rows matched the current rules.")
             
-            # --- ADVANCED EXCEL WRITING (Force Text Format) ---
+            # DOWNLOAD
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                # Write data to 'Sheet1'
-                filled_df.to_excel(writer, index=False, sheet_name='Sheet1')
-                
-                # Access Workbook and Worksheet
-                workbook = writer.book
-                worksheet = writer.sheets['Sheet1']
-                
-                # Create Text Format (@)
-                text_fmt = workbook.add_format({'num_format': '@'})
-                
-                # Identify Column Index for "Glasses color code"
-                # We need to find the specific column in the final dataframe
-                code_target = "Glasses color code"
-                for col in filled_df.columns:
-                    if "ID" in col and "107" in col:
-                        code_target = col
-                        break
-                    if "Glasses color code" in col:
-                        code_target = col
-                
-                # Apply Format if Column Found
-                if code_target in filled_df.columns:
-                    col_idx = filled_df.columns.get_loc(code_target)
-                    # Set column width to 15 and format to Text
-                    worksheet.set_column(col_idx, col_idx, 15, text_fmt)
-            
+                filled_df.to_excel(writer, index=False)
             buffer.seek(0)
             
             st.download_button(
