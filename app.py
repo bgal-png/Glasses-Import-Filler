@@ -44,8 +44,8 @@ def load_master():
             if df is not None: break
     if df is None:
         st.error(f"❌ Could not read '{file_path}'."); st.stop()
-    # Normalize headers slightly to make regex easier (replace tabs/newlines with space)
-    df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
+    
+    # CRITICAL: We do NOT normalize headers here. We search strictly later.
     return df
 
 # Load Master Data
@@ -84,21 +84,21 @@ for face_shape, sources in FACE_SHAPE_MAP.items():
 
 def get_col_by_id(df, target_id):
     """
-    STRICT ID MATCHING:
-    Ignores the column name text entirely.
-    Looks ONLY for 'ID' followed by the specific number.
-    Handles 'ID: 52', 'ID:52', 'ID 52', 'id: 52' etc.
+    THE 'STRIP SEARCH' FIX:
+    This ignores all spaces, tabs, and newlines in the headers.
+    It matches 'Glasses model\nID: 52' by shrinking it to 'glassesmodelid:52'.
+    This prevents duplicates because it finds the EXISTING column.
     """
-    # Regex breakdown:
-    # ID   -> Literal text "ID" (case insensitive)
-    # [:\s]+ -> One or more colons or whitespace characters
-    # {target_id} -> The specific number we want
-    # \b   -> Word boundary (so ID: 5 doesn't match ID: 52)
-    pattern = re.compile(f"ID[:\s]+{target_id}\\b", re.IGNORECASE)
+    clean_target = f"ID:{target_id}".replace(" ", "").lower() # e.g., "id:52"
     
     for col in df.columns:
-        if pattern.search(str(col)):
-            return col
+        # squish the column name: remove space, newline, tab
+        clean_col = str(col).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").lower()
+        
+        # Check if "id:52" exists inside the squished header
+        if clean_target in clean_col:
+            return col # Return the ORIGINAL matching header name
+            
     return None
 
 def check_type(value, target):
@@ -119,7 +119,6 @@ def apply_safe_fill(df, target_col, calculated_results):
     
     for curr, (new_val, new_reason) in zip(current_vals, calculated_results):
         curr_clean = curr.strip()
-        # If cell is obstructed (has text), keep original text
         if curr_clean == "" or curr_clean.lower() == "nan":
             final_vals.append(new_val)
             report_reasons.append(new_reason)
@@ -289,9 +288,6 @@ def apply_color_code(row, name_col):
 # --- MAIN EXECUTION ---
 
 def run_auto_fill(user_df):
-    # Normalize headers first thing to help search
-    user_df.columns = user_df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
-
     # Identify Columns
     name_col = user_df.columns[0]
     
@@ -318,13 +314,19 @@ def run_auto_fill(user_df):
     face_col = get_col_by_id(user_df, "94") or "Glasses for your face shape"
     no_order_col = get_col_by_id(user_df, "103") or "Glasses lenses no-orders"
     features_col = get_col_by_id(user_df, "104") or "Glasses other features"
-    model_col = get_col_by_id(user_df, "12") or "Model" 
+    
+    # Logic for Model: Try ID 12 first, then ID 52
+    model_col = get_col_by_id(user_df, "12")
+    if not model_col:
+        model_col = get_col_by_id(user_df, "52")
+    if not model_col:
+        model_col = "Glasses model ID: 12" # Fallback creation
+        
     code_col = get_col_by_id(user_df, "107") or "Glasses color code"
 
     target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col, no_order_col, features_col, model_col, code_col]
     
-    # Check what columns exist. Only create new ones if strictly necessary
-    # (Since we normalized headers and use strict ID search, this should no longer duplicate columns)
+    # Only create new columns if get_col_by_id returned None or a fallback
     for col in target_cols:
         if col not in user_df.columns: user_df[col] = ""
 
@@ -409,24 +411,36 @@ if uploaded_file:
                 else:
                     st.info("No rows matched the current rules.")
             
-            # --- STRICT EXCEL FORMATTING ---
+            # --- STRICT EXCEL FORMATTING (NO APOSTROPHE, JUST TEXT) ---
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                # 1. Write the DataFrame
                 filled_df.to_excel(writer, index=False, sheet_name='Sheet1')
                 
+                # 2. Get Workbook & Worksheet objects
                 workbook = writer.book
                 worksheet = writer.sheets['Sheet1']
                 
+                # 3. Create the "Text" format (@)
                 text_format = workbook.add_format({'num_format': '@'})
                 
+                # 4. Find the exact column index for "Glasses color code"
                 code_col_name = None
+                
+                # Use Strip Search to find the code column in the FINAL dataframe
+                target_code_id = "107"
+                clean_target = f"ID:{target_code_id}".replace(" ", "").lower()
+                
                 for col in filled_df.columns:
-                    if "ID" in col and "107" in col:
+                    clean_col = str(col).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").lower()
+                    if clean_target in clean_col:
                         code_col_name = col
                         break
                 
+                # 5. Apply the Text Format to that entire column
                 if code_col_name:
                     col_idx = filled_df.columns.get_loc(code_col_name)
+                    # Set column width to 15 and apply text format
                     worksheet.set_column(col_idx, col_idx, 15, text_format)
             
             buffer.seek(0)
