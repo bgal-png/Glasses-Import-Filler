@@ -263,17 +263,13 @@ def apply_glasses_model(row, name_col, brand_col):
     return cleaned_model, "Extracted"
 
 def apply_color_code(row, name_col):
-    """Rule 12: Extract Color Code (With ' Trick for Excel)"""
+    """Rule 12: Extract Color Code (No Tricks, just String)"""
     full_name = str(row.get(name_col, '')).strip()
     if not full_name: return "", ""
-    
     if " " in full_name:
+        # Extract the last part (e.g. "003")
         color_code = full_name.rsplit(" ", 1)[1].strip()
-        # If it looks like it has leading zeros (e.g., 003), prepend '
-        if color_code.startswith("0") and len(color_code) > 1:
-            return "'" + color_code, "Extracted (Text Forced)"
         return color_code, "Extracted"
-        
     return "", "No Space Found"
 
 # --- MAIN EXECUTION ---
@@ -393,10 +389,32 @@ if uploaded_file:
                 else:
                     st.info("No rows matched the current rules.")
             
-            # DOWNLOAD
+            # --- STRICT EXCEL FORMATTING (NO APOSTROPHE, JUST TEXT) ---
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                filled_df.to_excel(writer, index=False)
+                # 1. Write the DataFrame
+                filled_df.to_excel(writer, index=False, sheet_name='Sheet1')
+                
+                # 2. Get Workbook & Worksheet objects
+                workbook = writer.book
+                worksheet = writer.sheets['Sheet1']
+                
+                # 3. Create the "Text" format (@)
+                text_format = workbook.add_format({'num_format': '@'})
+                
+                # 4. Find the exact column index for "Glasses color code"
+                code_col_name = None
+                for col in filled_df.columns:
+                    if "Glasses color code" in col or ("ID" in col and "107" in col):
+                        code_col_name = col
+                        break
+                
+                # 5. Apply the Text Format to that entire column
+                if code_col_name:
+                    col_idx = filled_df.columns.get_loc(code_col_name)
+                    # Set column width to 15 and apply text format
+                    worksheet.set_column(col_idx, col_idx, 15, text_format)
+            
             buffer.seek(0)
             
             st.download_button(
