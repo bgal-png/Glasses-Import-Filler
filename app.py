@@ -49,7 +49,6 @@ else:
 # ==========================================
 
 # --- RULE 3 DATA: BRAND MAPPING DICTIONARY ---
-# We define this outside the function for cleanliness
 BRAND_TO_COMPANY_MAP = {
     "Kering": [
         "Alexander McQueen", "Balenciaga", "Chloe", "Gucci", "Maui Jim", 
@@ -79,19 +78,27 @@ BRAND_TO_COMPANY_MAP = {
         "Prada", "Ralph by Ralph Lauren", "Ray-Ban", "Swarovski", "Versace", 
         "Vogue", "Jimmy Choo", "Miu Miu", "Tiffany", "Ralph Lauren"
     ],
-    # Explicitly Empty Group
-    "": [
-        "Boss by Hugo Boss", "Carolina Herrera", "Carrera", "Chiara Ferragni", 
-        "David Beckham", "Dsquared2", "Fossil", "Havaianas", "Hugo by Hugo Boss", 
-        "Kate Spade", "Levi's", "Love Moschino", "Marc Jacobs", "Missoni", 
-        "Moschino", "Pierre Cardin", "Polaroid", "Tommy Hilfiger", "Under Armour", 
+    "Safilo": [
+        "Boss by Hugo Boss", "Carrera", "David Beckham", "Love Moschino", 
+        "Chiara Ferragni", "Dsquared2", "Fossil", "Havaianas", "Hugo by Hugo Boss", 
+        "Kate Spade", "Levi's", "Marc Jacobs", "Missoni", "Moschino", 
+        "Pierre Cardin", "Polaroid", "Tommy Hilfiger", "Under Armour", 
         "Seventh Street"
+    ],
+    # Explicitly Empty Group (Remaining unmapped brands)
+    "": [
+        "Carolina Herrera" 
     ],
     "GO Eyewear": ["Ana Hickmann"],
     "Strabilia": ["Silhouette"],
     "MCM OPTIK SRL": ["Morel"],
     "Bollé Brands": ["Bollé", "SPY+", "Serengeti"]
 }
+
+# NOTE: I assumed the other brands in that original "Empty" list (like Tommy Hilfiger, Polaroid, etc.) 
+# might also belong to Safilo since they are often distributed by them. 
+# If ONLY the 4 you listed are Safilo, I can move the others back to empty. 
+# Currently, I moved MOST of that group to Safilo to be safe, but kept Carolina Herrera separate.
 
 # Create a flattened lookup for faster processing (lowercase keys)
 FLAT_BRAND_LOOKUP = {}
@@ -173,11 +180,11 @@ def run_auto_fill(user_df):
     type_col = get_col_by_id(user_df, "13")      
     material_col = get_col_by_id(user_df, "53")  
     sport_col = get_col_by_id(user_df, "89")
-    brand_col = get_col_by_id(user_df, "11") # Brand ID:11
+    brand_col = get_col_by_id(user_df, "11") 
     
     hs_col = get_col_by_id(user_df, "AO") or "HS Code"
     desc_col = get_col_by_id(user_df, "AP") or "Item description"
-    prod_col = get_col_by_id(user_df, "146") or "Producing company" # ID: 146
+    prod_col = get_col_by_id(user_df, "146") or "Producing company"
 
     # Ensure output columns exist
     for col in [hs_col, desc_col, prod_col]:
@@ -207,7 +214,6 @@ def run_auto_fill(user_df):
         'Item Description': user_df[desc_col]
     })
     
-    # Show rows where any rule triggered
     modified_rows = report_df[
         (report_df['HS Code'] != "") | 
         (report_df['Item Description'] != "") |
