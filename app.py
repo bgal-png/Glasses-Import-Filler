@@ -256,43 +256,38 @@ def apply_other_features(row, type_col, contain_col, rx_col):
     return "|".join(unique_features), f"Features: {unique_features}"
 
 def apply_glasses_model(row, name_col, brand_col):
-    """Rule 11: Extract Model Name"""
+    """Rule 11: Extract Model Name (Strict Cut-Start & Cut-End)"""
     full_name = str(row.get(name_col, '')).strip()
     brand = str(row.get(brand_col, '')).strip()
     
-    # Safety Check: If name is empty, skip
-    if not full_name:
-        return "", ""
+    if not full_name: return "", ""
 
-    # 1. Remove Brand from Start (Case Insensitive)
-    # We use regex ^ to match only at the start
-    if brand:
-        pattern = re.compile(re.escape(brand), re.IGNORECASE)
-        # Only replace the FIRST occurrence at the start
-        if pattern.match(full_name):
-            full_name = pattern.sub("", full_name, count=1).strip()
+    # 1. CUT START: Remove Brand if it starts with it
+    # We use lower() to be case-insensitive safe
+    if brand and full_name.lower().startswith(brand.lower()):
+        # Slice off the brand length
+        full_name = full_name[len(brand):].strip()
     
-    # 2. Remove Color Code (Everything after the last space)
+    # 2. CUT END: Remove everything after the last space (Color Code)
     if " " in full_name:
-        # split once from the right
-        model_part = full_name.rsplit(" ", 1)[0]
-    else:
-        # If no spaces left (e.g. just "M4582"), keep it as is
-        model_part = full_name
-
-    cleaned_model = model_part.strip()
+        # rsplit splits from the right side, maxsplit=1 gives us [Head, Tail]
+        # We take [0] which is the Head (Model Name)
+        full_name = full_name.rsplit(" ", 1)[0]
+    
+    # 3. Trim Final Result
+    cleaned_model = full_name.strip()
     
     if not cleaned_model:
         return "", "Result Empty"
         
-    return cleaned_model, f"Extracted from '{row.get(name_col)}'"
+    return cleaned_model, "Extracted (Trimmed Start/End)"
 
 
 # --- MAIN EXECUTION ---
 
 def run_auto_fill(user_df):
     # Identify Columns
-    name_col = user_df.columns[0] # Assumes Column A is first column (Index 0) - "Glasses name"
+    name_col = user_df.columns[0] # Assumes Column A is "Glasses name"
     
     type_col = get_col_by_id(user_df, "13")      
     material_col = get_col_by_id(user_df, "53")  
@@ -318,8 +313,8 @@ def run_auto_fill(user_df):
     no_order_col = get_col_by_id(user_df, "103") or "Glasses lenses no-orders"
     features_col = get_col_by_id(user_df, "104") or "Glasses other features"
     
-    # Try to find Model column, otherwise default to "Model"
-    model_col = get_col_by_id(user_df, "12") or "Model" # Common ID for model is 12, but backing up
+    # Try to find Model column, otherwise default to "Model" or "Model name"
+    model_col = get_col_by_id(user_df, "12") or "Model" 
 
     target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col, no_order_col, features_col, model_col]
     for col in target_cols:
