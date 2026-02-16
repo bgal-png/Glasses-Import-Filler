@@ -229,6 +229,49 @@ def apply_lenses_no_order(row, frame_type_col, contain_col):
     if not unique_restrictions: return "", ""
     return "|".join(unique_restrictions), f"Restrictions: {unique_restrictions}"
 
+def apply_other_features(row, type_col, contain_col, rx_col):
+    """Rule 10: Glasses Other Features"""
+    g_type = str(row.get(type_col, '')).strip()
+    contain_val = str(row.get(contain_col, '')).strip()
+    rx_val = str(row.get(rx_col, '')).strip().lower()
+    
+    features = []
+    has_sun_clip = False
+    
+    # 1. Sport Glasses with Clip
+    if check_type(g_type, "Sport glasses") and "clip" in contain_val.lower():
+        features.append("Sport glasses with diopter clip")
+        
+    # 2. Specific Clip Features (Direct mapping)
+    # We check for these exact phrases in the 'Contains' column
+    target_clips = [
+        "Magnetic sun clip-on p",
+        "Magnetic sun clip-on",
+        "Sun clip-on p",
+        "Sun clip-on"
+    ]
+    
+    for clip in target_clips:
+        if check_type(contain_val, clip):
+            features.append(clip)
+            has_sun_clip = True
+            
+    # 3. Frames + Sun Clip Logic (Prepend the general category)
+    if check_type(g_type, "Frames") and has_sun_clip:
+        features.insert(0, "Glasses with sun clip-on")
+        
+    # 4. Prescription Sunglasses
+    if rx_val == "yes":
+        features.append("Prescription sunglasses")
+        
+    # Deduplicate while preserving order
+    unique_features = list(dict.fromkeys(features))
+    
+    if not unique_features:
+        return "", ""
+        
+    return "|".join(unique_features), f"Features: {unique_features}"
+
 # --- MAIN EXECUTION ---
 
 def run_auto_fill(user_df):
@@ -244,6 +287,7 @@ def run_auto_fill(user_df):
     lw_col = get_col_by_id(user_df, "72")    
     frame_type_col = get_col_by_id(user_df, "50")
     contain_col = get_col_by_id(user_df, "84")
+    rx_col = get_col_by_id(user_df, "108") or "SunGlasses RX lenses" # ID: 108
     
     hs_col = get_col_by_id(user_df, "AO") or "HS Code"
     desc_col = get_col_by_id(user_df, "AP") or "Item description"
@@ -254,8 +298,9 @@ def run_auto_fill(user_df):
     gender_col = get_col_by_id(user_df, "22") or "Glasses gendre"
     face_col = get_col_by_id(user_df, "94") or "Glasses for your face shape"
     no_order_col = get_col_by_id(user_df, "103") or "Glasses lenses no-orders"
+    features_col = get_col_by_id(user_df, "104") or "Glasses other features" # ID: 104
 
-    target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col, no_order_col]
+    target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col, no_order_col, features_col]
     for col in target_cols:
         if col not in user_df.columns: user_df[col] = ""
 
@@ -286,16 +331,21 @@ def run_auto_fill(user_df):
     
     calc_no_order = user_df.apply(lambda row: apply_lenses_no_order(row, frame_type_col, contain_col), axis=1)
     user_df[no_order_col], no_order_reasons = apply_safe_fill(user_df, no_order_col, calc_no_order)
+    
+    # Rule 10: Other Features
+    calc_features = user_df.apply(lambda row: apply_other_features(row, type_col, contain_col, rx_col), axis=1)
+    user_df[features_col], features_reasons = apply_safe_fill(user_df, features_col, calc_features)
 
     # Report Generation
     report_df = pd.DataFrame({
         'Gender (Y)': user_df[gender_col],
         'Face (AX)': user_df[face_col],
         'No Order (AY)': user_df[no_order_col],
-        'Logic (AY)': no_order_reasons
+        'Features (AD)': user_df[features_col],
+        'Features Logic': features_reasons
     })
     
-    modified_rows = report_df[report_df['Logic (AY)'] != ""]
+    modified_rows = report_df[report_df['Features Logic'] != ""]
     return user_df, modified_rows
 
 # ==========================================
@@ -320,7 +370,7 @@ if uploaded_file:
     
     # BUTTON ACTION
     if st.button("✨ Auto-Fill Data", type="primary"):
-        with st.spinner("Applying Rules 1-9..."):
+        with st.spinner("Applying Rules 1-10..."):
             working_df = user_df.copy()
             filled_df, report = run_auto_fill(working_df)
             
