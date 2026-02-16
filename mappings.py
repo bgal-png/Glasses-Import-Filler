@@ -70,3 +70,11 @@ BRAND_TO_USABLE_MAP = {
         "Carolina Herrera", "David Beckham", "Ralph Lauren", "Victoria Beckham"
     ]
 }
+# --- RULE 5: GLASSES COLLECTION ---
+BRAND_TO_COLLECTION_MAP = {
+    "Prémiové brýle - Kering": [
+        "Alexander McQueen", "Balenciaga", "Gucci", "Saint Laurent", "Chloe", 
+        "Dior", "Christian Dior", "Fendi", "Dolce & Gabbana", "Celine", 
+        "Miu Miu", "Tom Ford", "Prada", "Giorgio Armani", "Beron", "LeWish"
+    ]
+}

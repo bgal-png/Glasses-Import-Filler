@@ -6,7 +6,7 @@ import re
 
 # IMPORT THE MAPPINGS
 try:
-    from mappings import BRAND_TO_COMPANY_MAP, BRAND_TO_USABLE_MAP
+    from mappings import BRAND_TO_COMPANY_MAP, BRAND_TO_USABLE_MAP, BRAND_TO_COLLECTION_MAP
 except ImportError:
     st.error("❌ Critical Error: 'mappings.py' file is missing or missing dictionaries.")
     st.stop()
@@ -65,6 +65,11 @@ FLAT_USABLE_LOOKUP = {}
 for category, brands in BRAND_TO_USABLE_MAP.items():
     for brand in brands:
         FLAT_USABLE_LOOKUP[brand.lower().strip()] = category
+
+FLAT_COLLECTION_LOOKUP = {}
+for collection, brands in BRAND_TO_COLLECTION_MAP.items():
+    for brand in brands:
+        FLAT_COLLECTION_LOOKUP[brand.lower().strip()] = collection
 
 def get_col_by_id(df, target_id):
     """Finds a column name in the user's file that contains a specific ID number."""
@@ -125,10 +130,8 @@ def apply_item_description(row, type_col, mat_col):
 def apply_producing_company(row, brand_col):
     """Rule 3: Producing Company based on Brand"""
     brand_val = str(row.get(brand_col, '')).strip().lower()
-    
     if brand_val in FLAT_BRAND_LOOKUP:
-        company = FLAT_BRAND_LOOKUP[brand_val]
-        return company, f"Matched Brand: {brand_val}"
+        return FLAT_BRAND_LOOKUP[brand_val], f"Matched Brand: {brand_val}"
     return "", "Unknown Brand"
 
 def apply_glasses_usable(row, brand_col, type_col, effect_col, sport_col):
@@ -145,7 +148,6 @@ def apply_glasses_usable(row, brand_col, type_col, effect_col, sport_col):
         results.append(FLAT_USABLE_LOOKUP[brand_val])
         
     # 2. Logic Check: Driving vs Common Use
-    # Only applies if it contains "Sunglasses"
     if check_type(g_type, "Sunglasses"):
         is_polarized = "polarized" in effect_val
         is_ski_swim = any(x in sport_val for x in ["swimm", "swim", "ski", "snowboard"])
@@ -153,13 +155,18 @@ def apply_glasses_usable(row, brand_col, type_col, effect_col, sport_col):
         if is_polarized:
             results.append("Driving glasses")
         elif not is_ski_swim:
-            # Not Polarized AND Not Ski/Swim -> Common use
             results.append("Common use")
             
-    # Join with pipe separator
-    if not results:
-        return "", "No Match"
+    if not results: return "", "No Match"
     return "|".join(results), f"Combined: {results}"
+
+def apply_glasses_collection(row, brand_col):
+    """Rule 5: Glasses Collection based on Brand"""
+    brand_val = str(row.get(brand_col, '')).strip().lower()
+    
+    if brand_val in FLAT_COLLECTION_LOOKUP:
+        return FLAT_COLLECTION_LOOKUP[brand_val], f"Collection Match: {brand_val}"
+    return "", ""
 
 # --- MAIN EXECUTION ---
 
@@ -169,14 +176,15 @@ def run_auto_fill(user_df):
     material_col = get_col_by_id(user_df, "53")  
     sport_col = get_col_by_id(user_df, "89")
     brand_col = get_col_by_id(user_df, "11") 
-    effect_col = get_col_by_id(user_df, "37") # Lens Effect ID: 37
+    effect_col = get_col_by_id(user_df, "37") 
     
     hs_col = get_col_by_id(user_df, "AO") or "HS Code"
     desc_col = get_col_by_id(user_df, "AP") or "Item description"
     prod_col = get_col_by_id(user_df, "146") or "Producing company"
-    usable_col = get_col_by_id(user_df, "51") or "Glasses usable" # ID: 51
+    usable_col = get_col_by_id(user_df, "51") or "Glasses usable"
+    coll_col = get_col_by_id(user_df, "33") or "Glasses collection" # ID: 33
 
-    for col in [hs_col, desc_col, prod_col, usable_col]:
+    for col in [hs_col, desc_col, prod_col, usable_col, coll_col]:
         if col not in user_df.columns: user_df[col] = ""
 
     # 2. Apply Rule 1: HS Code
@@ -198,20 +206,24 @@ def run_auto_fill(user_df):
     usable_results = user_df.apply(lambda row: apply_glasses_usable(row, brand_col, type_col, effect_col, sport_col), axis=1)
     user_df[usable_col] = [r[0] for r in usable_results]
     usable_reasons = [r[1] for r in usable_results]
+
+    # 6. Apply Rule 5: Glasses Collection
+    coll_results = user_df.apply(lambda row: apply_glasses_collection(row, brand_col), axis=1)
+    user_df[coll_col] = [r[0] for r in coll_results]
+    coll_reasons = [r[1] for r in coll_results]
     
-    # 6. Generate Report
+    # 7. Generate Report
     report_df = pd.DataFrame({
         'Brand': user_df[brand_col] if brand_col else "N/A",
-        'Type': user_df[type_col] if type_col else "N/A",
+        'Collection (AA)': user_df[coll_col],
         'Usable (Z)': user_df[usable_col],
-        'Usable Logic': usable_reasons,
         'Prod. Company': user_df[prod_col],
         'HS Code': user_df[hs_col]
     })
     
     modified_rows = report_df[
         (report_df['HS Code'] != "") | 
-        (report_df['Usable (Z)'] != "") |
+        (report_df['Collection (AA)'] != "") |
         (report_df['Prod. Company'] != "Unknown Brand")
     ]
     return user_df, modified_rows
@@ -231,7 +243,7 @@ if uploaded_file:
     st.subheader("2. Run Auto-Fill")
     
     if st.button("✨ Auto-Fill Data", type="primary"):
-        with st.spinner("Applying Rules 1, 2, 3 & 4..."):
+        with st.spinner("Applying Rules 1-5..."):
             working_df = user_df.copy()
             filled_df, report = run_auto_fill(working_df)
             
