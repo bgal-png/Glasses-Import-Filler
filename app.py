@@ -254,29 +254,21 @@ def apply_glasses_model(row, name_col, brand_col):
     full_name = str(row.get(name_col, '')).strip()
     brand = str(row.get(brand_col, '')).strip()
     if not full_name: return "", ""
-    # 1. CUT START: Remove Brand
     if brand and full_name.lower().startswith(brand.lower()):
         full_name = full_name[len(brand):].strip()
-    # 2. CUT END: Remove everything after the last space
     if " " in full_name:
         full_name = full_name.rsplit(" ", 1)[0]
-    # 3. Trim
     cleaned_model = full_name.strip()
     if not cleaned_model: return "", "Result Empty"
     return cleaned_model, "Extracted"
 
 def apply_color_code(row, name_col):
-    """Rule 12: Extract Color Code (Tail Extraction)"""
+    """Rule 12: Extract Color Code"""
     full_name = str(row.get(name_col, '')).strip()
-    
     if not full_name: return "", ""
-    
-    # Check for space
     if " " in full_name:
-        # Split from right, take the LAST part (Index 1)
         color_code = full_name.rsplit(" ", 1)[1]
-        return color_code.strip(), "Extracted Tail"
-        
+        return color_code.strip(), "Extracted"
     return "", "No Space Found"
 
 # --- MAIN EXECUTION ---
@@ -309,7 +301,7 @@ def run_auto_fill(user_df):
     no_order_col = get_col_by_id(user_df, "103") or "Glasses lenses no-orders"
     features_col = get_col_by_id(user_df, "104") or "Glasses other features"
     model_col = get_col_by_id(user_df, "12") or "Model" 
-    code_col = get_col_by_id(user_df, "107") or "Glasses color code" # ID: 107
+    code_col = get_col_by_id(user_df, "107") or "Glasses color code"
 
     target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col, no_order_col, features_col, model_col, code_col]
     for col in target_cols:
@@ -334,12 +326,10 @@ def run_auto_fill(user_df):
     calc_uv = user_df.apply(lambda row: apply_uv_filter(row, type_col), axis=1)
     user_df[uv_col], _ = apply_safe_fill(user_df, uv_col, calc_uv)
     
-    # Rule 7 (Gender) - Special Case
     gender_results = user_df.apply(lambda row: apply_glasses_gender(row, gender_col, color_col, shape_col, tl_col, lw_col), axis=1)
     user_df[gender_col] = [r[0] for r in gender_results]
     gender_reasons = [r[1] for r in gender_results]
     
-    # Rules 8-10 (Safe Mode)
     calc_face = user_df.apply(lambda row: apply_face_shape(row, shape_col), axis=1)
     user_df[face_col], face_reasons = apply_safe_fill(user_df, face_col, calc_face)
     
@@ -349,15 +339,13 @@ def run_auto_fill(user_df):
     calc_features = user_df.apply(lambda row: apply_other_features(row, type_col, contain_col, rx_col), axis=1)
     user_df[features_col], features_reasons = apply_safe_fill(user_df, features_col, calc_features)
 
-    # Rule 11 (Model)
     calc_model = user_df.apply(lambda row: apply_glasses_model(row, name_col, brand_col), axis=1)
     user_df[model_col], model_reasons = apply_safe_fill(user_df, model_col, calc_model)
 
-    # Rule 12 (Color Code)
     calc_code = user_df.apply(lambda row: apply_color_code(row, name_col), axis=1)
     user_df[code_col], code_reasons = apply_safe_fill(user_df, code_col, calc_code)
 
-    # Report Generation
+    # Report
     report_df = pd.DataFrame({
         'Gender (Y)': user_df[gender_col],
         'Gender Logic': gender_reasons,
@@ -367,7 +355,6 @@ def run_auto_fill(user_df):
         'Code Logic': code_reasons
     })
     
-    # Filter to show rows where ANY rule applied a change
     modified_rows = report_df[
         (report_df['Gender Logic'] != "") |
         (report_df['Model Logic'] != "") |
@@ -389,24 +376,47 @@ if uploaded_file:
     st.divider()
     st.subheader("2. Run Auto-Fill")
     
-    # BUTTON ACTION
     if st.button("✨ Auto-Fill Data", type="primary"):
         with st.spinner("Applying Rules 1-12..."):
             working_df = user_df.copy()
             filled_df, report = run_auto_fill(working_df)
             st.success(f"✅ Rules Applied!")
 
-            # SHOW REPORT
             with st.expander("📊 View Processing Report", expanded=True):
                 if not report.empty:
                     st.dataframe(report, use_container_width=True)
                 else:
                     st.info("No rows matched the current rules.")
             
-            # DOWNLOAD
+            # --- ADVANCED EXCEL WRITING (Force Text Format) ---
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                filled_df.to_excel(writer, index=False)
+                # Write data to 'Sheet1'
+                filled_df.to_excel(writer, index=False, sheet_name='Sheet1')
+                
+                # Access Workbook and Worksheet
+                workbook = writer.book
+                worksheet = writer.sheets['Sheet1']
+                
+                # Create Text Format (@)
+                text_fmt = workbook.add_format({'num_format': '@'})
+                
+                # Identify Column Index for "Glasses color code"
+                # We need to find the specific column in the final dataframe
+                code_target = "Glasses color code"
+                for col in filled_df.columns:
+                    if "ID" in col and "107" in col:
+                        code_target = col
+                        break
+                    if "Glasses color code" in col:
+                        code_target = col
+                
+                # Apply Format if Column Found
+                if code_target in filled_df.columns:
+                    col_idx = filled_df.columns.get_loc(code_target)
+                    # Set column width to 15 and format to Text
+                    worksheet.set_column(col_idx, col_idx, 15, text_fmt)
+            
             buffer.seek(0)
             
             st.download_button(
