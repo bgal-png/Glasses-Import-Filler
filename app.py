@@ -20,12 +20,6 @@ except ImportError:
 st.set_page_config(page_title="Excel Auto-Filler", layout="wide")
 st.title("⚡ Excel Data Filler: Glasses Edition")
 
-# Initialize Session State
-if 'filled_df' not in st.session_state:
-    st.session_state.filled_df = None
-if 'report_df' not in st.session_state:
-    st.session_state.report_df = None
-
 # ==========================================
 # 🔒 INDESTRUCTIBLE LOADER (LOCKED VERSION)
 # ==========================================
@@ -256,31 +250,25 @@ def apply_other_features(row, type_col, contain_col, rx_col):
     return "|".join(unique_features), f"Features: {unique_features}"
 
 def apply_glasses_model(row, name_col, brand_col):
-    """Rule 11: Extract Model Name (Strict Cut-Start & Cut-End)"""
+    """Rule 11: Extract Model Name"""
     full_name = str(row.get(name_col, '')).strip()
     brand = str(row.get(brand_col, '')).strip()
     
     if not full_name: return "", ""
 
-    # 1. CUT START: Remove Brand if it starts with it
-    # We use lower() to be case-insensitive safe
+    # 1. CUT START: Remove Brand
     if brand and full_name.lower().startswith(brand.lower()):
-        # Slice off the brand length
         full_name = full_name[len(brand):].strip()
     
-    # 2. CUT END: Remove everything after the last space (Color Code)
+    # 2. CUT END: Remove everything after the last space
     if " " in full_name:
-        # rsplit splits from the right side, maxsplit=1 gives us [Head, Tail]
-        # We take [0] which is the Head (Model Name)
         full_name = full_name.rsplit(" ", 1)[0]
     
-    # 3. Trim Final Result
+    # 3. Trim
     cleaned_model = full_name.strip()
     
-    if not cleaned_model:
-        return "", "Result Empty"
-        
-    return cleaned_model, "Extracted (Trimmed Start/End)"
+    if not cleaned_model: return "", "Result Empty"
+    return cleaned_model, "Extracted"
 
 
 # --- MAIN EXECUTION ---
@@ -312,8 +300,6 @@ def run_auto_fill(user_df):
     face_col = get_col_by_id(user_df, "94") or "Glasses for your face shape"
     no_order_col = get_col_by_id(user_df, "103") or "Glasses lenses no-orders"
     features_col = get_col_by_id(user_df, "104") or "Glasses other features"
-    
-    # Try to find Model column, otherwise default to "Model" or "Model name"
     model_col = get_col_by_id(user_df, "12") or "Model" 
 
     target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col, no_order_col, features_col, model_col]
@@ -351,7 +337,6 @@ def run_auto_fill(user_df):
     calc_features = user_df.apply(lambda row: apply_other_features(row, type_col, contain_col, rx_col), axis=1)
     user_df[features_col], features_reasons = apply_safe_fill(user_df, features_col, calc_features)
 
-    # Rule 11: Model Extraction
     calc_model = user_df.apply(lambda row: apply_glasses_model(row, name_col, brand_col), axis=1)
     user_df[model_col], model_reasons = apply_safe_fill(user_df, model_col, calc_model)
 
@@ -375,12 +360,6 @@ st.subheader("1. Upload Partial Data")
 uploaded_file = st.file_uploader("Choose Excel File", type=['xlsx'])
 
 if uploaded_file:
-    # Reset state if a NEW file is uploaded
-    if st.session_state.get('last_uploaded_file') != uploaded_file.name:
-        st.session_state.filled_df = None
-        st.session_state.report_df = None
-        st.session_state.last_uploaded_file = uploaded_file.name
-
     user_df = pd.read_excel(uploaded_file, dtype=str)
     st.write(f"Loaded {len(user_df)} rows.")
 
@@ -392,28 +371,24 @@ if uploaded_file:
         with st.spinner("Applying Rules 1-11..."):
             working_df = user_df.copy()
             filled_df, report = run_auto_fill(working_df)
-            
-            # SAVE TO SESSION STATE
-            st.session_state.filled_df = filled_df
-            st.session_state.report_df = report
             st.success(f"✅ Rules Applied!")
 
-    # PERSISTENT DISPLAY
-    if st.session_state.filled_df is not None:
-        with st.expander("📊 View Processing Report", expanded=True):
-            if not st.session_state.report_df.empty:
-                st.dataframe(st.session_state.report_df, use_container_width=True)
-            else:
-                st.info("No rows matched the current rules.")
-        
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-            st.session_state.filled_df.to_excel(writer, index=False)
-        buffer.seek(0)
-        
-        st.download_button(
-            label="📥 Download Updated Excel",
-            data=buffer,
-            file_name="filled_glasses_data.xlsx",
-            mime="application/vnd.ms-excel"
-        )
+            # SHOW REPORT
+            with st.expander("📊 View Processing Report", expanded=True):
+                if not report.empty:
+                    st.dataframe(report, use_container_width=True)
+                else:
+                    st.info("No rows matched the current rules.")
+            
+            # DOWNLOAD
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                filled_df.to_excel(writer, index=False)
+            buffer.seek(0)
+            
+            st.download_button(
+                label="📥 Download Updated Excel",
+                data=buffer,
+                file_name="filled_glasses_data.xlsx",
+                mime="application/vnd.ms-excel"
+            )
