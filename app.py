@@ -21,7 +21,7 @@ st.set_page_config(page_title="Excel Auto-Filler", layout="wide")
 st.title("⚡ Excel Data Filler: Glasses Edition")
 
 # ==========================================
-# 🔒 INDESTRUCTIBLE LOADER (LOCKED VERSION)
+# 🔒 INDESTRUCTIBLE LOADER
 # ==========================================
 @st.cache_data
 def load_master():
@@ -99,18 +99,24 @@ def to_float(val):
         return 0.0
 
 def apply_safe_fill(df, target_col, calculated_results):
+    """
+    CRITICAL SAFETY:
+    - If cell is EMPTY -> Fill it (Reason included).
+    - If cell has DATA -> Keep it (Reason is empty string).
+    """
     current_vals = df[target_col].astype(str).fillna("")
     final_vals = []
     report_reasons = []
     
     for curr, (new_val, new_reason) in zip(current_vals, calculated_results):
         curr_clean = curr.strip()
+        # Checks for true emptiness or the word 'nan'
         if curr_clean == "" or curr_clean.lower() == "nan":
             final_vals.append(new_val)
             report_reasons.append(new_reason)
         else:
             final_vals.append(curr)
-            report_reasons.append("") 
+            report_reasons.append("") # Empty reason = "I touched nothing"
             
     return final_vals, report_reasons
 
@@ -183,6 +189,7 @@ def apply_uv_filter(row, type_col):
     return "", ""
 
 def apply_glasses_gender(row, gender_col, color_col, shape_col, tl_col, lw_col):
+    # This rule is SPECIAL: It allows editing of "Child" but respects other values.
     current_val = str(row.get(gender_col, '')).strip()
     current_lower = current_val.lower()
     color = str(row.get(color_col, '')).strip().lower()
@@ -253,20 +260,15 @@ def apply_glasses_model(row, name_col, brand_col):
     """Rule 11: Extract Model Name"""
     full_name = str(row.get(name_col, '')).strip()
     brand = str(row.get(brand_col, '')).strip()
-    
     if not full_name: return "", ""
-
     # 1. CUT START: Remove Brand
     if brand and full_name.lower().startswith(brand.lower()):
         full_name = full_name[len(brand):].strip()
-    
     # 2. CUT END: Remove everything after the last space
     if " " in full_name:
         full_name = full_name.rsplit(" ", 1)[0]
-    
     # 3. Trim
     cleaned_model = full_name.strip()
-    
     if not cleaned_model: return "", "Result Empty"
     return cleaned_model, "Extracted"
 
@@ -275,7 +277,7 @@ def apply_glasses_model(row, name_col, brand_col):
 
 def run_auto_fill(user_df):
     # Identify Columns
-    name_col = user_df.columns[0] # Assumes Column A is "Glasses name"
+    name_col = user_df.columns[0]
     
     type_col = get_col_by_id(user_df, "13")      
     material_col = get_col_by_id(user_df, "53")  
@@ -325,31 +327,46 @@ def run_auto_fill(user_df):
     calc_uv = user_df.apply(lambda row: apply_uv_filter(row, type_col), axis=1)
     user_df[uv_col], _ = apply_safe_fill(user_df, uv_col, calc_uv)
     
+    # Rule 7 (Gender) - Special Case, bypasses safe_fill
     gender_results = user_df.apply(lambda row: apply_glasses_gender(row, gender_col, color_col, shape_col, tl_col, lw_col), axis=1)
     user_df[gender_col] = [r[0] for r in gender_results]
+    gender_reasons = [r[1] for r in gender_results]
     
+    # Rule 8 (Face) - Uses safe_fill
     calc_face = user_df.apply(lambda row: apply_face_shape(row, shape_col), axis=1)
-    user_df[face_col], _ = apply_safe_fill(user_df, face_col, calc_face)
+    user_df[face_col], face_reasons = apply_safe_fill(user_df, face_col, calc_face)
     
+    # Rule 9 (No Order) - Uses safe_fill
     calc_no_order = user_df.apply(lambda row: apply_lenses_no_order(row, frame_type_col, contain_col), axis=1)
     user_df[no_order_col], no_order_reasons = apply_safe_fill(user_df, no_order_col, calc_no_order)
     
+    # Rule 10 (Features) - Uses safe_fill
     calc_features = user_df.apply(lambda row: apply_other_features(row, type_col, contain_col, rx_col), axis=1)
     user_df[features_col], features_reasons = apply_safe_fill(user_df, features_col, calc_features)
 
+    # Rule 11 (Model) - Uses safe_fill
     calc_model = user_df.apply(lambda row: apply_glasses_model(row, name_col, brand_col), axis=1)
     user_df[model_col], model_reasons = apply_safe_fill(user_df, model_col, calc_model)
 
-    # Report Generation
+    # Report Generation (Includes ALL logic columns now)
     report_df = pd.DataFrame({
         'Gender (Y)': user_df[gender_col],
+        'Gender Logic': gender_reasons,
         'Face (AX)': user_df[face_col],
+        'Face Logic': face_reasons,
         'Features (AD)': user_df[features_col],
+        'Features Logic': features_reasons,
         'Model Name': user_df[model_col],
         'Model Logic': model_reasons
     })
     
-    modified_rows = report_df[report_df['Model Logic'] != ""]
+    # Filter to show rows where ANY rule applied a change
+    modified_rows = report_df[
+        (report_df['Gender Logic'] != "") |
+        (report_df['Face Logic'] != "") |
+        (report_df['Features Logic'] != "") |
+        (report_df['Model Logic'] != "")
+    ]
     return user_df, modified_rows
 
 # ==========================================
