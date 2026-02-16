@@ -4,6 +4,13 @@ import os
 import io
 import re
 
+# IMPORT THE MAPPINGS
+try:
+    from mappings import BRAND_TO_COMPANY_MAP
+except ImportError:
+    st.error("❌ Critical Error: 'mappings.py' file is missing. Please create it.")
+    st.stop()
+
 # 1. Page Configuration
 st.set_page_config(page_title="Excel Auto-Filler", layout="wide")
 st.title("⚡ Excel Data Filler: Glasses Edition")
@@ -47,49 +54,6 @@ else:
 # ==========================================
 # 🧠 THE BRAIN: FILLING LOGIC
 # ==========================================
-
-# --- RULE 3 DATA: BRAND MAPPING DICTIONARY ---
-BRAND_TO_COMPANY_MAP = {
-    "Kering": [
-        "Alexander McQueen", "Balenciaga", "Chloe", "Gucci", "Maui Jim", 
-        "Montblanc", "Puma", "Saint Laurent"
-    ],
-    "Marcolin": [
-        "Adidas", "Guess", "Max Mara", "MAX&Co.", "Tom Ford"
-    ],
-    "Ostalo": [
-        "Arena", "Cebe", "Hawkers", "HEAD", "Lavida", "POC", "Oxydo", "Alpina'", "Alpina"
-    ],
-    "Inspecs": [
-        "Caterpillar", "O'Neill", "Radley", "Superdry"
-    ],
-    "Marchon": [
-        "Calvin Klein", "Lacoste", "LIU JO", "Nike"
-    ],
-    "Alensa": [
-        "Alensa"
-    ],
-    "Adrial": [
-        "Crullé", "Kimikado", "Marisio", "Válle", "LeWish", "Beron"
-    ],
-    "Luxottica": [
-        "Arnette", "Burberry", "Dolce & Gabbana", "Emporio Armani", "Giorgio Armani", 
-        "Armani Exchange", "Michael Kors", "Oakley", "Persol", "Polo Ralph Lauren", 
-        "Prada", "Ralph by Ralph Lauren", "Ray-Ban", "Swarovski", "Versace", 
-        "Vogue", "Jimmy Choo", "Miu Miu", "Tiffany", "Ralph Lauren"
-    ],
-    "Safilo": [
-        "Boss by Hugo Boss", "Carrera", "David Beckham", "Love Moschino", 
-        "Chiara Ferragni", "Dsquared2", "Fossil", "Havaianas", "Hugo by Hugo Boss", 
-        "Kate Spade", "Levi's", "Marc Jacobs", "Missoni", "Moschino", 
-        "Pierre Cardin", "Polaroid", "Tommy Hilfiger", "Under Armour", 
-        "Seventh Street", "Carolina Herrera" 
-    ],
-    "GO Eyewear": ["Ana Hickmann"],
-    "Strabilia": ["Silhouette"],
-    "MCM OPTIK SRL": ["Morel"],
-    "Bollé Brands": ["Bollé", "SPY+", "Serengeti"]
-}
 
 # Create a flattened lookup for faster processing (lowercase keys)
 FLAT_BRAND_LOOKUP = {}
@@ -154,7 +118,7 @@ def apply_item_description(row, type_col, mat_col):
     return "", "No Match"
 
 def apply_producing_company(row, brand_col):
-    """Rule 3: Producing Company based on Brand"""
+    """Rule 3: Producing Company based on Brand (using imported mappings)"""
     brand_val = str(row.get(brand_col, '')).strip().lower()
     
     if brand_val in FLAT_BRAND_LOOKUP:
