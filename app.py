@@ -6,7 +6,12 @@ import re
 
 # IMPORT THE MAPPINGS
 try:
-    from mappings import BRAND_TO_COMPANY_MAP, BRAND_TO_USABLE_MAP, BRAND_TO_COLLECTION_MAP
+    from mappings import (
+        BRAND_TO_COMPANY_MAP, 
+        BRAND_TO_USABLE_MAP, 
+        BRAND_TO_COLLECTION_MAP,
+        FACE_SHAPE_MAP  # <--- NEW IMPORT
+    )
 except ImportError:
     st.error("❌ Critical Error: 'mappings.py' file is missing or missing dictionaries.")
     st.stop()
@@ -70,6 +75,11 @@ FLAT_COLLECTION_LOOKUP = {}
 for collection, brands in BRAND_TO_COLLECTION_MAP.items():
     for brand in brands:
         FLAT_COLLECTION_LOOKUP[brand.lower().strip()] = collection
+
+FLAT_FACE_LOOKUP = {}
+for face_shape, sources in FACE_SHAPE_MAP.items():
+    for source in sources:
+        FLAT_FACE_LOOKUP[source.lower().strip()] = face_shape
 
 def get_col_by_id(df, target_id):
     """Finds a column name in the user's file that contains a specific ID number."""
@@ -190,56 +200,46 @@ def apply_uv_filter(row, type_col):
     return "", ""
 
 def apply_glasses_gender(row, gender_col, color_col, shape_col, tl_col, lw_col):
-    """Rule 7: Expanded Gender Logic (Refined)"""
-    
+    """Rule 7: Expanded Gender Logic"""
     current_val = str(row.get(gender_col, '')).strip()
     current_lower = current_val.lower()
-    
     color = str(row.get(color_col, '')).strip().lower()
     shape = str(row.get(shape_col, '')).strip().lower()
     
-    # 1. CHECK FEMALE TRIGGERS
-    # Trigger if shape is cat eye OR color is pink/purple (or cat eye is mistakenly in color col)
-    is_female_specific = (
-        "cat eye" in shape or 
-        "pink" in color or 
-        "purple" in color or 
-        "cat eye" in color
-    )
+    is_female_specific = ("cat eye" in shape or "pink" in color or "purple" in color or "cat eye" in color)
     
-    # 2. SCENARIO A: CELL CONTAINS "CHILD"
+    # A. Expand Child
     if "child" in current_lower:
         tl = to_float(row.get(tl_col, 0))
         lw = to_float(row.get(lw_col, 0))
+        genders = ["Child-Girls"] if is_female_specific else ["Child-Boys", "Child-Girls"]
         
-        # Decide Base Categories
-        if is_female_specific:
-            genders = ["Child-Girls"]
-        else:
-            genders = ["Child-Boys", "Child-Girls"] # Default
-            
-        # Determine Size Categories
         size_cats = []
         if (0 < tl <= 125) and (0 < lw <= 40): size_cats.append("Toddlers")
         if (115 <= tl <= 135) and (35 <= lw <= 48): size_cats.append("PreschoolKids")
         if (130 <= tl <= 145) and (45 <= lw <= 99): size_cats.append("SchoolKids")
 
-        # Build String
         final_parts = ["Child"]
         final_parts.extend(genders)
         for gender in genders:
             for size in size_cats:
                 final_parts.append(f"{gender}-{size}")
-                
-        return "|".join(final_parts), f"Expanded Child (Female={is_female_specific})"
+        return "|".join(final_parts), f"Expanded Child"
 
-    # 3. SCENARIO B: CELL IS EMPTY -> INFER WOMAN
+    # B. Infer Woman
     if current_val == "" or current_lower == "nan":
-        if is_female_specific:
-            return "Woman", "Inferred Woman (Cat Eye/Pink/Purple)"
+        if is_female_specific: return "Woman", "Inferred Woman"
             
-    # 4. SCENARIO C: PRESERVE EXISTING
     return current_val, ""
+
+def apply_face_shape(row, shape_col):
+    """Rule 8: Face Shape Recommendation"""
+    shape_val = str(row.get(shape_col, '')).strip().lower()
+    
+    if shape_val in FLAT_FACE_LOOKUP:
+        return FLAT_FACE_LOOKUP[shape_val], f"Match: {shape_val}"
+    
+    return "", ""
 
 # --- MAIN EXECUTION ---
 
@@ -262,15 +262,15 @@ def run_auto_fill(user_df):
     coll_col = get_col_by_id(user_df, "33") or "Glasses collection"
     uv_col = get_col_by_id(user_df, "60") or "UV filter"
     gender_col = get_col_by_id(user_df, "22") or "Glasses gendre"
+    face_col = get_col_by_id(user_df, "94") or "Glasses for your face shape" # ID: 94
 
     # Initialize Columns
-    target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col]
+    target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col]
     for col in target_cols:
         if col not in user_df.columns: user_df[col] = ""
 
     # --- APPLY RULES ---
     
-    # 1-6 Safe Mode Fill
     calc_hs = user_df.apply(lambda row: apply_hs_code(row, type_col, material_col, sport_col), axis=1)
     user_df[hs_col], _ = apply_safe_fill(user_df, hs_col, calc_hs)
 
@@ -289,22 +289,22 @@ def run_auto_fill(user_df):
     calc_uv = user_df.apply(lambda row: apply_uv_filter(row, type_col), axis=1)
     user_df[uv_col], _ = apply_safe_fill(user_df, uv_col, calc_uv)
     
-    # 7. Rule 7: Gender (CUSTOM UPDATE LOGIC)
+    # Rule 7 (Custom logic inside function)
     gender_results = user_df.apply(lambda row: apply_glasses_gender(row, gender_col, color_col, shape_col, tl_col, lw_col), axis=1)
     user_df[gender_col] = [r[0] for r in gender_results]
-    gender_reasons = [r[1] for r in gender_results]
+    
+    # Rule 8: Face Shape
+    calc_face = user_df.apply(lambda row: apply_face_shape(row, shape_col), axis=1)
+    user_df[face_col], face_reasons = apply_safe_fill(user_df, face_col, calc_face)
 
     # Report Generation
     report_df = pd.DataFrame({
-        'Gender (Y)': user_df[gender_col],
-        'Gender Logic': gender_reasons,
-        'TL': user_df[tl_col] if tl_col else 0,
-        'LW': user_df[lw_col] if lw_col else 0,
-        'Color': user_df[color_col] if color_col else "",
-        'Shape': user_df[shape_col] if shape_col else ""
+        'Shape (ID:25)': user_df[shape_col] if shape_col else "",
+        'Face Shape (AX)': user_df[face_col],
+        'Face Logic': face_reasons
     })
     
-    modified_rows = report_df[report_df['Gender Logic'] != ""]
+    modified_rows = report_df[report_df['Face Logic'] != ""]
     return user_df, modified_rows
 
 # ==========================================
@@ -322,7 +322,7 @@ if uploaded_file:
     st.subheader("2. Run Auto-Fill")
     
     if st.button("✨ Auto-Fill Data", type="primary"):
-        with st.spinner("Applying Rules 1-7 (Safe Mode)..."):
+        with st.spinner("Applying Rules 1-8..."):
             working_df = user_df.copy()
             filled_df, report = run_auto_fill(working_df)
             
@@ -332,7 +332,7 @@ if uploaded_file:
                 if not report.empty:
                     st.dataframe(report, use_container_width=True)
                 else:
-                    st.info("No rows required gender updates.")
+                    st.info("No rows matched the current rules.")
             
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
