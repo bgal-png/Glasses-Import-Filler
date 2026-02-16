@@ -44,6 +44,7 @@ def load_master():
             if df is not None: break
     if df is None:
         st.error(f"❌ Could not read '{file_path}'."); st.stop()
+    # Normalize headers slightly to make regex easier (replace tabs/newlines with space)
     df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
     return df
 
@@ -83,14 +84,20 @@ for face_shape, sources in FACE_SHAPE_MAP.items():
 
 def get_col_by_id(df, target_id):
     """
-    Robust Column Finder:
-    - Ignores Case (ID vs id)
-    - Ignores Line Breaks (DOTALL flag)
-    - Finds ID even if buried in multiline header
+    STRICT ID MATCHING:
+    Ignores the column name text entirely.
+    Looks ONLY for 'ID' followed by the specific number.
+    Handles 'ID: 52', 'ID:52', 'ID 52', 'id: 52' etc.
     """
+    # Regex breakdown:
+    # ID   -> Literal text "ID" (case insensitive)
+    # [:\s]+ -> One or more colons or whitespace characters
+    # {target_id} -> The specific number we want
+    # \b   -> Word boundary (so ID: 5 doesn't match ID: 52)
+    pattern = re.compile(f"ID[:\s]+{target_id}\\b", re.IGNORECASE)
+    
     for col in df.columns:
-        # Matches "ID" followed by any whitespace (including \n) or colon, then the number
-        if re.search(f"ID[:\s]+{target_id}\\b", str(col), re.IGNORECASE | re.DOTALL):
+        if pattern.search(str(col)):
             return col
     return None
 
@@ -282,8 +289,8 @@ def apply_color_code(row, name_col):
 # --- MAIN EXECUTION ---
 
 def run_auto_fill(user_df):
-    # Ensure column headers are treated as strings to safely search them
-    user_df.columns = user_df.columns.astype(str)
+    # Normalize headers first thing to help search
+    user_df.columns = user_df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
 
     # Identify Columns
     name_col = user_df.columns[0]
@@ -311,16 +318,13 @@ def run_auto_fill(user_df):
     face_col = get_col_by_id(user_df, "94") or "Glasses for your face shape"
     no_order_col = get_col_by_id(user_df, "103") or "Glasses lenses no-orders"
     features_col = get_col_by_id(user_df, "104") or "Glasses other features"
-    
-    # NOTE: Using ID 12 for model, assuming that's the standard. 
-    # If your file has ID 52 for model, change "12" to "52" below.
     model_col = get_col_by_id(user_df, "12") or "Model" 
     code_col = get_col_by_id(user_df, "107") or "Glasses color code"
 
     target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col, no_order_col, features_col, model_col, code_col]
     
-    # Important: This loop only creates a new column if get_col_by_id returned the fallback string 
-    # and that string doesn't exist. Now that get_col_by_id is robust, it should find your existing columns.
+    # Check what columns exist. Only create new ones if strictly necessary
+    # (Since we normalized headers and use strict ID search, this should no longer duplicate columns)
     for col in target_cols:
         if col not in user_df.columns: user_df[col] = ""
 
@@ -405,30 +409,24 @@ if uploaded_file:
                 else:
                     st.info("No rows matched the current rules.")
             
-            # --- STRICT EXCEL FORMATTING (NO APOSTROPHE, JUST TEXT) ---
+            # --- STRICT EXCEL FORMATTING ---
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                # 1. Write the DataFrame
                 filled_df.to_excel(writer, index=False, sheet_name='Sheet1')
                 
-                # 2. Get Workbook & Worksheet objects
                 workbook = writer.book
                 worksheet = writer.sheets['Sheet1']
                 
-                # 3. Create the "Text" format (@)
                 text_format = workbook.add_format({'num_format': '@'})
                 
-                # 4. Find the exact column index for "Glasses color code"
                 code_col_name = None
                 for col in filled_df.columns:
-                    if "Glasses color code" in col or ("ID" in col and "107" in col):
+                    if "ID" in col and "107" in col:
                         code_col_name = col
                         break
                 
-                # 5. Apply the Text Format to that entire column
                 if code_col_name:
                     col_idx = filled_df.columns.get_loc(code_col_name)
-                    # Set column width to 15 and apply text format
                     worksheet.set_column(col_idx, col_idx, 15, text_format)
             
             buffer.seek(0)
