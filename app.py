@@ -83,13 +83,14 @@ for face_shape, sources in FACE_SHAPE_MAP.items():
 
 def get_col_by_id(df, target_id):
     """
-    UPGRADED: Finds ID even if hidden by line breaks (Alt+Enter)
-    This prevents duplicate columns from being created.
+    Robust Column Finder:
+    - Ignores Case (ID vs id)
+    - Ignores Line Breaks (DOTALL flag)
+    - Finds ID even if buried in multiline header
     """
     for col in df.columns:
-        # Replace newlines with spaces strictly for the search check
-        clean_col_name = str(col).replace('\n', ' ')
-        if re.search(f"ID[:\s]+{target_id}\\b", clean_col_name, re.IGNORECASE):
+        # Matches "ID" followed by any whitespace (including \n) or colon, then the number
+        if re.search(f"ID[:\s]+{target_id}\\b", str(col), re.IGNORECASE | re.DOTALL):
             return col
     return None
 
@@ -111,6 +112,7 @@ def apply_safe_fill(df, target_col, calculated_results):
     
     for curr, (new_val, new_reason) in zip(current_vals, calculated_results):
         curr_clean = curr.strip()
+        # If cell is obstructed (has text), keep original text
         if curr_clean == "" or curr_clean.lower() == "nan":
             final_vals.append(new_val)
             report_reasons.append(new_reason)
@@ -269,11 +271,10 @@ def apply_glasses_model(row, name_col, brand_col):
     return cleaned_model, "Extracted"
 
 def apply_color_code(row, name_col):
-    """Rule 12: Extract Color Code (No Tricks, just String)"""
+    """Rule 12: Extract Color Code"""
     full_name = str(row.get(name_col, '')).strip()
     if not full_name: return "", ""
     if " " in full_name:
-        # Extract the last part (e.g. "003")
         color_code = full_name.rsplit(" ", 1)[1].strip()
         return color_code, "Extracted"
     return "", "No Space Found"
@@ -281,6 +282,9 @@ def apply_color_code(row, name_col):
 # --- MAIN EXECUTION ---
 
 def run_auto_fill(user_df):
+    # Ensure column headers are treated as strings to safely search them
+    user_df.columns = user_df.columns.astype(str)
+
     # Identify Columns
     name_col = user_df.columns[0]
     
@@ -307,10 +311,16 @@ def run_auto_fill(user_df):
     face_col = get_col_by_id(user_df, "94") or "Glasses for your face shape"
     no_order_col = get_col_by_id(user_df, "103") or "Glasses lenses no-orders"
     features_col = get_col_by_id(user_df, "104") or "Glasses other features"
+    
+    # NOTE: Using ID 12 for model, assuming that's the standard. 
+    # If your file has ID 52 for model, change "12" to "52" below.
     model_col = get_col_by_id(user_df, "12") or "Model" 
     code_col = get_col_by_id(user_df, "107") or "Glasses color code"
 
     target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col, no_order_col, features_col, model_col, code_col]
+    
+    # Important: This loop only creates a new column if get_col_by_id returned the fallback string 
+    # and that string doesn't exist. Now that get_col_by_id is robust, it should find your existing columns.
     for col in target_cols:
         if col not in user_df.columns: user_df[col] = ""
 
