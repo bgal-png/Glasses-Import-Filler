@@ -230,52 +230,70 @@ def apply_lenses_no_order(row, frame_type_col, contain_col):
     return "|".join(unique_restrictions), f"Restrictions: {unique_restrictions}"
 
 def apply_other_features(row, type_col, contain_col, rx_col):
-    """Rule 10: Glasses Other Features"""
     g_type = str(row.get(type_col, '')).strip()
     contain_val = str(row.get(contain_col, '')).strip()
     rx_val = str(row.get(rx_col, '')).strip().lower()
-    
     features = []
     has_sun_clip = False
     
-    # 1. Sport Glasses with Clip
     if check_type(g_type, "Sport glasses") and "clip" in contain_val.lower():
         features.append("Sport glasses with diopter clip")
-        
-    # 2. Specific Clip Features (Direct mapping)
-    # We check for these exact phrases in the 'Contains' column
-    target_clips = [
-        "Magnetic sun clip-on p",
-        "Magnetic sun clip-on",
-        "Sun clip-on p",
-        "Sun clip-on"
-    ]
     
+    target_clips = ["Magnetic sun clip-on p", "Magnetic sun clip-on", "Sun clip-on p", "Sun clip-on"]
     for clip in target_clips:
         if check_type(contain_val, clip):
             features.append(clip)
             has_sun_clip = True
             
-    # 3. Frames + Sun Clip Logic (Prepend the general category)
     if check_type(g_type, "Frames") and has_sun_clip:
         features.insert(0, "Glasses with sun clip-on")
         
-    # 4. Prescription Sunglasses
     if rx_val == "yes":
         features.append("Prescription sunglasses")
         
-    # Deduplicate while preserving order
     unique_features = list(dict.fromkeys(features))
-    
-    if not unique_features:
-        return "", ""
-        
+    if not unique_features: return "", ""
     return "|".join(unique_features), f"Features: {unique_features}"
+
+def apply_glasses_model(row, name_col, brand_col):
+    """Rule 11: Extract Model Name"""
+    full_name = str(row.get(name_col, '')).strip()
+    brand = str(row.get(brand_col, '')).strip()
+    
+    # Safety Check: If name is empty, skip
+    if not full_name:
+        return "", ""
+
+    # 1. Remove Brand from Start (Case Insensitive)
+    # We use regex ^ to match only at the start
+    if brand:
+        pattern = re.compile(re.escape(brand), re.IGNORECASE)
+        # Only replace the FIRST occurrence at the start
+        if pattern.match(full_name):
+            full_name = pattern.sub("", full_name, count=1).strip()
+    
+    # 2. Remove Color Code (Everything after the last space)
+    if " " in full_name:
+        # split once from the right
+        model_part = full_name.rsplit(" ", 1)[0]
+    else:
+        # If no spaces left (e.g. just "M4582"), keep it as is
+        model_part = full_name
+
+    cleaned_model = model_part.strip()
+    
+    if not cleaned_model:
+        return "", "Result Empty"
+        
+    return cleaned_model, f"Extracted from '{row.get(name_col)}'"
+
 
 # --- MAIN EXECUTION ---
 
 def run_auto_fill(user_df):
     # Identify Columns
+    name_col = user_df.columns[0] # Assumes Column A is first column (Index 0) - "Glasses name"
+    
     type_col = get_col_by_id(user_df, "13")      
     material_col = get_col_by_id(user_df, "53")  
     sport_col = get_col_by_id(user_df, "89")
@@ -287,7 +305,7 @@ def run_auto_fill(user_df):
     lw_col = get_col_by_id(user_df, "72")    
     frame_type_col = get_col_by_id(user_df, "50")
     contain_col = get_col_by_id(user_df, "84")
-    rx_col = get_col_by_id(user_df, "108") or "SunGlasses RX lenses" # ID: 108
+    rx_col = get_col_by_id(user_df, "108") or "SunGlasses RX lenses"
     
     hs_col = get_col_by_id(user_df, "AO") or "HS Code"
     desc_col = get_col_by_id(user_df, "AP") or "Item description"
@@ -298,9 +316,12 @@ def run_auto_fill(user_df):
     gender_col = get_col_by_id(user_df, "22") or "Glasses gendre"
     face_col = get_col_by_id(user_df, "94") or "Glasses for your face shape"
     no_order_col = get_col_by_id(user_df, "103") or "Glasses lenses no-orders"
-    features_col = get_col_by_id(user_df, "104") or "Glasses other features" # ID: 104
+    features_col = get_col_by_id(user_df, "104") or "Glasses other features"
+    
+    # Try to find Model column, otherwise default to "Model"
+    model_col = get_col_by_id(user_df, "12") or "Model" # Common ID for model is 12, but backing up
 
-    target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col, no_order_col, features_col]
+    target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col, no_order_col, features_col, model_col]
     for col in target_cols:
         if col not in user_df.columns: user_df[col] = ""
 
@@ -332,20 +353,23 @@ def run_auto_fill(user_df):
     calc_no_order = user_df.apply(lambda row: apply_lenses_no_order(row, frame_type_col, contain_col), axis=1)
     user_df[no_order_col], no_order_reasons = apply_safe_fill(user_df, no_order_col, calc_no_order)
     
-    # Rule 10: Other Features
     calc_features = user_df.apply(lambda row: apply_other_features(row, type_col, contain_col, rx_col), axis=1)
     user_df[features_col], features_reasons = apply_safe_fill(user_df, features_col, calc_features)
+
+    # Rule 11: Model Extraction
+    calc_model = user_df.apply(lambda row: apply_glasses_model(row, name_col, brand_col), axis=1)
+    user_df[model_col], model_reasons = apply_safe_fill(user_df, model_col, calc_model)
 
     # Report Generation
     report_df = pd.DataFrame({
         'Gender (Y)': user_df[gender_col],
         'Face (AX)': user_df[face_col],
-        'No Order (AY)': user_df[no_order_col],
         'Features (AD)': user_df[features_col],
-        'Features Logic': features_reasons
+        'Model Name': user_df[model_col],
+        'Model Logic': model_reasons
     })
     
-    modified_rows = report_df[report_df['Features Logic'] != ""]
+    modified_rows = report_df[report_df['Model Logic'] != ""]
     return user_df, modified_rows
 
 # ==========================================
@@ -370,7 +394,7 @@ if uploaded_file:
     
     # BUTTON ACTION
     if st.button("✨ Auto-Fill Data", type="primary"):
-        with st.spinner("Applying Rules 1-10..."):
+        with st.spinner("Applying Rules 1-11..."):
             working_df = user_df.copy()
             filled_df, report = run_auto_fill(working_df)
             
