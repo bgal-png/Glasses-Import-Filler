@@ -99,24 +99,18 @@ def to_float(val):
         return 0.0
 
 def apply_safe_fill(df, target_col, calculated_results):
-    """
-    CRITICAL SAFETY:
-    - If cell is EMPTY -> Fill it (Reason included).
-    - If cell has DATA -> Keep it (Reason is empty string).
-    """
     current_vals = df[target_col].astype(str).fillna("")
     final_vals = []
     report_reasons = []
     
     for curr, (new_val, new_reason) in zip(current_vals, calculated_results):
         curr_clean = curr.strip()
-        # Checks for true emptiness or the word 'nan'
         if curr_clean == "" or curr_clean.lower() == "nan":
             final_vals.append(new_val)
             report_reasons.append(new_reason)
         else:
             final_vals.append(curr)
-            report_reasons.append("") # Empty reason = "I touched nothing"
+            report_reasons.append("") 
             
     return final_vals, report_reasons
 
@@ -189,7 +183,6 @@ def apply_uv_filter(row, type_col):
     return "", ""
 
 def apply_glasses_gender(row, gender_col, color_col, shape_col, tl_col, lw_col):
-    # This rule is SPECIAL: It allows editing of "Child" but respects other values.
     current_val = str(row.get(gender_col, '')).strip()
     current_lower = current_val.lower()
     color = str(row.get(color_col, '')).strip().lower()
@@ -272,6 +265,19 @@ def apply_glasses_model(row, name_col, brand_col):
     if not cleaned_model: return "", "Result Empty"
     return cleaned_model, "Extracted"
 
+def apply_color_code(row, name_col):
+    """Rule 12: Extract Color Code (Tail Extraction)"""
+    full_name = str(row.get(name_col, '')).strip()
+    
+    if not full_name: return "", ""
+    
+    # Check for space
+    if " " in full_name:
+        # Split from right, take the LAST part (Index 1)
+        color_code = full_name.rsplit(" ", 1)[1]
+        return color_code.strip(), "Extracted Tail"
+        
+    return "", "No Space Found"
 
 # --- MAIN EXECUTION ---
 
@@ -303,8 +309,9 @@ def run_auto_fill(user_df):
     no_order_col = get_col_by_id(user_df, "103") or "Glasses lenses no-orders"
     features_col = get_col_by_id(user_df, "104") or "Glasses other features"
     model_col = get_col_by_id(user_df, "12") or "Model" 
+    code_col = get_col_by_id(user_df, "107") or "Glasses color code" # ID: 107
 
-    target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col, no_order_col, features_col, model_col]
+    target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col, no_order_col, features_col, model_col, code_col]
     for col in target_cols:
         if col not in user_df.columns: user_df[col] = ""
 
@@ -327,45 +334,44 @@ def run_auto_fill(user_df):
     calc_uv = user_df.apply(lambda row: apply_uv_filter(row, type_col), axis=1)
     user_df[uv_col], _ = apply_safe_fill(user_df, uv_col, calc_uv)
     
-    # Rule 7 (Gender) - Special Case, bypasses safe_fill
+    # Rule 7 (Gender) - Special Case
     gender_results = user_df.apply(lambda row: apply_glasses_gender(row, gender_col, color_col, shape_col, tl_col, lw_col), axis=1)
     user_df[gender_col] = [r[0] for r in gender_results]
     gender_reasons = [r[1] for r in gender_results]
     
-    # Rule 8 (Face) - Uses safe_fill
+    # Rules 8-10 (Safe Mode)
     calc_face = user_df.apply(lambda row: apply_face_shape(row, shape_col), axis=1)
     user_df[face_col], face_reasons = apply_safe_fill(user_df, face_col, calc_face)
     
-    # Rule 9 (No Order) - Uses safe_fill
     calc_no_order = user_df.apply(lambda row: apply_lenses_no_order(row, frame_type_col, contain_col), axis=1)
     user_df[no_order_col], no_order_reasons = apply_safe_fill(user_df, no_order_col, calc_no_order)
     
-    # Rule 10 (Features) - Uses safe_fill
     calc_features = user_df.apply(lambda row: apply_other_features(row, type_col, contain_col, rx_col), axis=1)
     user_df[features_col], features_reasons = apply_safe_fill(user_df, features_col, calc_features)
 
-    # Rule 11 (Model) - Uses safe_fill
+    # Rule 11 (Model)
     calc_model = user_df.apply(lambda row: apply_glasses_model(row, name_col, brand_col), axis=1)
     user_df[model_col], model_reasons = apply_safe_fill(user_df, model_col, calc_model)
 
-    # Report Generation (Includes ALL logic columns now)
+    # Rule 12 (Color Code)
+    calc_code = user_df.apply(lambda row: apply_color_code(row, name_col), axis=1)
+    user_df[code_col], code_reasons = apply_safe_fill(user_df, code_col, calc_code)
+
+    # Report Generation
     report_df = pd.DataFrame({
         'Gender (Y)': user_df[gender_col],
         'Gender Logic': gender_reasons,
-        'Face (AX)': user_df[face_col],
-        'Face Logic': face_reasons,
-        'Features (AD)': user_df[features_col],
-        'Features Logic': features_reasons,
         'Model Name': user_df[model_col],
-        'Model Logic': model_reasons
+        'Model Logic': model_reasons,
+        'Color Code': user_df[code_col],
+        'Code Logic': code_reasons
     })
     
     # Filter to show rows where ANY rule applied a change
     modified_rows = report_df[
         (report_df['Gender Logic'] != "") |
-        (report_df['Face Logic'] != "") |
-        (report_df['Features Logic'] != "") |
-        (report_df['Model Logic'] != "")
+        (report_df['Model Logic'] != "") |
+        (report_df['Code Logic'] != "")
     ]
     return user_df, modified_rows
 
@@ -385,7 +391,7 @@ if uploaded_file:
     
     # BUTTON ACTION
     if st.button("✨ Auto-Fill Data", type="primary"):
-        with st.spinner("Applying Rules 1-11..."):
+        with st.spinner("Applying Rules 1-12..."):
             working_df = user_df.copy()
             filled_df, report = run_auto_fill(working_df)
             st.success(f"✅ Rules Applied!")
