@@ -44,8 +44,7 @@ def load_master():
             if df is not None: break
     if df is None:
         st.error(f"❌ Could not read '{file_path}'."); st.stop()
-    
-    # CRITICAL: We do NOT normalize headers here. We search strictly later.
+    df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
     return df
 
 # Load Master Data
@@ -83,22 +82,9 @@ for face_shape, sources in FACE_SHAPE_MAP.items():
         FLAT_FACE_LOOKUP[source.lower().strip()] = face_shape
 
 def get_col_by_id(df, target_id):
-    """
-    THE 'STRIP SEARCH' FIX:
-    This ignores all spaces, tabs, and newlines in the headers.
-    It matches 'Glasses model\nID: 52' by shrinking it to 'glassesmodelid:52'.
-    This prevents duplicates because it finds the EXISTING column.
-    """
-    clean_target = f"ID:{target_id}".replace(" ", "").lower() # e.g., "id:52"
-    
     for col in df.columns:
-        # squish the column name: remove space, newline, tab
-        clean_col = str(col).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").lower()
-        
-        # Check if "id:52" exists inside the squished header
-        if clean_target in clean_col:
-            return col # Return the ORIGINAL matching header name
-            
+        if re.search(f"ID[:\s]+{target_id}\\b", col):
+            return col
     return None
 
 def check_type(value, target):
@@ -277,10 +263,11 @@ def apply_glasses_model(row, name_col, brand_col):
     return cleaned_model, "Extracted"
 
 def apply_color_code(row, name_col):
-    """Rule 12: Extract Color Code"""
+    """Rule 12: Extract Color Code (No Tricks, just String)"""
     full_name = str(row.get(name_col, '')).strip()
     if not full_name: return "", ""
     if " " in full_name:
+        # Extract the last part (e.g. "003")
         color_code = full_name.rsplit(" ", 1)[1].strip()
         return color_code, "Extracted"
     return "", "No Space Found"
@@ -314,19 +301,10 @@ def run_auto_fill(user_df):
     face_col = get_col_by_id(user_df, "94") or "Glasses for your face shape"
     no_order_col = get_col_by_id(user_df, "103") or "Glasses lenses no-orders"
     features_col = get_col_by_id(user_df, "104") or "Glasses other features"
-    
-    # Logic for Model: Try ID 12 first, then ID 52
-    model_col = get_col_by_id(user_df, "12")
-    if not model_col:
-        model_col = get_col_by_id(user_df, "52")
-    if not model_col:
-        model_col = "Glasses model ID: 12" # Fallback creation
-        
+    model_col = get_col_by_id(user_df, "12") or "Model" 
     code_col = get_col_by_id(user_df, "107") or "Glasses color code"
 
     target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col, no_order_col, features_col, model_col, code_col]
-    
-    # Only create new columns if get_col_by_id returned None or a fallback
     for col in target_cols:
         if col not in user_df.columns: user_df[col] = ""
 
@@ -426,14 +404,8 @@ if uploaded_file:
                 
                 # 4. Find the exact column index for "Glasses color code"
                 code_col_name = None
-                
-                # Use Strip Search to find the code column in the FINAL dataframe
-                target_code_id = "107"
-                clean_target = f"ID:{target_code_id}".replace(" ", "").lower()
-                
                 for col in filled_df.columns:
-                    clean_col = str(col).replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "").lower()
-                    if clean_target in clean_col:
+                    if "Glasses color code" in col or ("ID" in col and "107" in col):
                         code_col_name = col
                         break
                 
@@ -451,3 +423,4 @@ if uploaded_file:
                 file_name="filled_glasses_data.xlsx",
                 mime="application/vnd.ms-excel"
             )
+
