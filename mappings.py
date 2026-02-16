@@ -77,7 +77,8 @@ BRAND_TO_COLLECTION_MAP = {
         "Dior", "Christian Dior", "Fendi", "Dolce & Gabbana", "Celine", 
         "Miu Miu", "Tom Ford", "Prada", "Giorgio Armani", "Beron", "LeWish"
     ]
-}# --- RULE 8: FACE SHAPE RECOMMENDATION ---
+}
+# --- RULE 8: FACE SHAPE RECOMMENDATION ---
 FACE_SHAPE_MAP = {
     # The "Universal" Group (Fits almost everyone)
     "Round face|Oval face|Heart-shaped face|Square face": [
