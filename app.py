@@ -4,7 +4,7 @@ import os
 import io
 import re
 
-# 1. Page Configuration - FIXED: changed set_config to set_page_config
+# 1. Page Configuration
 st.set_page_config(page_title="Excel Auto-Filler", layout="wide")
 st.title("⚡ Excel Data Filler: Glasses Edition")
 
@@ -55,46 +55,66 @@ def get_col_by_id(df, target_id):
             return col
     return None
 
+def check_type(value, target):
+    """
+    Smart Check: Returns True if 'target' is found in the value, 
+    handling 'Sunglasses|Sport glasses' style combinations.
+    """
+    value = str(value).strip()
+    # Split by pipe '|' and strip whitespace from each part
+    parts = [p.strip() for p in value.split('|')]
+    return target in parts
+
 def apply_hs_code(row, type_col, mat_col, sport_col):
-    """Revised Logic for Rule 1: HS Code Groups"""
+    """Revised Logic for Rule 1: HS Code Groups (Multi-Value Capable)"""
     g_type = str(row.get(type_col, '')).strip() if type_col else ""
     material = str(row.get(mat_col, '')).strip().lower() if mat_col else ""
     sport_val = str(row.get(sport_col, '')).strip().lower() if sport_col else ""
 
-    # GROUP 1: Sunglasses & Sport Glasses logic
-    if g_type in ["Sunglasses", "Sport glasses"]:
+    # GROUP 1: Sunglasses (Even if mixed like "Sunglasses|Sport glasses")
+    if check_type(g_type, "Sunglasses"):
+        return "90041091", "Group: Sunglasses (Multi-Value Match)"
+
+    # GROUP 2: Sport Glasses (Only if NOT Sunglasses)
+    if check_type(g_type, "Sport glasses"):
         # Specialty fallback for Swim/Ski
         if any(x in sport_val for x in ["swimm", "swim", "ski", "snowboard"]):
             return "90049090", "Sport Specialty (Swim/Ski)"
-        return "90041091", f"Group: Protection ({g_type})"
+        # Default Sport -> Sunglasses HS Code
+        return "90041091", "Group: Sport (Protection)"
     
-    # GROUP 2: Frames, Reading, Driving, PC Glasses
-    eyewear_group = ["Frames", "Reading glasses", "Driving Glasses without power", "PC Glasses without power"]
-    if g_type in eyewear_group:
+    # GROUP 3: Eyewear (Frames, Reading, etc.)
+    eyewear_targets = ["Frames", "Reading glasses", "Driving Glasses without power", "PC Glasses without power"]
+    # Check if ANY of these exist in the type column
+    if any(check_type(g_type, t) for t in eyewear_targets):
         if "plastic" in material:
-            return "90031100", f"Group: Eyewear ({g_type}) + Plastic"
+            return "90031100", f"Group: Eyewear + Plastic"
         if "metal" in material:
-            return "90031900", f"Group: Eyewear ({g_type}) + Metal"
-        return "", f"Group: Eyewear ({g_type}) - Missing Material"
+            return "90031900", f"Group: Eyewear + Metal"
+        return "", "Group: Eyewear - Missing Material"
 
     return "", "No Match"
 
 def apply_item_description(row, type_col, mat_col):
-    """Logic for Rule 2: Item Description"""
+    """Logic for Rule 2: Item Description (Multi-Value Capable)"""
     g_type = str(row.get(type_col, '')).strip() if type_col else ""
     material = str(row.get(mat_col, '')).strip().lower() if mat_col else ""
 
-    if g_type in ["Frames", "PC Glasses without power", "Driving Glasses without power", "Reading glasses"]:
-        return "Eyeglasses", f"Match: {g_type}"
+    # Eyeglasses category
+    eyewear_targets = ["Frames", "PC Glasses without power", "Driving Glasses without power", "Reading glasses"]
+    if any(check_type(g_type, t) for t in eyewear_targets):
+        return "Eyeglasses", f"Match: Eyewear Group"
     
-    if g_type == "Sunglasses":
+    # Sunglasses category (Prioritized over Sport if both exist)
+    if check_type(g_type, "Sunglasses"):
         if "plastic" in material:
             return "Sunglasses, plastic frame", "Sunglasses + Plastic"
         if "metal" in material:
             return "Sunglasses, metal frame", "Sunglasses + Metal"
         return "Sunglasses", "Sunglasses (Unknown Material)"
     
-    if g_type == "Sport glasses":
+    # Sport glasses (Only if Sunglasses wasn't found first)
+    if check_type(g_type, "Sport glasses"):
         return "Sport glasses", "Exact match: Sport glasses"
         
     return "", "No Match"
