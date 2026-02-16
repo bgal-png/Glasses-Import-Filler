@@ -84,6 +84,28 @@ def check_type(value, target):
     parts = [p.strip() for p in value.split('|')]
     return target in parts
 
+def apply_safe_fill(df, target_col, calculated_results):
+    """
+    SAFETY CHECK: Only fills df[target_col] if the cell is currently empty.
+    Returns: (Final Values List, Reasons List)
+    """
+    current_vals = df[target_col].astype(str).fillna("")
+    final_vals = []
+    report_reasons = []
+    
+    for curr, (new_val, new_reason) in zip(current_vals, calculated_results):
+        curr_clean = curr.strip()
+        # If cell is empty or 'nan', use the Brain's suggestion
+        if curr_clean == "" or curr_clean.lower() == "nan":
+            final_vals.append(new_val)
+            report_reasons.append(new_reason)
+        # Otherwise, KEEP the existing value and do nothing
+        else:
+            final_vals.append(curr)
+            report_reasons.append("") # Empty reason means "Skipped/Preserved"
+            
+    return final_vals, report_reasons
+
 # --- RULE FUNCTIONS ---
 
 def apply_hs_code(row, type_col, mat_col, sport_col):
@@ -163,9 +185,15 @@ def apply_glasses_usable(row, brand_col, type_col, effect_col, sport_col):
 def apply_glasses_collection(row, brand_col):
     """Rule 5: Glasses Collection based on Brand"""
     brand_val = str(row.get(brand_col, '')).strip().lower()
-    
     if brand_val in FLAT_COLLECTION_LOOKUP:
         return FLAT_COLLECTION_LOOKUP[brand_val], f"Collection Match: {brand_val}"
+    return "", ""
+
+def apply_uv_filter(row, type_col):
+    """Rule 6: UV Filter"""
+    g_type = str(row.get(type_col, '')).strip()
+    if check_type(g_type, "Sunglasses"):
+        return "400", "Type is Sunglasses"
     return "", ""
 
 # --- MAIN EXECUTION ---
@@ -182,50 +210,61 @@ def run_auto_fill(user_df):
     desc_col = get_col_by_id(user_df, "AP") or "Item description"
     prod_col = get_col_by_id(user_df, "146") or "Producing company"
     usable_col = get_col_by_id(user_df, "51") or "Glasses usable"
-    coll_col = get_col_by_id(user_df, "33") or "Glasses collection" # ID: 33
+    coll_col = get_col_by_id(user_df, "33") or "Glasses collection"
+    uv_col = get_col_by_id(user_df, "60") or "UV filter"
 
-    for col in [hs_col, desc_col, prod_col, usable_col, coll_col]:
+    # Ensure columns exist (Initialize empty if missing)
+    for col in [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col]:
         if col not in user_df.columns: user_df[col] = ""
 
-    # 2. Apply Rule 1: HS Code
-    hs_results = user_df.apply(lambda row: apply_hs_code(row, type_col, material_col, sport_col), axis=1)
-    user_df[hs_col] = [r[0] for r in hs_results]
-    hs_reasons = [r[1] for r in hs_results]
+    # --- APPLY RULES (SAFELY) ---
+    
+    # 1. HS Code
+    calc_hs = user_df.apply(lambda row: apply_hs_code(row, type_col, material_col, sport_col), axis=1)
+    user_df[hs_col], hs_reasons = apply_safe_fill(user_df, hs_col, calc_hs)
 
-    # 3. Apply Rule 2: Item Description
-    desc_results = user_df.apply(lambda row: apply_item_description(row, type_col, material_col), axis=1)
-    user_df[desc_col] = [r[0] for r in desc_results]
-    desc_reasons = [r[1] for r in desc_results]
+    # 2. Item Description
+    calc_desc = user_df.apply(lambda row: apply_item_description(row, type_col, material_col), axis=1)
+    user_df[desc_col], desc_reasons = apply_safe_fill(user_df, desc_col, calc_desc)
     
-    # 4. Apply Rule 3: Producing Company
-    prod_results = user_df.apply(lambda row: apply_producing_company(row, brand_col), axis=1)
-    user_df[prod_col] = [r[0] for r in prod_results]
-    prod_reasons = [r[1] for r in prod_results]
+    # 3. Producing Company
+    calc_prod = user_df.apply(lambda row: apply_producing_company(row, brand_col), axis=1)
+    user_df[prod_col], prod_reasons = apply_safe_fill(user_df, prod_col, calc_prod)
     
-    # 5. Apply Rule 4: Glasses Usable
-    usable_results = user_df.apply(lambda row: apply_glasses_usable(row, brand_col, type_col, effect_col, sport_col), axis=1)
-    user_df[usable_col] = [r[0] for r in usable_results]
-    usable_reasons = [r[1] for r in usable_results]
+    # 4. Glasses Usable
+    calc_usable = user_df.apply(lambda row: apply_glasses_usable(row, brand_col, type_col, effect_col, sport_col), axis=1)
+    user_df[usable_col], usable_reasons = apply_safe_fill(user_df, usable_col, calc_usable)
 
-    # 6. Apply Rule 5: Glasses Collection
-    coll_results = user_df.apply(lambda row: apply_glasses_collection(row, brand_col), axis=1)
-    user_df[coll_col] = [r[0] for r in coll_results]
-    coll_reasons = [r[1] for r in coll_results]
+    # 5. Glasses Collection
+    calc_coll = user_df.apply(lambda row: apply_glasses_collection(row, brand_col), axis=1)
+    user_df[coll_col], coll_reasons = apply_safe_fill(user_df, coll_col, calc_coll)
+
+    # 6. UV Filter
+    calc_uv = user_df.apply(lambda row: apply_uv_filter(row, type_col), axis=1)
+    user_df[uv_col], uv_reasons = apply_safe_fill(user_df, uv_col, calc_uv)
     
-    # 7. Generate Report
+    # 8. Generate Report
+    # We create a dataframe but filter it to only show rows where we ACTUALLY did something (Reason is not empty)
     report_df = pd.DataFrame({
-        'Brand': user_df[brand_col] if brand_col else "N/A",
-        'Collection (AA)': user_df[coll_col],
+        'Type': user_df[type_col] if type_col else "N/A",
+        'UV Filter (AB)': user_df[uv_col],
+        'UV Logic': uv_reasons,
         'Usable (Z)': user_df[usable_col],
+        'Usable Logic': usable_reasons,
         'Prod. Company': user_df[prod_col],
-        'HS Code': user_df[hs_col]
+        'Company Logic': prod_reasons
     })
     
+    # Filter: Show rows where at least one Logic column is NOT empty
     modified_rows = report_df[
-        (report_df['HS Code'] != "") | 
-        (report_df['Collection (AA)'] != "") |
-        (report_df['Prod. Company'] != "Unknown Brand")
+        (report_df['UV Logic'] != "") | 
+        (report_df['Usable Logic'] != "") |
+        (report_df['Company Logic'] != "") |
+        (report_df['UV Filter (AB)'] != "") # Also catch if we filled something else
     ]
+    # (Optional) Clean up the display by dropping rows where no action was taken
+    modified_rows = modified_rows.loc[(report_df['UV Logic'] != "") | (report_df['Usable Logic'] != "") | (report_df['Company Logic'] != "")]
+
     return user_df, modified_rows
 
 # ==========================================
@@ -243,17 +282,17 @@ if uploaded_file:
     st.subheader("2. Run Auto-Fill")
     
     if st.button("✨ Auto-Fill Data", type="primary"):
-        with st.spinner("Applying Rules 1-5..."):
+        with st.spinner("Applying Rules 1-6 (Safe Mode)..."):
             working_df = user_df.copy()
             filled_df, report = run_auto_fill(working_df)
             
-            st.success(f"✅ Rules Applied!")
+            st.success(f"✅ Rules Applied! (Existing data was preserved)")
             
             with st.expander("📊 View Processing Report", expanded=True):
                 if not report.empty:
                     st.dataframe(report, use_container_width=True)
                 else:
-                    st.info("No rows matched the current rules.")
+                    st.info("No empty cells matched the rules. (All valid cells were already full or didn't match logic)")
             
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
