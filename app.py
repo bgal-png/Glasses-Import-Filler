@@ -190,47 +190,55 @@ def apply_uv_filter(row, type_col):
     return "", ""
 
 def apply_glasses_gender(row, gender_col, color_col, shape_col, tl_col, lw_col):
-    """Rule 7: Expanded Gender Logic (Child Expansion + Woman Inference)"""
+    """Rule 7: Expanded Gender Logic (Refined)"""
     
-    # Get Current Value (Safety is handled INSIDE this function)
     current_val = str(row.get(gender_col, '')).strip()
     current_lower = current_val.lower()
     
     color = str(row.get(color_col, '')).strip().lower()
     shape = str(row.get(shape_col, '')).strip().lower()
     
-    # CONDITION 1: EXPAND "CHILD"
-    # Only runs if the cell explicitly contains "Child"
+    # 1. CHECK FEMALE TRIGGERS
+    # Trigger if shape is cat eye OR color is pink/purple (or cat eye is mistakenly in color col)
+    is_female_specific = (
+        "cat eye" in shape or 
+        "pink" in color or 
+        "purple" in color or 
+        "cat eye" in color
+    )
+    
+    # 2. SCENARIO A: CELL CONTAINS "CHILD"
     if "child" in current_lower:
         tl = to_float(row.get(tl_col, 0))
         lw = to_float(row.get(lw_col, 0))
         
-        # Gender Scope
-        genders = ["Child-Boys", "Child-Girls"]
-        if "pink" in color or "purple" in color or "cat eye" in shape:
+        # Decide Base Categories
+        if is_female_specific:
             genders = ["Child-Girls"]
+        else:
+            genders = ["Child-Boys", "Child-Girls"] # Default
             
-        # Size Categories
+        # Determine Size Categories
         size_cats = []
         if (0 < tl <= 125) and (0 < lw <= 40): size_cats.append("Toddlers")
         if (115 <= tl <= 135) and (35 <= lw <= 48): size_cats.append("PreschoolKids")
         if (130 <= tl <= 145) and (45 <= lw <= 99): size_cats.append("SchoolKids")
 
+        # Build String
         final_parts = ["Child"]
         final_parts.extend(genders)
         for gender in genders:
             for size in size_cats:
                 final_parts.append(f"{gender}-{size}")
                 
-        return "|".join(final_parts), f"Expanded Child ({size_cats})"
+        return "|".join(final_parts), f"Expanded Child (Female={is_female_specific})"
 
-    # CONDITION 2: INFER "WOMAN"
-    # Only runs if the cell is currently EMPTY (or 'nan')
+    # 3. SCENARIO B: CELL IS EMPTY -> INFER WOMAN
     if current_val == "" or current_lower == "nan":
-        if "pink" in color or "purple" in color or "cat eye" in shape:
-            return "Woman", "Inferred Woman (Color/Shape)"
+        if is_female_specific:
+            return "Woman", "Inferred Woman (Cat Eye/Pink/Purple)"
             
-    # CONDITION 3: PRESERVE EXISTING (Man, Woman, etc.)
+    # 4. SCENARIO C: PRESERVE EXISTING
     return current_val, ""
 
 # --- MAIN EXECUTION ---
@@ -282,7 +290,6 @@ def run_auto_fill(user_df):
     user_df[uv_col], _ = apply_safe_fill(user_df, uv_col, calc_uv)
     
     # 7. Rule 7: Gender (CUSTOM UPDATE LOGIC)
-    # We do NOT use apply_safe_fill here because the function handles the logic of "Expand Child" vs "Keep Man"
     gender_results = user_df.apply(lambda row: apply_glasses_gender(row, gender_col, color_col, shape_col, tl_col, lw_col), axis=1)
     user_df[gender_col] = [r[0] for r in gender_results]
     gender_reasons = [r[1] for r in gender_results]
@@ -291,13 +298,12 @@ def run_auto_fill(user_df):
     report_df = pd.DataFrame({
         'Gender (Y)': user_df[gender_col],
         'Gender Logic': gender_reasons,
-        'TL (ID:70)': user_df[tl_col] if tl_col else 0,
-        'LW (ID:72)': user_df[lw_col] if lw_col else 0,
+        'TL': user_df[tl_col] if tl_col else 0,
+        'LW': user_df[lw_col] if lw_col else 0,
         'Color': user_df[color_col] if color_col else "",
         'Shape': user_df[shape_col] if shape_col else ""
     })
     
-    # Filter report to show only rows where logic actually did something
     modified_rows = report_df[report_df['Gender Logic'] != ""]
     return user_df, modified_rows
 
@@ -316,7 +322,7 @@ if uploaded_file:
     st.subheader("2. Run Auto-Fill")
     
     if st.button("✨ Auto-Fill Data", type="primary"):
-        with st.spinner("Applying Rules 1-7..."):
+        with st.spinner("Applying Rules 1-7 (Safe Mode)..."):
             working_df = user_df.copy()
             filled_df, report = run_auto_fill(working_df)
             
