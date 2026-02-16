@@ -1,7 +1,7 @@
 # mappings.py
 # This file contains the data lists for the Excel Auto-Filler.
-# You can edit this file safely without breaking the main app logic.
 
+# --- RULE 3: PRODUCING COMPANY ---
 BRAND_TO_COMPANY_MAP = {
     "Kering": [
         "Alexander McQueen", "Balenciaga", "Chloe", "Gucci", "Maui Jim", 
@@ -42,16 +42,16 @@ BRAND_TO_COMPANY_MAP = {
     "Strabilia": ["Silhouette"],
     "MCM OPTIK SRL": ["Morel"],
     "Bollé Brands": ["Bollé", "SPY+", "Serengeti"],
-    
-    # Explicitly Empty Group (Brands that should have NO company filled)
     "": [] 
 }
-# NEW RULE: GLASSES USABLE
+
+# --- RULE 4: GLASSES USABLE ---
 BRAND_TO_USABLE_MAP = {
     "Fashion glasses": [
         "Botaniq", "Brioni", "Calvin Klein", "Carrera", "Coco song", "Crullé", 
-        "Dsquared2", "Fossil", "Guess", "Hawkers", "Hugo Boss", "BOSS", 
-        "Boss by Hugo Boss", "Julbo", "Kate Spade", "Kimikado", "Lacoste", 
+        "Dsquared2", "Fossil", "Guess", "Hawkers",
+        "Hugo Boss", "BOSS", "Boss by Hugo Boss", 
+        "Julbo", "Kate Spade", "Kimikado", "Lacoste", 
         "Levis", "Levi's", "Marc Jacobs", "Marisio", "Max Mara", "Max&Co.", 
         "Michael Kors", "Persol", "Polaroid", "Police", "Puma", "Radley", 
         "Ray-Ban", "Seventh Street", "Superdry", "Swarovski", "Swidoo", 
@@ -61,10 +61,12 @@ BRAND_TO_USABLE_MAP = {
         "Alexander McQueen", "Balenciaga", "Bottega Venetta", "Burberry", 
         "Celine", "Chiara Ferreagni", "Chloe", "Christian Dior", "Dolce & Gabbana", 
         "Emporio Armani", "Fendi", "Givenchy", "Gucci", "Impressio", 
-        "Jimmy Choo", "Liu Jo", "Missoni", "Moschino", "Love Moschino", "Myth", 
-        "Pierre Cardin", "Polo Ralph Lauren", "Ralph by Ralph Lauren", "Prada", 
-        "Saint Laurent", "Stella McCarteny", "Tiffany", "Tom Ford", "Versace", 
-        "Miu Miu", "Beron", "LeWish", "Giorgio Armani", "Carolina Herrera", 
-        "David Beckham", "Ralph Lauren", "Victoria Beckham"
+        "Jimmy Choo", "Liu Jo", "Michael Kors", "Missoni", 
+        "Moschino", "Love Moschino", 
+        "Myth", "Pierre Cardin", 
+        "Polo Ralph Lauren", "Ralph by Ralph Lauren", 
+        "Prada", "Saint Laurent", "Stella McCarteny", "Tiffany", "Tom Ford", 
+        "Versace", "Miu Miu", "Beron", "LeWish", "Giorgio Armani", 
+        "Carolina Herrera", "David Beckham", "Ralph Lauren", "Victoria Beckham"
     ]
 }
