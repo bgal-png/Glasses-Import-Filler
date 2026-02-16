@@ -84,6 +84,13 @@ def check_type(value, target):
     parts = [p.strip() for p in value.split('|')]
     return target in parts
 
+def to_float(val):
+    """Safely convert string to float for measurements"""
+    try:
+        return float(str(val).replace(',', '.').strip())
+    except:
+        return 0.0
+
 def apply_safe_fill(df, target_col, calculated_results):
     """
     SAFETY CHECK: Only fills df[target_col] if the cell is currently empty.
@@ -95,24 +102,21 @@ def apply_safe_fill(df, target_col, calculated_results):
     
     for curr, (new_val, new_reason) in zip(current_vals, calculated_results):
         curr_clean = curr.strip()
-        # If cell is empty or 'nan', use the Brain's suggestion
         if curr_clean == "" or curr_clean.lower() == "nan":
             final_vals.append(new_val)
             report_reasons.append(new_reason)
-        # Otherwise, KEEP the existing value and do nothing
         else:
             final_vals.append(curr)
-            report_reasons.append("") # Empty reason means "Skipped/Preserved"
+            report_reasons.append("") 
             
     return final_vals, report_reasons
 
 # --- RULE FUNCTIONS ---
 
 def apply_hs_code(row, type_col, mat_col, sport_col):
-    """Rule 1: HS Code"""
-    g_type = str(row.get(type_col, '')).strip() if type_col else ""
-    material = str(row.get(mat_col, '')).strip().lower() if mat_col else ""
-    sport_val = str(row.get(sport_col, '')).strip().lower() if sport_col else ""
+    g_type = str(row.get(type_col, '')).strip()
+    material = str(row.get(mat_col, '')).strip().lower()
+    sport_val = str(row.get(sport_col, '')).strip().lower()
 
     if check_type(g_type, "Sunglasses"):
         return "90041091", "Group: Sunglasses"
@@ -131,9 +135,8 @@ def apply_hs_code(row, type_col, mat_col, sport_col):
     return "", "No Match"
 
 def apply_item_description(row, type_col, mat_col):
-    """Rule 2: Item Description"""
-    g_type = str(row.get(type_col, '')).strip() if type_col else ""
-    material = str(row.get(mat_col, '')).strip().lower() if mat_col else ""
+    g_type = str(row.get(type_col, '')).strip()
+    material = str(row.get(mat_col, '')).strip().lower()
 
     eyewear_targets = ["Frames", "PC Glasses without power", "Driving Glasses without power", "Reading glasses"]
     if any(check_type(g_type, t) for t in eyewear_targets):
@@ -150,61 +153,99 @@ def apply_item_description(row, type_col, mat_col):
     return "", "No Match"
 
 def apply_producing_company(row, brand_col):
-    """Rule 3: Producing Company based on Brand"""
     brand_val = str(row.get(brand_col, '')).strip().lower()
     if brand_val in FLAT_BRAND_LOOKUP:
         return FLAT_BRAND_LOOKUP[brand_val], f"Matched Brand: {brand_val}"
     return "", "Unknown Brand"
 
 def apply_glasses_usable(row, brand_col, type_col, effect_col, sport_col):
-    """Rule 4: Glasses Usable (Brand + Logic Combinations)"""
     brand_val = str(row.get(brand_col, '')).strip().lower()
     g_type = str(row.get(type_col, '')).strip()
     effect_val = str(row.get(effect_col, '')).strip().lower()
     sport_val = str(row.get(sport_col, '')).strip().lower()
     
     results = []
-    
-    # 1. Base Category from Brand
     if brand_val in FLAT_USABLE_LOOKUP:
         results.append(FLAT_USABLE_LOOKUP[brand_val])
         
-    # 2. Logic Check: Driving vs Common Use
     if check_type(g_type, "Sunglasses"):
         is_polarized = "polarized" in effect_val
         is_ski_swim = any(x in sport_val for x in ["swimm", "swim", "ski", "snowboard"])
-        
-        if is_polarized:
-            results.append("Driving glasses")
-        elif not is_ski_swim:
-            results.append("Common use")
+        if is_polarized: results.append("Driving glasses")
+        elif not is_ski_swim: results.append("Common use")
             
     if not results: return "", "No Match"
     return "|".join(results), f"Combined: {results}"
 
 def apply_glasses_collection(row, brand_col):
-    """Rule 5: Glasses Collection based on Brand"""
     brand_val = str(row.get(brand_col, '')).strip().lower()
     if brand_val in FLAT_COLLECTION_LOOKUP:
         return FLAT_COLLECTION_LOOKUP[brand_val], f"Collection Match: {brand_val}"
     return "", ""
 
 def apply_uv_filter(row, type_col):
-    """Rule 6: UV Filter"""
     g_type = str(row.get(type_col, '')).strip()
     if check_type(g_type, "Sunglasses"):
         return "400", "Type is Sunglasses"
     return "", ""
 
+def apply_glasses_gender(row, gender_col, color_col, shape_col, tl_col, lw_col):
+    """Rule 7: Expanded Gender Logic (Child Expansion + Woman Inference)"""
+    
+    # Get Current Value (Safety is handled INSIDE this function)
+    current_val = str(row.get(gender_col, '')).strip()
+    current_lower = current_val.lower()
+    
+    color = str(row.get(color_col, '')).strip().lower()
+    shape = str(row.get(shape_col, '')).strip().lower()
+    
+    # CONDITION 1: EXPAND "CHILD"
+    # Only runs if the cell explicitly contains "Child"
+    if "child" in current_lower:
+        tl = to_float(row.get(tl_col, 0))
+        lw = to_float(row.get(lw_col, 0))
+        
+        # Gender Scope
+        genders = ["Child-Boys", "Child-Girls"]
+        if "pink" in color or "purple" in color or "cat eye" in shape:
+            genders = ["Child-Girls"]
+            
+        # Size Categories
+        size_cats = []
+        if (0 < tl <= 125) and (0 < lw <= 40): size_cats.append("Toddlers")
+        if (115 <= tl <= 135) and (35 <= lw <= 48): size_cats.append("PreschoolKids")
+        if (130 <= tl <= 145) and (45 <= lw <= 99): size_cats.append("SchoolKids")
+
+        final_parts = ["Child"]
+        final_parts.extend(genders)
+        for gender in genders:
+            for size in size_cats:
+                final_parts.append(f"{gender}-{size}")
+                
+        return "|".join(final_parts), f"Expanded Child ({size_cats})"
+
+    # CONDITION 2: INFER "WOMAN"
+    # Only runs if the cell is currently EMPTY (or 'nan')
+    if current_val == "" or current_lower == "nan":
+        if "pink" in color or "purple" in color or "cat eye" in shape:
+            return "Woman", "Inferred Woman (Color/Shape)"
+            
+    # CONDITION 3: PRESERVE EXISTING (Man, Woman, etc.)
+    return current_val, ""
+
 # --- MAIN EXECUTION ---
 
 def run_auto_fill(user_df):
-    # 1. Identify Columns by ID
+    # Identify Columns
     type_col = get_col_by_id(user_df, "13")      
     material_col = get_col_by_id(user_df, "53")  
     sport_col = get_col_by_id(user_df, "89")
     brand_col = get_col_by_id(user_df, "11") 
     effect_col = get_col_by_id(user_df, "37") 
+    color_col = get_col_by_id(user_df, "26") 
+    shape_col = get_col_by_id(user_df, "25") 
+    tl_col = get_col_by_id(user_df, "70")    
+    lw_col = get_col_by_id(user_df, "72")    
     
     hs_col = get_col_by_id(user_df, "AO") or "HS Code"
     desc_col = get_col_by_id(user_df, "AP") or "Item description"
@@ -212,59 +253,52 @@ def run_auto_fill(user_df):
     usable_col = get_col_by_id(user_df, "51") or "Glasses usable"
     coll_col = get_col_by_id(user_df, "33") or "Glasses collection"
     uv_col = get_col_by_id(user_df, "60") or "UV filter"
+    gender_col = get_col_by_id(user_df, "22") or "Glasses gendre"
 
-    # Ensure columns exist (Initialize empty if missing)
-    for col in [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col]:
+    # Initialize Columns
+    target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col]
+    for col in target_cols:
         if col not in user_df.columns: user_df[col] = ""
 
-    # --- APPLY RULES (SAFELY) ---
+    # --- APPLY RULES ---
     
-    # 1. HS Code
+    # 1-6 Safe Mode Fill
     calc_hs = user_df.apply(lambda row: apply_hs_code(row, type_col, material_col, sport_col), axis=1)
-    user_df[hs_col], hs_reasons = apply_safe_fill(user_df, hs_col, calc_hs)
+    user_df[hs_col], _ = apply_safe_fill(user_df, hs_col, calc_hs)
 
-    # 2. Item Description
     calc_desc = user_df.apply(lambda row: apply_item_description(row, type_col, material_col), axis=1)
-    user_df[desc_col], desc_reasons = apply_safe_fill(user_df, desc_col, calc_desc)
+    user_df[desc_col], _ = apply_safe_fill(user_df, desc_col, calc_desc)
     
-    # 3. Producing Company
     calc_prod = user_df.apply(lambda row: apply_producing_company(row, brand_col), axis=1)
-    user_df[prod_col], prod_reasons = apply_safe_fill(user_df, prod_col, calc_prod)
+    user_df[prod_col], _ = apply_safe_fill(user_df, prod_col, calc_prod)
     
-    # 4. Glasses Usable
     calc_usable = user_df.apply(lambda row: apply_glasses_usable(row, brand_col, type_col, effect_col, sport_col), axis=1)
-    user_df[usable_col], usable_reasons = apply_safe_fill(user_df, usable_col, calc_usable)
+    user_df[usable_col], _ = apply_safe_fill(user_df, usable_col, calc_usable)
 
-    # 5. Glasses Collection
     calc_coll = user_df.apply(lambda row: apply_glasses_collection(row, brand_col), axis=1)
-    user_df[coll_col], coll_reasons = apply_safe_fill(user_df, coll_col, calc_coll)
+    user_df[coll_col], _ = apply_safe_fill(user_df, coll_col, calc_coll)
 
-    # 6. UV Filter
     calc_uv = user_df.apply(lambda row: apply_uv_filter(row, type_col), axis=1)
-    user_df[uv_col], uv_reasons = apply_safe_fill(user_df, uv_col, calc_uv)
+    user_df[uv_col], _ = apply_safe_fill(user_df, uv_col, calc_uv)
     
-    # 8. Generate Report
-    # We create a dataframe but filter it to only show rows where we ACTUALLY did something (Reason is not empty)
+    # 7. Rule 7: Gender (CUSTOM UPDATE LOGIC)
+    # We do NOT use apply_safe_fill here because the function handles the logic of "Expand Child" vs "Keep Man"
+    gender_results = user_df.apply(lambda row: apply_glasses_gender(row, gender_col, color_col, shape_col, tl_col, lw_col), axis=1)
+    user_df[gender_col] = [r[0] for r in gender_results]
+    gender_reasons = [r[1] for r in gender_results]
+
+    # Report Generation
     report_df = pd.DataFrame({
-        'Type': user_df[type_col] if type_col else "N/A",
-        'UV Filter (AB)': user_df[uv_col],
-        'UV Logic': uv_reasons,
-        'Usable (Z)': user_df[usable_col],
-        'Usable Logic': usable_reasons,
-        'Prod. Company': user_df[prod_col],
-        'Company Logic': prod_reasons
+        'Gender (Y)': user_df[gender_col],
+        'Gender Logic': gender_reasons,
+        'TL (ID:70)': user_df[tl_col] if tl_col else 0,
+        'LW (ID:72)': user_df[lw_col] if lw_col else 0,
+        'Color': user_df[color_col] if color_col else "",
+        'Shape': user_df[shape_col] if shape_col else ""
     })
     
-    # Filter: Show rows where at least one Logic column is NOT empty
-    modified_rows = report_df[
-        (report_df['UV Logic'] != "") | 
-        (report_df['Usable Logic'] != "") |
-        (report_df['Company Logic'] != "") |
-        (report_df['UV Filter (AB)'] != "") # Also catch if we filled something else
-    ]
-    # (Optional) Clean up the display by dropping rows where no action was taken
-    modified_rows = modified_rows.loc[(report_df['UV Logic'] != "") | (report_df['Usable Logic'] != "") | (report_df['Company Logic'] != "")]
-
+    # Filter report to show only rows where logic actually did something
+    modified_rows = report_df[report_df['Gender Logic'] != ""]
     return user_df, modified_rows
 
 # ==========================================
@@ -282,17 +316,17 @@ if uploaded_file:
     st.subheader("2. Run Auto-Fill")
     
     if st.button("✨ Auto-Fill Data", type="primary"):
-        with st.spinner("Applying Rules 1-6 (Safe Mode)..."):
+        with st.spinner("Applying Rules 1-7..."):
             working_df = user_df.copy()
             filled_df, report = run_auto_fill(working_df)
             
-            st.success(f"✅ Rules Applied! (Existing data was preserved)")
+            st.success(f"✅ Rules Applied!")
             
             with st.expander("📊 View Processing Report", expanded=True):
                 if not report.empty:
                     st.dataframe(report, use_container_width=True)
                 else:
-                    st.info("No empty cells matched the rules. (All valid cells were already full or didn't match logic)")
+                    st.info("No rows required gender updates.")
             
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
