@@ -82,8 +82,14 @@ for face_shape, sources in FACE_SHAPE_MAP.items():
         FLAT_FACE_LOOKUP[source.lower().strip()] = face_shape
 
 def get_col_by_id(df, target_id):
+    """
+    UPGRADED: Finds ID even if hidden by line breaks (Alt+Enter)
+    This prevents duplicate columns from being created.
+    """
     for col in df.columns:
-        if re.search(f"ID[:\s]+{target_id}\\b", col):
+        # Replace newlines with spaces strictly for the search check
+        clean_col_name = str(col).replace('\n', ' ')
+        if re.search(f"ID[:\s]+{target_id}\\b", clean_col_name, re.IGNORECASE):
             return col
     return None
 
