@@ -20,6 +20,12 @@ except ImportError:
 st.set_page_config(page_title="Excel Auto-Filler", layout="wide")
 st.title("⚡ Excel Data Filler: Glasses Edition")
 
+# Initialize Session State
+if 'filled_df' not in st.session_state:
+    st.session_state.filled_df = None
+if 'report_df' not in st.session_state:
+    st.session_state.report_df = None
+
 # ==========================================
 # 🔒 INDESTRUCTIBLE LOADER (LOCKED VERSION)
 # ==========================================
@@ -82,30 +88,23 @@ for face_shape, sources in FACE_SHAPE_MAP.items():
         FLAT_FACE_LOOKUP[source.lower().strip()] = face_shape
 
 def get_col_by_id(df, target_id):
-    """Finds a column name in the user's file that contains a specific ID number."""
     for col in df.columns:
         if re.search(f"ID[:\s]+{target_id}\\b", col):
             return col
     return None
 
 def check_type(value, target):
-    """Smart Check for multi-value types (Split by |)"""
     value = str(value).strip()
     parts = [p.strip() for p in value.split('|')]
     return target in parts
 
 def to_float(val):
-    """Safely convert string to float for measurements"""
     try:
         return float(str(val).replace(',', '.').strip())
     except:
         return 0.0
 
 def apply_safe_fill(df, target_col, calculated_results):
-    """
-    SAFETY CHECK: Only fills df[target_col] if the cell is currently empty.
-    Returns: (Final Values List, Reasons List)
-    """
     current_vals = df[target_col].astype(str).fillna("")
     final_vals = []
     report_reasons = []
@@ -130,36 +129,29 @@ def apply_hs_code(row, type_col, mat_col, sport_col):
 
     if check_type(g_type, "Sunglasses"):
         return "90041091", "Group: Sunglasses"
-
     if check_type(g_type, "Sport glasses"):
         if any(x in sport_val for x in ["swimm", "swim", "ski", "snowboard"]):
             return "90049090", "Sport Specialty (Swim/Ski)"
         return "90041091", "Group: Sport (Protection)"
-    
     eyewear_targets = ["Frames", "Reading glasses", "Driving Glasses without power", "PC Glasses without power"]
     if any(check_type(g_type, t) for t in eyewear_targets):
         if "plastic" in material: return "90031100", "Group: Eyewear + Plastic"
         if "metal" in material: return "90031900", "Group: Eyewear + Metal"
         return "", "Group: Eyewear - Missing Material"
-
     return "", "No Match"
 
 def apply_item_description(row, type_col, mat_col):
     g_type = str(row.get(type_col, '')).strip()
     material = str(row.get(mat_col, '')).strip().lower()
-
     eyewear_targets = ["Frames", "PC Glasses without power", "Driving Glasses without power", "Reading glasses"]
     if any(check_type(g_type, t) for t in eyewear_targets):
         return "Eyeglasses", "Match: Eyewear Group"
-    
     if check_type(g_type, "Sunglasses"):
         if "plastic" in material: return "Sunglasses, plastic frame", "Sunglasses + Plastic"
         if "metal" in material: return "Sunglasses, metal frame", "Sunglasses + Metal"
         return "Sunglasses", "Sunglasses (Unknown Material)"
-    
     if check_type(g_type, "Sport glasses"):
         return "Sport glasses", "Exact match: Sport glasses"
-        
     return "", "No Match"
 
 def apply_producing_company(row, brand_col):
@@ -173,17 +165,14 @@ def apply_glasses_usable(row, brand_col, type_col, effect_col, sport_col):
     g_type = str(row.get(type_col, '')).strip()
     effect_val = str(row.get(effect_col, '')).strip().lower()
     sport_val = str(row.get(sport_col, '')).strip().lower()
-    
     results = []
     if brand_val in FLAT_USABLE_LOOKUP:
         results.append(FLAT_USABLE_LOOKUP[brand_val])
-        
     if check_type(g_type, "Sunglasses"):
         is_polarized = "polarized" in effect_val
         is_ski_swim = any(x in sport_val for x in ["swimm", "swim", "ski", "snowboard"])
         if is_polarized: results.append("Driving glasses")
         elif not is_ski_swim: results.append("Common use")
-            
     if not results: return "", "No Match"
     return "|".join(results), f"Combined: {results}"
 
@@ -200,71 +189,44 @@ def apply_uv_filter(row, type_col):
     return "", ""
 
 def apply_glasses_gender(row, gender_col, color_col, shape_col, tl_col, lw_col):
-    """Rule 7: Expanded Gender Logic"""
     current_val = str(row.get(gender_col, '')).strip()
     current_lower = current_val.lower()
     color = str(row.get(color_col, '')).strip().lower()
     shape = str(row.get(shape_col, '')).strip().lower()
-    
     is_female_specific = ("cat eye" in shape or "pink" in color or "purple" in color or "cat eye" in color)
-    
-    # A. Expand Child
     if "child" in current_lower:
         tl = to_float(row.get(tl_col, 0))
         lw = to_float(row.get(lw_col, 0))
         genders = ["Child-Girls"] if is_female_specific else ["Child-Boys", "Child-Girls"]
-        
         size_cats = []
         if (0 < tl <= 125) and (0 < lw <= 40): size_cats.append("Toddlers")
         if (115 <= tl <= 135) and (35 <= lw <= 48): size_cats.append("PreschoolKids")
         if (130 <= tl <= 145) and (45 <= lw <= 99): size_cats.append("SchoolKids")
-
         final_parts = ["Child"]
         final_parts.extend(genders)
         for gender in genders:
             for size in size_cats:
                 final_parts.append(f"{gender}-{size}")
         return "|".join(final_parts), f"Expanded Child"
-
-    # B. Infer Woman
     if current_val == "" or current_lower == "nan":
         if is_female_specific: return "Woman", "Inferred Woman"
-            
     return current_val, ""
 
 def apply_face_shape(row, shape_col):
-    """Rule 8: Face Shape Recommendation"""
     shape_val = str(row.get(shape_col, '')).strip().lower()
     if shape_val in FLAT_FACE_LOOKUP:
         return FLAT_FACE_LOOKUP[shape_val], f"Match: {shape_val}"
     return "", ""
 
 def apply_lenses_no_order(row, frame_type_col, contain_col):
-    """Rule 9: Lenses No Order (Additive Logic)"""
     frame_val = str(row.get(frame_type_col, '')).strip()
     contain_val = str(row.get(contain_col, '')).strip()
-    
     restrictions = []
-    
-    # 1. Check Frame Type
-    if check_type(frame_val, "Half rim"):
-        restrictions.extend(["CoatingPolarized", "Glasses index 1.5"])
-        
-    if check_type(frame_val, "Rimless"):
-        restrictions.extend(["CoatingPolarized", "Glasses index 1.5", "Glasses index 1.74"])
-        
-    # 2. Check Contain (Clip)
-    # Using 'in' to catch "Magnetic Clip", "Clip-on", etc.
-    if "clip" in contain_val.lower():
-        restrictions.append("Glasses index 1.5")
-        
-    # 3. Deduplicate (while keeping order)
-    # dict.fromkeys() removes duplicates but preserves insertion order
+    if check_type(frame_val, "Half rim"): restrictions.extend(["CoatingPolarized", "Glasses index 1.5"])
+    if check_type(frame_val, "Rimless"): restrictions.extend(["CoatingPolarized", "Glasses index 1.5", "Glasses index 1.74"])
+    if "clip" in contain_val.lower(): restrictions.append("Glasses index 1.5")
     unique_restrictions = list(dict.fromkeys(restrictions))
-    
-    if not unique_restrictions:
-        return "", ""
-        
+    if not unique_restrictions: return "", ""
     return "|".join(unique_restrictions), f"Restrictions: {unique_restrictions}"
 
 # --- MAIN EXECUTION ---
@@ -280,8 +242,8 @@ def run_auto_fill(user_df):
     shape_col = get_col_by_id(user_df, "25") 
     tl_col = get_col_by_id(user_df, "70")    
     lw_col = get_col_by_id(user_df, "72")    
-    frame_type_col = get_col_by_id(user_df, "50") # Glasses frame type ID: 50
-    contain_col = get_col_by_id(user_df, "84")    # Glasses contain ID: 84
+    frame_type_col = get_col_by_id(user_df, "50")
+    contain_col = get_col_by_id(user_df, "84")
     
     hs_col = get_col_by_id(user_df, "AO") or "HS Code"
     desc_col = get_col_by_id(user_df, "AP") or "Item description"
@@ -291,15 +253,13 @@ def run_auto_fill(user_df):
     uv_col = get_col_by_id(user_df, "60") or "UV filter"
     gender_col = get_col_by_id(user_df, "22") or "Glasses gendre"
     face_col = get_col_by_id(user_df, "94") or "Glasses for your face shape"
-    no_order_col = get_col_by_id(user_df, "103") or "Glasses lenses no-orders" # ID: 103
+    no_order_col = get_col_by_id(user_df, "103") or "Glasses lenses no-orders"
 
-    # Initialize Columns
     target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col, no_order_col]
     for col in target_cols:
         if col not in user_df.columns: user_df[col] = ""
 
-    # --- APPLY RULES ---
-    
+    # Apply Rules
     calc_hs = user_df.apply(lambda row: apply_hs_code(row, type_col, material_col, sport_col), axis=1)
     user_df[hs_col], _ = apply_safe_fill(user_df, hs_col, calc_hs)
 
@@ -324,19 +284,18 @@ def run_auto_fill(user_df):
     calc_face = user_df.apply(lambda row: apply_face_shape(row, shape_col), axis=1)
     user_df[face_col], _ = apply_safe_fill(user_df, face_col, calc_face)
     
-    # Rule 9: Lenses No Order
     calc_no_order = user_df.apply(lambda row: apply_lenses_no_order(row, frame_type_col, contain_col), axis=1)
     user_df[no_order_col], no_order_reasons = apply_safe_fill(user_df, no_order_col, calc_no_order)
 
     # Report Generation
     report_df = pd.DataFrame({
-        'Frame Type (ID:50)': user_df[frame_type_col] if frame_type_col else "",
-        'Contains (ID:84)': user_df[contain_col] if contain_col else "",
+        'Gender (Y)': user_df[gender_col],
+        'Face (AX)': user_df[face_col],
         'No Order (AY)': user_df[no_order_col],
-        'Rule 9 Logic': no_order_reasons
+        'Logic (AY)': no_order_reasons
     })
     
-    modified_rows = report_df[report_df['Rule 9 Logic'] != ""]
+    modified_rows = report_df[report_df['Logic (AY)'] != ""]
     return user_df, modified_rows
 
 # ==========================================
@@ -347,33 +306,45 @@ st.subheader("1. Upload Partial Data")
 uploaded_file = st.file_uploader("Choose Excel File", type=['xlsx'])
 
 if uploaded_file:
+    # Reset state if a NEW file is uploaded
+    if st.session_state.get('last_uploaded_file') != uploaded_file.name:
+        st.session_state.filled_df = None
+        st.session_state.report_df = None
+        st.session_state.last_uploaded_file = uploaded_file.name
+
     user_df = pd.read_excel(uploaded_file, dtype=str)
     st.write(f"Loaded {len(user_df)} rows.")
 
     st.divider()
     st.subheader("2. Run Auto-Fill")
     
+    # BUTTON ACTION
     if st.button("✨ Auto-Fill Data", type="primary"):
         with st.spinner("Applying Rules 1-9..."):
             working_df = user_df.copy()
             filled_df, report = run_auto_fill(working_df)
             
+            # SAVE TO SESSION STATE
+            st.session_state.filled_df = filled_df
+            st.session_state.report_df = report
             st.success(f"✅ Rules Applied!")
-            
-            with st.expander("📊 View Processing Report", expanded=True):
-                if not report.empty:
-                    st.dataframe(report, use_container_width=True)
-                else:
-                    st.info("No rows matched the current rules.")
-            
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                filled_df.to_excel(writer, index=False)
-            buffer.seek(0)
-            
-            st.download_button(
-                label="📥 Download Updated Excel",
-                data=buffer,
-                file_name="filled_glasses_data.xlsx",
-                mime="application/vnd.ms-excel"
-            )
+
+    # PERSISTENT DISPLAY
+    if st.session_state.filled_df is not None:
+        with st.expander("📊 View Processing Report", expanded=True):
+            if not st.session_state.report_df.empty:
+                st.dataframe(st.session_state.report_df, use_container_width=True)
+            else:
+                st.info("No rows matched the current rules.")
+        
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+            st.session_state.filled_df.to_excel(writer, index=False)
+        buffer.seek(0)
+        
+        st.download_button(
+            label="📥 Download Updated Excel",
+            data=buffer,
+            file_name="filled_glasses_data.xlsx",
+            mime="application/vnd.ms-excel"
+        )
