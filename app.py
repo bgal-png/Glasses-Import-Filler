@@ -10,7 +10,7 @@ try:
         BRAND_TO_COMPANY_MAP, 
         BRAND_TO_USABLE_MAP, 
         BRAND_TO_COLLECTION_MAP,
-        FACE_SHAPE_MAP  # <--- NEW IMPORT
+        FACE_SHAPE_MAP
     )
 except ImportError:
     st.error("❌ Critical Error: 'mappings.py' file is missing or missing dictionaries.")
@@ -235,11 +235,37 @@ def apply_glasses_gender(row, gender_col, color_col, shape_col, tl_col, lw_col):
 def apply_face_shape(row, shape_col):
     """Rule 8: Face Shape Recommendation"""
     shape_val = str(row.get(shape_col, '')).strip().lower()
-    
     if shape_val in FLAT_FACE_LOOKUP:
         return FLAT_FACE_LOOKUP[shape_val], f"Match: {shape_val}"
-    
     return "", ""
+
+def apply_lenses_no_order(row, frame_type_col, contain_col):
+    """Rule 9: Lenses No Order (Additive Logic)"""
+    frame_val = str(row.get(frame_type_col, '')).strip()
+    contain_val = str(row.get(contain_col, '')).strip()
+    
+    restrictions = []
+    
+    # 1. Check Frame Type
+    if check_type(frame_val, "Half rim"):
+        restrictions.extend(["CoatingPolarized", "Glasses index 1.5"])
+        
+    if check_type(frame_val, "Rimless"):
+        restrictions.extend(["CoatingPolarized", "Glasses index 1.5", "Glasses index 1.74"])
+        
+    # 2. Check Contain (Clip)
+    # Using 'in' to catch "Magnetic Clip", "Clip-on", etc.
+    if "clip" in contain_val.lower():
+        restrictions.append("Glasses index 1.5")
+        
+    # 3. Deduplicate (while keeping order)
+    # dict.fromkeys() removes duplicates but preserves insertion order
+    unique_restrictions = list(dict.fromkeys(restrictions))
+    
+    if not unique_restrictions:
+        return "", ""
+        
+    return "|".join(unique_restrictions), f"Restrictions: {unique_restrictions}"
 
 # --- MAIN EXECUTION ---
 
@@ -254,6 +280,8 @@ def run_auto_fill(user_df):
     shape_col = get_col_by_id(user_df, "25") 
     tl_col = get_col_by_id(user_df, "70")    
     lw_col = get_col_by_id(user_df, "72")    
+    frame_type_col = get_col_by_id(user_df, "50") # Glasses frame type ID: 50
+    contain_col = get_col_by_id(user_df, "84")    # Glasses contain ID: 84
     
     hs_col = get_col_by_id(user_df, "AO") or "HS Code"
     desc_col = get_col_by_id(user_df, "AP") or "Item description"
@@ -262,10 +290,11 @@ def run_auto_fill(user_df):
     coll_col = get_col_by_id(user_df, "33") or "Glasses collection"
     uv_col = get_col_by_id(user_df, "60") or "UV filter"
     gender_col = get_col_by_id(user_df, "22") or "Glasses gendre"
-    face_col = get_col_by_id(user_df, "94") or "Glasses for your face shape" # ID: 94
+    face_col = get_col_by_id(user_df, "94") or "Glasses for your face shape"
+    no_order_col = get_col_by_id(user_df, "103") or "Glasses lenses no-orders" # ID: 103
 
     # Initialize Columns
-    target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col]
+    target_cols = [hs_col, desc_col, prod_col, usable_col, coll_col, uv_col, gender_col, face_col, no_order_col]
     for col in target_cols:
         if col not in user_df.columns: user_df[col] = ""
 
@@ -289,22 +318,25 @@ def run_auto_fill(user_df):
     calc_uv = user_df.apply(lambda row: apply_uv_filter(row, type_col), axis=1)
     user_df[uv_col], _ = apply_safe_fill(user_df, uv_col, calc_uv)
     
-    # Rule 7 (Custom logic inside function)
     gender_results = user_df.apply(lambda row: apply_glasses_gender(row, gender_col, color_col, shape_col, tl_col, lw_col), axis=1)
     user_df[gender_col] = [r[0] for r in gender_results]
     
-    # Rule 8: Face Shape
     calc_face = user_df.apply(lambda row: apply_face_shape(row, shape_col), axis=1)
-    user_df[face_col], face_reasons = apply_safe_fill(user_df, face_col, calc_face)
+    user_df[face_col], _ = apply_safe_fill(user_df, face_col, calc_face)
+    
+    # Rule 9: Lenses No Order
+    calc_no_order = user_df.apply(lambda row: apply_lenses_no_order(row, frame_type_col, contain_col), axis=1)
+    user_df[no_order_col], no_order_reasons = apply_safe_fill(user_df, no_order_col, calc_no_order)
 
     # Report Generation
     report_df = pd.DataFrame({
-        'Shape (ID:25)': user_df[shape_col] if shape_col else "",
-        'Face Shape (AX)': user_df[face_col],
-        'Face Logic': face_reasons
+        'Frame Type (ID:50)': user_df[frame_type_col] if frame_type_col else "",
+        'Contains (ID:84)': user_df[contain_col] if contain_col else "",
+        'No Order (AY)': user_df[no_order_col],
+        'Rule 9 Logic': no_order_reasons
     })
     
-    modified_rows = report_df[report_df['Face Logic'] != ""]
+    modified_rows = report_df[report_df['Rule 9 Logic'] != ""]
     return user_df, modified_rows
 
 # ==========================================
@@ -322,7 +354,7 @@ if uploaded_file:
     st.subheader("2. Run Auto-Fill")
     
     if st.button("✨ Auto-Fill Data", type="primary"):
-        with st.spinner("Applying Rules 1-8..."):
+        with st.spinner("Applying Rules 1-9..."):
             working_df = user_df.copy()
             filled_df, report = run_auto_fill(working_df)
             
