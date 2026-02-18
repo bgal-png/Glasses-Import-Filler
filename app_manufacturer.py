@@ -7,8 +7,32 @@ import re
 st.set_page_config(page_title="Manufacturer Data Linker", layout="wide")
 st.title("🏭 Manufacturer Data Linker: Source Loader")
 st.write("### 📂 Debug: Files in Current Folder")
-files_in_folder = os.listdir(os.getcwd())
-st.write(files_in_folder)
+import os
+
+st.divider()
+st.subheader("🕵️ File Integrity Check")
+files_to_check = ["safilo.xlsx", "kering.xlsx", "marcolin.xlsx", "luxottica.xlsx"]
+
+col1, col2 = st.columns(2)
+with col1:
+    st.write("**File Status:**")
+    for f in files_to_check:
+        if os.path.exists(f):
+            # Get size in Megabytes
+            size_mb = os.path.getsize(f) / (1024 * 1024)
+            if size_mb < 0.1:
+                st.error(f"❌ {f} is too small ({size_mb:.4f} MB). It might be a Git LFS pointer!")
+            else:
+                st.success(f"✅ {f}: {size_mb:.2f} MB (Looks healthy)")
+        else:
+            st.warning(f"⚠️ {f} NOT FOUND")
+
+with col2:
+    st.write("**Action:**")
+    if st.button("🗑️ CLEAR CACHE & RETRY", type="primary"):
+        st.cache_data.clear()
+        st.rerun()
+st.divider()
 # ==========================================
 # 🗺️ THE CONFIGURATION (Raw Mode)
 # ==========================================
