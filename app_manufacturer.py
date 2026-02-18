@@ -5,36 +5,33 @@ import re
 
 # 1. Page Configuration
 st.set_page_config(page_title="Manufacturer Data Linker", layout="wide")
-st.title("🏭 Manufacturer Data Linker: The 'Source of Truth'")
+st.title("🏭 Manufacturer Data Linker: Source Loader")
 
 # ==========================================
-# 🗺️ THE CONFIGURATION (The Rosetta Stone)
+# 🗺️ THE CONFIGURATION (Raw Mode)
 # ==========================================
-# UPDATE THIS with your real filenames and column headers!
+# We are loading the files first. You will fill in the "columns" dictionary later.
 MANUFACTURER_CONFIG = {
     "safilo": {
-        "file": "safilo_catalog.xlsx",  # <--- Change to your real filename
-        "brands": ["Carrera", "Polaroid", "Smith", "Boss", "Tommy Hilfiger"],
-        "columns": {
-            "Mod.": "model_name",       # Their Column -> Our Standard Key
-            "Col.": "color_code",
-            "Calibre": "lens_width",
-            "Bridge": "bridge_width",
-            "Temple": "temple_length"
-        }
+        "file": "safilo.xlsx",
+        "brands": ["Carrera", "Polaroid", "Smith", "Boss", "Tommy Hilfiger", "Moschino", "Marc Jacobs", "Levi's", "Pierre Cardin"], 
+        "columns": {}  # <-- TO BE FILLED LATER
     },
     "kering": {
-        "file": "kering_master.csv",    # <--- Change to your real filename
-        "brands": ["Gucci", "Saint Laurent", "Balenciaga", "Montblanc"],
-        "columns": {
-            "Style": "model_name",
-            "ColorId": "color_code",
-            "Size": "lens_width",
-            "Bridge": "bridge_width",
-            "TempleLength": "temple_length"
-        }
+        "file": "kering.xlsx",
+        "brands": ["Gucci", "Saint Laurent", "Balenciaga", "Montblanc", "Bottega Veneta", "Alexander McQueen", "Dunhill"],
+        "columns": {}  # <-- TO BE FILLED LATER
     },
-    # Add other manufacturers here following the same pattern
+    "marcolin": {
+        "file": "marcolin.xlsx",
+        "brands": ["Tom Ford", "Guess", "Adidas", "Max Mara", "Moncler", "Zegna", "Gant", "Harley Davidson", "Skechers"],
+        "columns": {}  # <-- TO BE FILLED LATER
+    },
+    "luxottica": {
+        "file": "luxottica.xlsx",
+        "brands": ["Ray-Ban", "Oakley", "Persol", "Prada", "Versace", "Burberry", "Dolce & Gabbana", "Michael Kors", "Vogue"],
+        "columns": {}  # <-- TO BE FILLED LATER
+    }
 }
 
 # ==========================================
@@ -62,40 +59,43 @@ def load_all_catalogs(config):
         # 2. Load the file (Smart detection of CSV vs Excel)
         try:
             if file_name.endswith('.csv'):
-                # Try reading with different delimiters just in case
                 try:
                     df = pd.read_csv(file_path, dtype=str, on_bad_lines='skip', sep=',')
                 except:
                     df = pd.read_csv(file_path, dtype=str, on_bad_lines='skip', sep=';')
             else:
                 df = pd.read_excel(file_path, dtype=str)
+                
+            # Clean up column names (strip whitespace) to avoid "KeyError" later
+            df.columns = df.columns.astype(str).str.strip()
+            
         except Exception as e:
             st.error(f"❌ Error loading {file_name}: {e}")
             continue
 
-        # 3. Standardize Columns (The Rename)
-        # Check if all columns exist before renaming
-        their_cols = list(settings["columns"].keys())
-        missing_cols = [c for c in their_cols if c not in df.columns]
-        
-        if missing_cols:
-            st.error(f"❌ Config Error in {mfg_name}: Columns {missing_cols} not found in file. Check your config!")
-            st.write(f"Available columns in {file_name}: {list(df.columns)}")
-            continue
+        # 3. Standardize Columns (The Rename) - SKIPPED FOR NOW
+        # Once you provide the mappings, we will uncomment this block.
+        if settings["columns"]:
+            # Check if all target columns exist
+            their_cols = list(settings["columns"].keys())
+            missing_cols = [c for c in their_cols if c not in df.columns]
             
-        # Rename to our standard names
-        df = df.rename(columns=settings["columns"])
+            if missing_cols:
+                st.error(f"❌ Config Error in {mfg_name}: Columns {missing_cols} not found in file.")
+                st.write(f"Available columns: {list(df.columns)}")
+                continue
+                
+            df = df.rename(columns=settings["columns"])
         
-        # 4. Generate the 'Join Key' (Critical Step!)
-        # We create a standardized fingerprint: Brand + Model + Color
-        # Logic: Lowercase, remove spaces, remove dashes/slashes
+        # 4. Generate the 'Join Key' (Placeholder)
+        # We need "model_name" and "color_code" to do this.
+        # Since we haven't mapped them yet, we skip this step safely.
         if "model_name" in df.columns and "color_code" in df.columns:
             df["join_key"] = df["model_name"].str.strip() + df["color_code"].str.strip()
             df["join_key"] = df["join_key"].str.lower().str.replace(r"[^a-z0-9]", "", regex=True)
 
         # 5. Assign to Brands in the Catalog
-        # Instead of storing one huge DF, we map brands to this specific DF
-        # This makes lookup instantaneous: virtual_catalog["Gucci"] -> Kering DF
+        # Map brands to this specific DF
         for brand in settings["brands"]:
             virtual_catalog[brand.lower().strip()] = df
             
@@ -105,15 +105,15 @@ def load_all_catalogs(config):
 # 🚀 APP EXECUTION
 # ==========================================
 
-st.write("### 1. Catalog Status")
-
-if st.button("🔄 Reload Catalogs"):
+st.sidebar.header("Control Panel")
+if st.sidebar.button("🔄 Reload Catalogs"):
     st.cache_data.clear()
     st.rerun()
 
 # Load Data
 if 'catalog' not in st.session_state:
-    st.session_state.catalog = load_all_catalogs(MANUFACTURER_CONFIG)
+    with st.spinner("Loading huge manufacturer files..."):
+        st.session_state.catalog = load_all_catalogs(MANUFACTURER_CONFIG)
 
 catalog = st.session_state.catalog
 
@@ -121,13 +121,24 @@ catalog = st.session_state.catalog
 if catalog:
     st.success(f"✅ Successfully loaded catalogs for {len(catalog)} brands.")
     
+    st.divider()
+    st.subheader("🕵️ Data Inspector")
+    st.info("Use this section to find the exact Column Headers for mapping.")
+    
     col1, col2 = st.columns([1, 3])
     with col1:
-        selected_brand = st.selectbox("Select a Brand to Inspect Source Data:", list(catalog.keys()))
+        # Create a list of available brands
+        available_brands = sorted(list(catalog.keys()))
+        selected_brand = st.selectbox("Select a Brand:", available_brands)
     
     with col2:
         if selected_brand:
-            st.write(f"### Source Data for {selected_brand.title()}")
-            st.dataframe(catalog[selected_brand].head(50), use_container_width=True)
+            df_preview = catalog[selected_brand]
+            st.write(f"### Raw Data for {selected_brand.title()} ({len(df_preview)} rows)")
+            st.dataframe(df_preview.head(50), use_container_width=True)
+            
+            # Helper to show all columns easily
+            with st.expander("📋 View All Column Names (Copy these for Config)"):
+                st.code(list(df_preview.columns))
 else:
-    st.info("ℹ️ No catalogs loaded yet. Please add files to the folder and update MANUFACTURER_CONFIG.")
+    st.info("ℹ️ No catalogs loaded yet. Please ensure 'safilo.xlsx', 'kering.xlsx', 'marcolin.xlsx', and 'luxottica.xlsx' are in the folder.")
