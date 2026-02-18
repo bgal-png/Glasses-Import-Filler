@@ -149,7 +149,7 @@ def load_all_catalogs(config):
     return virtual_catalog
 
 # ==========================================
-# 🚀 APP EXECUTION
+# 🚀 APP EXECUTIONS
 # ==========================================
 
 st.sidebar.header("Control Panel")
