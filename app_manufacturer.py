@@ -1,61 +1,78 @@
 import streamlit as st
 import pandas as pd
 import os
+import re
 
 # 1. Page Configuration
 st.set_page_config(page_title="Manufacturer Data Linker", layout="wide")
 st.title("🏭 Manufacturer Data Linker: Source Loader")
 
 # ==========================================
-# 🗺️ THE CONFIGURATION (Template Mode)
+# 🗺️ THE CONFIGURATION (Exact Mappings)
 # ==========================================
-# I have added "Best Guess" column names here. 
-# If they are wrong, the app will error and tell you the REAL names.
 MANUFACTURER_CONFIG = {
     "safilo": {
         "file": "safilo.xlsx",
-        "brands": ["Carrera", "Polaroid", "Smith", "Boss", "Tommy Hilfiger"], 
+        "brands": ["Carrera", "Polaroid", "Smith", "Boss", "Tommy Hilfiger", "Fossil", "Pierre Cardin", "Marc Jacobs"],
         "columns": {
-            "Mod.": "model_name",       # Common Safilo header
-            "Col.": "color_code",       # Common Safilo header
-            "Calibre": "lens_width",    
-            "Bridge": "bridge_width"
-        }
-    },
-    "kering": {
-        "file": "kering.xlsx",
-        "brands": ["Gucci", "Saint Laurent", "Balenciaga", "Montblanc"],
-        "columns": {
-            "Style": "model_name",      # Common Kering header
-            "Color": "color_code",      # Common Kering header
+            "Model": "model_name",
+            "COLOUR CODE": "color_code",
             "Size": "lens_width",
-            "Bridge": "bridge_width"
-        }
-    },
-    "marcolin": {
-        "file": "marcolin.xlsx",
-        "brands": ["Tom Ford", "Guess", "Adidas", "Max Mara"],
-        "columns": {
-            "Model": "model_name",      # Common Marcolin header
-            "Color": "color_code",
-            "Eye": "lens_width",
-            "Bridge": "bridge_width"
+            "Bridge Length": "bridge_width",
+            "Temple Length": "temple_length",
+            "EAN/UPC": "ean",
+            "Lens Material Description": "lens_material",
+            "Shape": "shape",
+            "Gender": "gender"
         }
     },
     "luxottica": {
         "file": "luxottica.xlsx",
-        "brands": ["Ray-Ban", "Oakley", "Persol", "Prada"],
+        "brands": ["Ray-Ban", "Oakley", "Persol", "Prada", "Versace", "Burberry", "Dolce & Gabbana", "Michael Kors", "Vogue", "Arnette", "Ralph"],
         "columns": {
-            "Model Code": "model_name", # Common Lux header
-            "Color Code": "color_code",
-            "Size": "lens_width",
-            "Bridge": "bridge_width"
+            "Kód modelu": "model_name",       # Czech Header
+            "Kód barvy": "color_code",        # Czech Header
+            "Velikost": "lens_width",         # Czech Header
+            "Velikost nosníku": "bridge_width",
+            "Délka stranice": "temple_length",
+            "UPC": "ean",
+            "Materiál čočky": "lens_material",
+            "Tvar": "shape",
+            "Pohlaví": "gender",
+            "Materiál stranice": "frame_material"
+        }
+    },
+    "kering": {
+        "file": "kering.xlsx",
+        "brands": ["Gucci", "Saint Laurent", "Balenciaga", "Montblanc", "Bottega Veneta", "Alexander McQueen", "Dunhill", "Puma"],
+        "columns": {
+            "SKU Description": "model_raw",   # Contains "Model-Color" (e.g., AM0001S-001)
+            "Size 1": "lens_width",
+            "Bridge Length (mm)": "bridge_width",
+            "Temple length (mm)": "temple_length",
+            "UPC code(Z2)": "ean",
+            "Lens Material Description": "lens_material",
+            "Shape Description": "shape",
+            "Fashion Grade": "gender"         # Sometimes gender is hidden here or in 'Concept'
+        }
+    },
+    "marcolin": {
+        "file": "marcolin.xlsx",
+        "brands": ["Tom Ford", "Guess", "Adidas", "Max Mara", "Moncler", "Zegna", "Gant", "Harley Davidson", "Skechers", "Web", "Timberland"],
+        "columns": {
+            "SKU Description": "model_raw",   # Contains "Model-Color"
+            "Size 1": "lens_width",
+            "Bridge Length (mm)": "bridge_width",
+            "Temple length (mm)": "temple_length",
+            "UPC code(Z2)": "ean",
+            "Lens Material Description": "lens_material",
+            "Shape Description": "shape"
         }
     }
 }
 
 # ==========================================
-# 📥 THE LOADER (Debug Mode)
+# 📥 THE LOADER
 # ==========================================
 @st.cache_data(show_spinner=True)
 def load_all_catalogs(config):
@@ -66,43 +83,66 @@ def load_all_catalogs(config):
         file_name = settings["file"]
         file_path = os.path.join(current_dir, file_name)
         
-        # 1. Validation
         if not os.path.exists(file_path):
             st.warning(f"⚠️ Missing File: '{file_name}'")
             continue
             
-        # 2. Load File (With explicit error printing)
         try:
+            # Load File (Smart Engine Selection)
             if file_name.endswith('.csv'):
-                df = pd.read_csv(file_path, dtype=str, on_bad_lines='skip', sep=None, engine='python')
+                # Try standard comma first, then semicolon
+                try:
+                    df = pd.read_csv(file_path, dtype=str, on_bad_lines='skip', sep=',')
+                except:
+                    df = pd.read_csv(file_path, dtype=str, on_bad_lines='skip', sep=';')
             else:
-                # Engine 'openpyxl' is safer for xlsx
                 df = pd.read_excel(file_path, dtype=str, engine='openpyxl')
                 
-            # Normalize headers (strip spaces)
+            # Normalize Headers (Strip spaces)
             df.columns = df.columns.astype(str).str.strip()
             
         except Exception as e:
-            st.error(f"❌ CRITICAL ERROR loading {file_name}: {e}")
+            st.error(f"❌ Error loading {file_name}: {e}")
             continue
 
-        # 3. Column Check & Rename
-        # We try to rename. If a column is missing, we report it but LOAD THE DATA ANYWAY so you can see it.
-        their_cols = list(settings["columns"].keys())
-        missing_cols = [c for c in their_cols if c not in df.columns]
+        # Rename Columns
+        # Check if map exists to avoid KeyErrors
+        available_cols = set(df.columns)
+        required_cols = set(settings["columns"].keys())
+        valid_rename = {k: v for k, v in settings["columns"].items() if k in available_cols}
         
-        if missing_cols:
-            st.error(f"❌ {mfg_name.title()} Mapping Error: Columns {missing_cols} not found.")
-            st.warning(f"ℹ️ Actual columns in {file_name}: {list(df.columns)[:10]}...") # Show first 10 cols
-            # We skip renaming to avoid crash, but we still load the DF so you can inspect it
-        else:
-            df = df.rename(columns=settings["columns"])
-            # Only create join key if rename worked
-            if "model_name" in df.columns and "color_code" in df.columns:
-                df["join_key"] = df["model_name"].str.strip() + df["color_code"].str.strip()
-                df["join_key"] = df["join_key"].str.lower().str.replace(r"[^a-z0-9]", "", regex=True)
+        # Report Missing Columns (Debug Info)
+        missing = required_cols - available_cols
+        if missing:
+            st.warning(f"⚠️ {mfg_name.title()}: Could not find columns {missing}. Check file format.")
+        
+        df = df.rename(columns=valid_rename)
+        
+        # --- JOIN KEY GENERATION LOGIC ---
+        
+        # Logic A: Standard (Safilo/Luxottica) - Separate Columns
+        if "model_name" in df.columns and "color_code" in df.columns:
+            df["join_key"] = df["model_name"].str.strip() + df["color_code"].str.strip()
+            
+        # Logic B: Kering/Marcolin - Combined in "model_raw" (e.g., "GG0001S-001")
+        elif "model_raw" in df.columns:
+            # We assume format is "MODEL-COLOR" or similar.
+            # We split by space or hyphen to get components.
+            # This is a basic extractor; we can refine it later.
+            def extract_key(raw_val):
+                if not isinstance(raw_val, str): return ""
+                # Remove spaces and normalize
+                clean = raw_val.strip().lower()
+                # Remove non-alphanumeric chars to make a "mush" key
+                return re.sub(r'[^a-z0-9]', '', clean)
+            
+            df["join_key"] = df["model_raw"].apply(extract_key)
+            
+        # Clean Key (Lowercase, no special chars)
+        if "join_key" in df.columns:
+            df["join_key"] = df["join_key"].str.lower().str.replace(r"[^a-z0-9]", "", regex=True)
 
-        # 4. Success Registration
+        # Register to Virtual Catalog
         for brand in settings["brands"]:
             virtual_catalog[brand.lower().strip()] = df
             
@@ -111,33 +151,29 @@ def load_all_catalogs(config):
 # ==========================================
 # 🚀 APP EXECUTION
 # ==========================================
+
 st.sidebar.header("Control Panel")
-if st.sidebar.button("🗑️ Clear Cache & Reload"):
+if st.sidebar.button("🔄 Reload Catalogs"):
     st.cache_data.clear()
     st.rerun()
 
-# Run Loader
 if 'catalog' not in st.session_state:
-    st.session_state.catalog = load_all_catalogs(MANUFACTURER_CONFIG)
+    with st.spinner("Creating Virtual Catalog..."):
+        st.session_state.catalog = load_all_catalogs(MANUFACTURER_CONFIG)
 
 catalog = st.session_state.catalog
 
-# Dashboard
 if catalog:
-    st.success(f"✅ Loaded data for {len(catalog)} brands.")
+    st.success(f"✅ System Online: Loaded {len(catalog)} brands.")
     
-    st.divider()
-    st.subheader("🕵️ Column Inspector")
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        selected_brand = st.selectbox("Inspect Brand:", sorted(list(catalog.keys())))
     
-    # Selector
-    selected_brand = st.selectbox("Select Brand to Inspect:", sorted(list(catalog.keys())))
-    
-    if selected_brand:
-        df = catalog[selected_brand]
-        st.write(f"### Data Preview: {selected_brand.title()}")
-        st.dataframe(df.head(50), use_container_width=True)
-        
-        with st.expander("📋 Copy All Column Names"):
-            st.code(list(df.columns))
-else:
-    st.error("❌ No catalogs loaded. Check the errors above for details.")
+    with col2:
+        if selected_brand:
+            df = catalog[selected_brand]
+            st.write(f"### Standardized Data: {selected_brand.title()}")
+            st.dataframe(df.head(50), use_container_width=True)
+            
+            st.info(f"Join Keys generated: {df['join_key'].head(3).values if 'join_key' in df.columns else 'None'}")
