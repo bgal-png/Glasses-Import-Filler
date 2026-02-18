@@ -6,7 +6,9 @@ import re
 # 1. Page Configuration
 st.set_page_config(page_title="Manufacturer Data Linker", layout="wide")
 st.title("🏭 Manufacturer Data Linker: Source Loader")
-
+st.write("### 📂 Debug: Files in Current Folder")
+files_in_folder = os.listdir(os.getcwd())
+st.write(files_in_folder)
 # ==========================================
 # 🗺️ THE CONFIGURATION (Raw Mode)
 # ==========================================
