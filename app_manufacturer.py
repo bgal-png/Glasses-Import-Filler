@@ -8,7 +8,7 @@ st.set_page_config(page_title="Manufacturer Data Linker", layout="wide")
 st.title("🏭 Manufacturer Data Linker: Source Loader")
 
 # ==========================================
-# 🗺️ THE CONFIGURATION (Exact Mappings)
+# 🗺️ THE CONFIGURATION (Exact Mappings from your Files)
 # ==========================================
 MANUFACTURER_CONFIG = {
     "safilo": {
