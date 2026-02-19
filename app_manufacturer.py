@@ -2,20 +2,52 @@ import streamlit as st
 import pandas as pd
 import os
 import re
+from io import BytesIO
 
 # ==========================================
 # 🛑 VERSION CHECK 
 # ==========================================
 st.set_page_config(page_title="Manufacturer Data Linker", layout="wide")
-APP_VERSION = "3.0 - BARCODE MATCHER & FLIP MAPPING"
+APP_VERSION = "4.0 - THE MATCHER ACTIVE"
 
 st.title(f"🏭 Manufacturer Data Linker")
 st.caption(f"🚀 Running Code Version: **{APP_VERSION}**")
 
 # ==========================================
+# 🎯 THE TARGET MAPPING (Your File)
+# ==========================================
+TARGET_MAPPING = {
+    "Combination": "Combination (size on glasses)",
+    "Barcode": "Barcode",
+    "Glasses_type": "Glasses type ID: 13",
+    "Manufacturer": "Manufacturer ID: 9", 
+    "Glasses_size_temple_length": "Glasses size: temple length ID: 70",
+    "Glasses_size_lens_height": "Glasses size: lens height ID: 71",
+    "Glasses_size_lens_width": "Glasses size: lens width ID: 72",
+    "Glasses_size_bridge": "Glasses size: bridge ID: 73",
+    "Glasses_shape": "Glasses shape ID: 25",
+    "Glasses_other_info": "Glasses other info ID: 49",
+    "Glasses_frame_type": "Glasses frame type ID: 50",
+    "Frame_Colour": "Frame Colour ID: 26",
+    "Temple_Colour": "Temple Colour ID: 39",
+    "Glasses_main_material": "Glasses main material ID: 53",
+    "Glasses_lens_Colour": "Glasses lens Colour ID: 28",
+    "Glasses_lens_material": "Glasses lens material ID: 35",
+    "Glasses_lens_effect": "Glasses lens effect ID: 37",
+    "Sunglasses_filter": "Sunglasses filter ID: 77",
+    "Glasses_gendre": "Glasses gendre ID: 22",
+    "Glasses_collection": "Glasses collection ID: 33",
+    "SunGlasses_RX_lenses": "SunGlasses RX lenses ID:108",
+    "Brand": "Brand ID:11",
+    "Case_weight_g": "Case weight (g)",
+    "Glasses_weight_g": "Glasses weight (g)",
+    "Item_origin_country": "Item origin country",
+    "Producing_company": "Producing company ID:146" 
+}
+
+# ==========================================
 # 🗺️ THE CONFIGURATION (Global -> Manufacturer)
 # ==========================================
-# Note: Duplicate keys (like multiple lens effects) are now grouped in lists []
 MANUFACTURER_CONFIG = {
     "safilo": {
         "file": "safilo.xlsx",
@@ -174,46 +206,34 @@ def load_all_catalogs(config):
             st.error(f"❌ Error loading {file_name}: {e}")
             continue
 
-        # --- SMART FLIPPER & RENAMER ---
         valid_rename = {}
         cols_to_duplicate = []
         
         for global_name, mfg_names in settings["columns"].items():
             if not mfg_names: continue
-            
-            # Ensure it's a list for processing
             if isinstance(mfg_names, str):
                 mfg_names = [mfg_names]
                 
-            for mfg_name in mfg_names:
-                if mfg_name in df.columns:
-                    if mfg_name not in valid_rename:
-                        # Standard Rename: MFG_Col -> Global_Col
-                        valid_rename[mfg_name] = global_name
+            for mfg_name_header in mfg_names:
+                if mfg_name_header in df.columns:
+                    if mfg_name_header not in valid_rename:
+                        valid_rename[mfg_name_header] = global_name
                     else:
-                        # Handle Multi-Mapping (e.g. Size -> Combination AND Lens_Width)
-                        cols_to_duplicate.append((mfg_name, global_name))
+                        cols_to_duplicate.append((mfg_name_header, global_name))
 
-        # Perform primary renaming
         df = df.rename(columns=valid_rename)
         
-        # Duplicate columns mapped multiple times
         for original_mfg_name, additional_global_name in cols_to_duplicate:
             primary_global_name = valid_rename[original_mfg_name]
             if primary_global_name in df.columns:
                 df[additional_global_name] = df[primary_global_name]
                 
-        # --- THE ULTIMATE BARCODE JOIN KEY ---
         if "Barcode" in df.columns:
-            # Strip spaces, make lowercase just in case, and remove trailing '.0' from excel floats
             df["join_key"] = df["Barcode"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-            
-            # Optionally remove rows that don't have a barcode
             df = df[df["join_key"].notna() & (df["join_key"] != "nan") & (df["join_key"] != "")]
         else:
-            st.error(f"❌ CRITICAL: 'Barcode' column missing in {mfg_name} after rename.")
+            st.error(f"❌ CRITICAL: 'Barcode' missing in {mfg_name} after rename.")
 
-        # Hardcode the Producer Company directly into the DF
         df["Producing_company"] = mfg_name.title()
 
         for brand in settings["brands"]:
@@ -222,7 +242,7 @@ def load_all_catalogs(config):
     return virtual_catalog
 
 # ==========================================
-# 🚀 APP EXECUTION
+# 🚀 APP EXECUTION & UI
 # ==========================================
 
 st.sidebar.header("Control Panel")
@@ -230,33 +250,107 @@ if st.sidebar.button("🗑️ Clear Cache & Reload Data", type="primary"):
     st.cache_data.clear()
     st.rerun()
 
+# 1. Load Background Data
 if 'catalog' not in st.session_state:
     with st.spinner("Building Virtual Catalog..."):
         st.session_state.catalog = load_all_catalogs(MANUFACTURER_CONFIG)
 
 catalog = st.session_state.catalog
 
-if catalog:
-    # 🕵️ LOGIC CHECK: Do we have Barcode Join Keys?
-    first_brand = list(catalog.keys())[0]
-    sample_df = catalog[first_brand]
-    
-    if "join_key" in sample_df.columns:
-        st.success(f"✅ SUCCESS: Version {APP_VERSION} active. Barcode Matcher is READY.")
-    else:
-        st.error(f"❌ FAIL: Barcode 'join_key' is MISSING. Check mappings.")
+if not catalog:
+    st.warning("No manufacturer catalogs loaded. Fix errors before proceeding.")
+    st.stop()
 
-    st.divider()
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        selected_brand = st.selectbox("Inspect Brand:", sorted(list(catalog.keys())))
-    
-    with col2:
-        if selected_brand:
-            df = catalog[selected_brand]
-            st.write(f"### Standardized Data for {selected_brand.title()}")
-            st.dataframe(df.head(50), use_container_width=True)
-            if "join_key" in df.columns:
-                st.info(f"Barcode Join Keys Preview: {df['join_key'].head(5).tolist()}")
-else:
-    st.warning("No catalogs loaded.")
+# 2. Build the Master Database (for fast searching)
+@st.cache_data(show_spinner=False)
+def get_master_database(cat):
+    # Combine all individual brand dataframes into one massive searchable database
+    all_dfs = list(cat.values())
+    master_df = pd.concat(all_dfs, ignore_index=True)
+    # Keep only the first instance of a barcode if it's duplicated across files
+    master_df.drop_duplicates(subset=['join_key'], keep='first', inplace=True)
+    # Set the barcode as the Index to make searching ultra-fast
+    master_df.set_index('join_key', inplace=True)
+    return master_df
+
+master_db = get_master_database(catalog)
+
+# 3. Main Interface
+st.divider()
+st.subheader("📥 Step 1: Upload Your File to Fill")
+
+uploaded_file = st.file_uploader("Upload your Target Excel or CSV file", type=["xlsx", "csv"])
+
+if uploaded_file:
+    # Read User File
+    try:
+        if uploaded_file.name.endswith('.csv'):
+            target_df = pd.read_csv(uploaded_file, dtype=str)
+        else:
+            target_df = pd.read_excel(uploaded_file, dtype=str, engine='openpyxl')
+            
+        # SANITIZE HEADERS: Remove \n, trailing spaces, etc.
+        target_df.columns = target_df.columns.astype(str).str.replace('\n', ' ', regex=False).str.strip()
+        
+    except Exception as e:
+        st.error(f"Could not read your uploaded file: {e}")
+        st.stop()
+
+    # Find the target barcode column
+    target_barcode_col = TARGET_MAPPING.get("Barcode", "Barcode")
+    if target_barcode_col not in target_df.columns:
+        st.error(f"❌ Could not find the Barcode column '{target_barcode_col}' in your file. Found columns: {list(target_df.columns)}")
+        st.stop()
+
+    st.success(f"File uploaded! Contains {len(target_df)} rows. Click below to start matching.")
+
+    # Execute Matcher
+    if st.button("🚀 Run Auto-Filler", type="primary"):
+        with st.spinner("Matching barcodes and pouring data..."):
+            
+            # Ensure target columns exist in the dataframe before we try to write to them
+            for global_col, target_col in TARGET_MAPPING.items():
+                if target_col not in target_df.columns:
+                    target_df[target_col] = "" # Create blank column if missing
+
+            match_count = 0
+            
+            # Iterate through every row in the user's file
+            for index, row in target_df.iterrows():
+                raw_barcode = str(row[target_barcode_col]).strip()
+                # Clean the barcode exactly like we did in the Master DB
+                clean_barcode = re.sub(r'\.0$', '', raw_barcode)
+                
+                # MAGIC HAPPENS HERE: If we find the barcode in our Master Database
+                if clean_barcode in master_db.index:
+                    match_count += 1
+                    master_row = master_db.loc[clean_barcode]
+                    
+                    # Pour the data based on mapping
+                    for global_col, target_col in TARGET_MAPPING.items():
+                        if global_col == "Barcode": continue # Skip overwriting the barcode
+                        
+                        # Only transfer if the master database has this column and it's not totally empty
+                        if global_col in master_db.columns:
+                            val = master_row[global_col]
+                            if pd.notna(val) and str(val).strip() != "":
+                                target_df.at[index, target_col] = val
+
+            st.success(f"✅ Match Complete! Successfully filled {match_count} out of {len(target_df)} products.")
+            
+            # Preview the result
+            st.write("### Preview of Filled Data:")
+            st.dataframe(target_df.head(20), use_container_width=True)
+
+            # Generate Downloadable Excel
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                target_df.to_excel(writer, index=False, sheet_name='Filled_Data')
+            processed_data = output.getvalue()
+
+            st.download_button(
+                label="📥 Download Filled Excel File",
+                data=processed_data,
+                file_name="Master_Filled_Glasses.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
