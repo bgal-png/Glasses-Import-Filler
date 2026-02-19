@@ -8,7 +8,7 @@ from io import BytesIO
 # 🛑 VERSION CHECK 
 # ==========================================
 st.set_page_config(page_title="Manufacturer Data Linker", layout="wide")
-APP_VERSION = "4.0 - THE MATCHER ACTIVE"
+APP_VERSION = "4.1 - CACHE ANNIHILATOR"
 
 st.title(f"🏭 Manufacturer Data Linker")
 st.caption(f"🚀 Running Code Version: **{APP_VERSION}**")
@@ -178,7 +178,7 @@ MANUFACTURER_CONFIG = {
 # ==========================================
 # 📥 THE LOADER
 # ==========================================
-@st.cache_data(show_spinner=True)
+@st.cache_data(show_spinner=False)
 def load_all_catalogs(config):
     virtual_catalog = {}
     current_dir = os.getcwd()
@@ -200,14 +200,25 @@ def load_all_catalogs(config):
             else:
                 df = pd.read_excel(file_path, dtype=str, engine='openpyxl')
                 
+            # 1. Clean headers
             df.columns = df.columns.astype(str).str.strip()
+            
+            # 2. Safely number any duplicate headers
+            new_cols = []
+            seen = {}
+            for c in df.columns:
+                if c in seen:
+                    seen[c] += 1
+                    new_cols.append(f"{c}.{seen[c]}")
+                else:
+                    seen[c] = 0
+                    new_cols.append(c)
+            df.columns = new_cols
             
         except Exception as e:
             st.error(f"❌ Error loading {file_name}: {e}")
             continue
 
-        # --- V2 SMART EXTRACTOR ---
-        # Build a pristine DataFrame containing ONLY our Global Names
         new_df = pd.DataFrame()
         
         for global_name, mfg_names in settings["columns"].items():
@@ -215,33 +226,28 @@ def load_all_catalogs(config):
             if isinstance(mfg_names, str):
                 mfg_names = [mfg_names]
                 
-            # Find which of these headers actually exist in the file
             existing_cols = [col for col in mfg_names if col in df.columns]
             
             if existing_cols:
                 if len(existing_cols) == 1:
-                    # Direct 1-to-1 copy
-                    new_df[global_name] = df[existing_cols[0]]
+                    col_data = df[existing_cols[0]]
+                    if isinstance(col_data, pd.DataFrame):
+                        col_data = col_data.iloc[:, 0]
+                    new_df[global_name] = col_data
                 else:
-                    # Merge multiple columns into one (e.g. Polarized + Photochromic)
                     def merge_row(row):
                         vals = [str(row[c]).strip() for c in existing_cols if pd.notna(row[c]) and str(row[c]).strip().lower() not in ("nan", "")]
                         return ", ".join(vals) if vals else ""
-                    
                     new_df[global_name] = df.apply(merge_row, axis=1)
 
-        # --- THE ULTIMATE BARCODE JOIN KEY ---
         if "Barcode" in new_df.columns:
             new_df["join_key"] = new_df["Barcode"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-            # Drop rows with empty barcodes
             new_df = new_df[new_df["join_key"].notna() & (new_df["join_key"] != "nan") & (new_df["join_key"] != "")]
         else:
             st.error(f"❌ CRITICAL: 'Barcode' missing in {mfg_name} after extraction.")
 
-        # Hardcode Producer Company
         new_df["Producing_company"] = mfg_name.title()
 
-        # Save to virtual catalog
         for brand in settings["brands"]:
             virtual_catalog[brand.lower().strip()] = new_df
             
@@ -252,30 +258,27 @@ def load_all_catalogs(config):
 # ==========================================
 
 st.sidebar.header("Control Panel")
-if st.sidebar.button("🗑️ Clear Cache & Reload Data", type="primary"):
+
+# 🔥 THE FIX: The Nuclear Reload Button
+if st.sidebar.button("🗑️ Clear Memory & Reload Data", type="primary"):
     st.cache_data.clear()
+    st.session_state.clear() # This kills the ghost data!
     st.rerun()
 
-# 1. Load Background Data
-if 'catalog' not in st.session_state:
-    with st.spinner("Building Virtual Catalog..."):
-        st.session_state.catalog = load_all_catalogs(MANUFACTURER_CONFIG)
-
-catalog = st.session_state.catalog
+with st.spinner("Building Virtual Catalog from scratch..."):
+    # We load fresh every time if not in cache (no more session state traps!)
+    catalog = load_all_catalogs(MANUFACTURER_CONFIG)
 
 if not catalog:
     st.warning("No manufacturer catalogs loaded. Fix errors before proceeding.")
     st.stop()
 
-# 2. Build the Master Database (for fast searching)
+# 2. Build the Master Database
 @st.cache_data(show_spinner=False)
 def get_master_database(cat):
-    # Combine all individual brand dataframes into one massive searchable database
     all_dfs = list(cat.values())
     master_df = pd.concat(all_dfs, ignore_index=True)
-    # Keep only the first instance of a barcode if it's duplicated across files
     master_df.drop_duplicates(subset=['join_key'], keep='first', inplace=True)
-    # Set the barcode as the Index to make searching ultra-fast
     master_df.set_index('join_key', inplace=True)
     return master_df
 
@@ -288,21 +291,18 @@ st.subheader("📥 Step 1: Upload Your File to Fill")
 uploaded_file = st.file_uploader("Upload your Target Excel or CSV file", type=["xlsx", "csv"])
 
 if uploaded_file:
-    # Read User File
     try:
         if uploaded_file.name.endswith('.csv'):
             target_df = pd.read_csv(uploaded_file, dtype=str)
         else:
             target_df = pd.read_excel(uploaded_file, dtype=str, engine='openpyxl')
             
-        # SANITIZE HEADERS: Remove \n, trailing spaces, etc.
         target_df.columns = target_df.columns.astype(str).str.replace('\n', ' ', regex=False).str.strip()
         
     except Exception as e:
         st.error(f"Could not read your uploaded file: {e}")
         st.stop()
 
-    # Find the target barcode column
     target_barcode_col = TARGET_MAPPING.get("Barcode", "Barcode")
     if target_barcode_col not in target_df.columns:
         st.error(f"❌ Could not find the Barcode column '{target_barcode_col}' in your file. Found columns: {list(target_df.columns)}")
@@ -310,33 +310,26 @@ if uploaded_file:
 
     st.success(f"File uploaded! Contains {len(target_df)} rows. Click below to start matching.")
 
-    # Execute Matcher
     if st.button("🚀 Run Auto-Filler", type="primary"):
         with st.spinner("Matching barcodes and pouring data..."):
             
-            # Ensure target columns exist in the dataframe before we try to write to them
             for global_col, target_col in TARGET_MAPPING.items():
                 if target_col not in target_df.columns:
-                    target_df[target_col] = "" # Create blank column if missing
+                    target_df[target_col] = "" 
 
             match_count = 0
             
-            # Iterate through every row in the user's file
             for index, row in target_df.iterrows():
                 raw_barcode = str(row[target_barcode_col]).strip()
-                # Clean the barcode exactly like we did in the Master DB
                 clean_barcode = re.sub(r'\.0$', '', raw_barcode)
                 
-                # MAGIC HAPPENS HERE: If we find the barcode in our Master Database
                 if clean_barcode in master_db.index:
                     match_count += 1
                     master_row = master_db.loc[clean_barcode]
                     
-                    # Pour the data based on mapping
                     for global_col, target_col in TARGET_MAPPING.items():
-                        if global_col == "Barcode": continue # Skip overwriting the barcode
+                        if global_col == "Barcode": continue
                         
-                        # Only transfer if the master database has this column and it's not totally empty
                         if global_col in master_db.columns:
                             val = master_row[global_col]
                             if pd.notna(val) and str(val).strip() != "":
@@ -344,11 +337,9 @@ if uploaded_file:
 
             st.success(f"✅ Match Complete! Successfully filled {match_count} out of {len(target_df)} products.")
             
-            # Preview the result
             st.write("### Preview of Filled Data:")
             st.dataframe(target_df.head(20), use_container_width=True)
 
-            # Generate Downloadable Excel
             output = BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 target_df.to_excel(writer, index=False, sheet_name='Filled_Data')
