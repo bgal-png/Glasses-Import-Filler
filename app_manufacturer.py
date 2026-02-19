@@ -44,7 +44,38 @@ TARGET_MAPPING = {
     "Item_origin_country": "Item origin country",
     "Producing_company": "Producing company ID:146" 
 }
-
+# ==========================================
+# 🔤 THE VALUE TRANSLATOR (Standardizing Data)
+# ==========================================
+# Format -> "Global_Column_Name": { "Their_Value": "Our_System_Value" }
+# IMPORTANT: Put ALL variations from ALL manufacturers in the same list!
+VALUE_TRANSLATOR = {
+    "Glasses_shape": {
+        "RECTANGULAR": "Rectangle",
+        "obdélníkový tvar": "Rectangle",
+        "CAT EYE": "Cat Eye",
+        "ROUND": "Round"
+    },
+    "Frame_Colour": {
+        "matná černá": "Black",
+        "Shiny Black": "Black",
+        "BLACK": "Black",
+        "BROWN": "Brown",
+        "matná hnědá": "Brown"
+    },
+    "Glasses_gendre": {
+        "Muž": "Men",
+        "WOMAN": "Women",
+        "UNISEX ADULT": "Unisex"
+    },
+    "Glasses_lens_effect": {
+        "Polarizované": "Polarized",
+        "Polarized Lens": "Polarized",
+        "Fotochromatické": "Photochromic",
+        "Photocromic": "Photochromic",
+        "Dark Grey Mirror Water Polarized": "Polarized, Mirrored" # Example of turning one value into two
+    }
+}
 # ==========================================
 # 🗺️ THE CONFIGURATION (Global -> Manufacturer)
 # ==========================================
@@ -238,7 +269,35 @@ def load_all_catalogs(config):
                         return ", ".join(vals) if vals else ""
                     new_df[global_name] = df.apply(merge_row, axis=1)
 
-        # 🔥 ZERO-STRIPPER APPLIED HERE
+        # 🔥 VALUE TRANSLATOR APPLIED HERE 🔥
+        def apply_translation(val, translation_dict):
+            if pd.isna(val) or str(val).strip() == "":
+                return val
+                
+            val_str = str(val).strip()
+            
+            # Scenario A: Exact match (e.g. "Shiny Black" -> "Black")
+            if val_str in translation_dict:
+                return translation_dict[val_str]
+                
+            # Scenario B: Multiple comma-separated values (e.g. "Polarizované, Fotochromatické")
+            if "," in val_str:
+                parts = [p.strip() for p in val_str.split(",")]
+                # Translate each piece, keeping the original if no translation is found
+                translated_parts = [translation_dict.get(p, p) for p in parts]
+                # Remove duplicates in case two words translated to the same thing
+                clean_parts = list(dict.fromkeys(translated_parts))
+                return ", ".join(clean_parts)
+                
+            # If no translation exists, leave it exactly as the manufacturer wrote it
+            return val_str
+
+        # Loop through our translator and apply to any columns that exist
+        for target_col, translation_dict in VALUE_TRANSLATOR.items():
+            if target_col in new_df.columns:
+                new_df[target_col] = new_df[target_col].apply(lambda x: apply_translation(x, translation_dict))
+
+        # ZERO-STRIPPER APPLIED HERE
         if "Barcode" in new_df.columns:
             new_df["join_key"] = new_df["Barcode"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).str.lstrip('0')
             new_df = new_df[new_df["join_key"].notna() & (new_df["join_key"] != "nan") & (new_df["join_key"] != "")]
