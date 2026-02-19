@@ -206,38 +206,44 @@ def load_all_catalogs(config):
             st.error(f"❌ Error loading {file_name}: {e}")
             continue
 
-        valid_rename = {}
-        cols_to_duplicate = []
+        # --- V2 SMART EXTRACTOR ---
+        # Build a pristine DataFrame containing ONLY our Global Names
+        new_df = pd.DataFrame()
         
         for global_name, mfg_names in settings["columns"].items():
             if not mfg_names: continue
             if isinstance(mfg_names, str):
                 mfg_names = [mfg_names]
                 
-            for mfg_name_header in mfg_names:
-                if mfg_name_header in df.columns:
-                    if mfg_name_header not in valid_rename:
-                        valid_rename[mfg_name_header] = global_name
-                    else:
-                        cols_to_duplicate.append((mfg_name_header, global_name))
+            # Find which of these headers actually exist in the file
+            existing_cols = [col for col in mfg_names if col in df.columns]
+            
+            if existing_cols:
+                if len(existing_cols) == 1:
+                    # Direct 1-to-1 copy
+                    new_df[global_name] = df[existing_cols[0]]
+                else:
+                    # Merge multiple columns into one (e.g. Polarized + Photochromic)
+                    def merge_row(row):
+                        vals = [str(row[c]).strip() for c in existing_cols if pd.notna(row[c]) and str(row[c]).strip().lower() not in ("nan", "")]
+                        return ", ".join(vals) if vals else ""
+                    
+                    new_df[global_name] = df.apply(merge_row, axis=1)
 
-        df = df.rename(columns=valid_rename)
-        
-        for original_mfg_name, additional_global_name in cols_to_duplicate:
-            primary_global_name = valid_rename[original_mfg_name]
-            if primary_global_name in df.columns:
-                df[additional_global_name] = df[primary_global_name]
-                
-        if "Barcode" in df.columns:
-            df["join_key"] = df["Barcode"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-            df = df[df["join_key"].notna() & (df["join_key"] != "nan") & (df["join_key"] != "")]
+        # --- THE ULTIMATE BARCODE JOIN KEY ---
+        if "Barcode" in new_df.columns:
+            new_df["join_key"] = new_df["Barcode"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+            # Drop rows with empty barcodes
+            new_df = new_df[new_df["join_key"].notna() & (new_df["join_key"] != "nan") & (new_df["join_key"] != "")]
         else:
-            st.error(f"❌ CRITICAL: 'Barcode' missing in {mfg_name} after rename.")
+            st.error(f"❌ CRITICAL: 'Barcode' missing in {mfg_name} after extraction.")
 
-        df["Producing_company"] = mfg_name.title()
+        # Hardcode Producer Company
+        new_df["Producing_company"] = mfg_name.title()
 
+        # Save to virtual catalog
         for brand in settings["brands"]:
-            virtual_catalog[brand.lower().strip()] = df
+            virtual_catalog[brand.lower().strip()] = new_df
             
     return virtual_catalog
 
