@@ -8,7 +8,7 @@ from io import BytesIO
 # 🛑 VERSION CHECK 
 # ==========================================
 st.set_page_config(page_title="Manufacturer Data Linker", layout="wide")
-APP_VERSION = "4.1 - CACHE ANNIHILATOR"
+APP_VERSION = "4.2 - ZERO-STRIPPER ACTIVE"
 
 st.title(f"🏭 Manufacturer Data Linker")
 st.caption(f"🚀 Running Code Version: **{APP_VERSION}**")
@@ -200,10 +200,8 @@ def load_all_catalogs(config):
             else:
                 df = pd.read_excel(file_path, dtype=str, engine='openpyxl')
                 
-            # 1. Clean headers
             df.columns = df.columns.astype(str).str.strip()
             
-            # 2. Safely number any duplicate headers
             new_cols = []
             seen = {}
             for c in df.columns:
@@ -240,8 +238,9 @@ def load_all_catalogs(config):
                         return ", ".join(vals) if vals else ""
                     new_df[global_name] = df.apply(merge_row, axis=1)
 
+        # 🔥 ZERO-STRIPPER APPLIED HERE
         if "Barcode" in new_df.columns:
-            new_df["join_key"] = new_df["Barcode"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+            new_df["join_key"] = new_df["Barcode"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).str.lstrip('0')
             new_df = new_df[new_df["join_key"].notna() & (new_df["join_key"] != "nan") & (new_df["join_key"] != "")]
         else:
             st.error(f"❌ CRITICAL: 'Barcode' missing in {mfg_name} after extraction.")
@@ -259,21 +258,18 @@ def load_all_catalogs(config):
 
 st.sidebar.header("Control Panel")
 
-# 🔥 THE FIX: The Nuclear Reload Button
 if st.sidebar.button("🗑️ Clear Memory & Reload Data", type="primary"):
     st.cache_data.clear()
-    st.session_state.clear() # This kills the ghost data!
+    st.session_state.clear() 
     st.rerun()
 
 with st.spinner("Building Virtual Catalog from scratch..."):
-    # We load fresh every time if not in cache (no more session state traps!)
     catalog = load_all_catalogs(MANUFACTURER_CONFIG)
 
 if not catalog:
     st.warning("No manufacturer catalogs loaded. Fix errors before proceeding.")
     st.stop()
 
-# 2. Build the Master Database
 @st.cache_data(show_spinner=False)
 def get_master_database(cat):
     all_dfs = list(cat.values())
@@ -284,7 +280,6 @@ def get_master_database(cat):
 
 master_db = get_master_database(catalog)
 
-# 3. Main Interface
 st.divider()
 st.subheader("📥 Step 1: Upload Your File to Fill")
 
@@ -321,7 +316,9 @@ if uploaded_file:
             
             for index, row in target_df.iterrows():
                 raw_barcode = str(row[target_barcode_col]).strip()
-                clean_barcode = re.sub(r'\.0$', '', raw_barcode)
+                
+                # 🔥 ZERO-STRIPPER APPLIED HERE TOO
+                clean_barcode = re.sub(r'\.0$', '', raw_barcode).lstrip('0')
                 
                 if clean_barcode in master_db.index:
                     match_count += 1
