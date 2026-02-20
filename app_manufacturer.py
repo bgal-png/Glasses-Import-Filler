@@ -53,9 +53,6 @@ VALUE_TRANSLATOR = {
     "Glasses_type": {
         "": "",
     },
-    "Manufacturer": {
-        #just transfort the text from caps to ccapitalization on the start of each word
-    },
     "Glasses_shape": { #na shape až budou kompletní data od výrobců
     #safilo
     "OTHER SHAPE": "Extravagant",
