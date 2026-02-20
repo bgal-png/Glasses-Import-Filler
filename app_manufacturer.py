@@ -50,29 +50,119 @@ TARGET_MAPPING = {
 # Format -> "Global_Column_Name": { "Their_Value": "Our_System_Value" }
 # IMPORTANT: Put ALL variations from ALL manufacturers in the same list!
 VALUE_TRANSLATOR = {
-    "Glasses_shape": {
-        "RECTANGULAR": "Rectangle",
-        "obdélníkový tvar": "Rectangle",
-        "CAT EYE": "Cat Eye",
-        "ROUND": "Round"
+    "Glasses_type": {
+        "": "",
+    },
+    "Manufacturer": {
+        #just transfort the text from caps to ccapitalization on the start of each word
+    },
+    "Glasses_shape": { #na shape až budou kompletní data od výrobců
+    #safilo
+    "OTHER SHAPE": "Extravagant",
+    "ROUND GEOMETRICAL": "Round",
+    "ROUND": "Round",
+    "PILOT": "Pilot",
+    "NAVIGATOR": "Pilot",
+    "CAT EYE": "Cat Eye",
+    "SQUARE": "Square",
+    "SQUARE FLAT TOP": "Square",
+    "SQUARE DOUBLE BRIDGE": "Square",
+    "SQUARE GEOMETRICAL": "Square",
+    "RECTANGULAR GEOMETRICAL": "Rectangular",
+    "RECTANGULAR FLAT TOP": "Rectangular",
+    "PANTHOS": "Panthos / Tea cup",
+    "OVAL": "Oval / Elipse",
+    "MASK": "Single lens",
+    "BUTTERFLY": "Butterfly",
+    "BUTTERFLY GEOMETRICAL": "Butterfly",
+    "RECTANGULAR BROWLINE": "Browline",
+    #luxottica - napsat dotaz na kategorie
+    #kering
+    },
+    "Glasses_other_info": {
+        "": "",
+        #safilo
+        "SQUARE DOUBLE BRIDGE": "Double bridge"
+        #if in D "Model" id flex, add it
+
+        #luxottica
+        #marcolin
+        "Flex":"Flex"
+        #kering
+        "Flex":"Flex"
+    },
+    "Glasses_frame_type": {
+        "": "",
+        #safilo
+        #luxottica
+        #marcolin
+        #kering
     },
     "Frame_Colour": {
-        "matná černá": "Black",
-        "Shiny Black": "Black",
-        "BLACK": "Black",
-        "BROWN": "Brown",
-        "matná hnědá": "Brown"
+        "": "",
+        #safilo
+        #luxottica
+        #marcolin
+        #kering
     },
-    "Glasses_gendre": {
-        "Muž": "Men",
-        "WOMAN": "Women",
-        "UNISEX ADULT": "Unisex"
+    "Temple_Colour": {
+        "": "",
+        #safilo
+        #luxottica
+        #marcolin
+        #kering
+    },
+    "Glasses_main_material": {
+        "": "",
+        #safilo
+        #luxottica
+        #marcolin
+        #kering
+    },
+    "Glasses_lens_Colour": {
+        "": "",
+        #safilo
+        #luxottica
+        #marcolin
+        #kering
+    },
+    "Glasses_lens_material": {
+        "": "",
+        #safilo
+        #luxottica
+        #marcolin
+        #kering
     },
     "Glasses_lens_effect": {
-        "Polarizované": "Polarized",
-        "Polarized Lens": "Polarized",
-        "Fotochromatické": "Photochromic",
-        "Photocromic": "Photochromic",
+        "": "",
+        #safilo
+        #luxottica
+        #marcolin
+        #kering
+    },
+    "Sunglasses_filter": {
+        "": "",
+        #safilo
+        #luxottica
+        #marcolin
+        #kering
+    },
+    "Glasses_gendre": {
+        "": "",
+        #safilo
+        #luxottica
+        #marcolin
+        #kering
+    },
+    "SunGlasses_RX_lenses": {
+        "": "",
+        #safilo
+        #luxottica
+        #marcolin
+        #kering
+    },
+    
+    "Glasses_lens_effect": {
         "Dark Grey Mirror Water Polarized": "Polarized, Mirrored" # Example of turning one value into two
     }
 }
@@ -169,7 +259,8 @@ MANUFACTURER_CONFIG = {
             "Case_weight_g": "Gross Weight",
             "Glasses_weight_g": "Net Weight",
             "Item_origin_country": "Country of origin",
-            "Producing_company": "" 
+            "Producing_company": "",
+            "Family_descriptions_raw": "Family descriptions",
         }
     },
     "marcolin": {
@@ -201,7 +292,8 @@ MANUFACTURER_CONFIG = {
             "Case_weight_g": "Gross Weight",
             "Glasses_weight_g": "Net Weight",
             "Item_origin_country": "Country of origin",
-            "Producing_company": "" 
+            "Producing_company": "",
+            "Family_descriptions_raw": "Family descriptions",
         }
     }
 }
@@ -269,33 +361,76 @@ def load_all_catalogs(config):
                         return ", ".join(vals) if vals else ""
                     new_df[global_name] = df.apply(merge_row, axis=1)
 
-        # 🔥 VALUE TRANSLATOR APPLIED HERE 🔥
-        def apply_translation(val, translation_dict):
-            if pd.isna(val) or str(val).strip() == "":
-                return val
-                
-            val_str = str(val).strip()
-            
-            # Scenario A: Exact match (e.g. "Shiny Black" -> "Black")
-            if val_str in translation_dict:
-                return translation_dict[val_str]
-                
-            # Scenario B: Multiple comma-separated values (e.g. "Polarizované, Fotochromatické")
-            if "," in val_str:
-                parts = [p.strip() for p in val_str.split(",")]
-                # Translate each piece, keeping the original if no translation is found
-                translated_parts = [translation_dict.get(p, p) for p in parts]
-                # Remove duplicates in case two words translated to the same thing
-                clean_parts = list(dict.fromkeys(translated_parts))
-                return ", ".join(clean_parts)
-                
-            # If no translation exists, leave it exactly as the manufacturer wrote it
-            return val_str
+        # ==========================================
+        # 🧠 CUSTOM RULES ENGINE & STRICT TRANSLATOR
+        # ==========================================
+        
+        # We will store unknown values here to report to the user later
+        if 'unmapped_values' not in st.session_state:
+            st.session_state.unmapped_values = set()
 
-        # Loop through our translator and apply to any columns that exist
-        for target_col, translation_dict in VALUE_TRANSLATOR.items():
-            if target_col in new_df.columns:
-                new_df[target_col] = new_df[target_col].apply(lambda x: apply_translation(x, translation_dict))
+        def process_cell_strict(row, col_name, mfg):
+            final_values = set()
+            
+            # --- 1. CUSTOM RULES ENGINE ---
+            if col_name == "Glasses_other_info":
+                
+                # SAFILO RULES
+                if mfg == "safilo":
+                    if pd.notna(row.get("Glasses_model")) and "FLEX" in str(row["Glasses_model"]).upper():
+                        final_values.add("Flex")
+                
+                # LUXOTTICA RULES
+                elif mfg == "luxottica":
+                    # Luxottica mapped "Flex" directly to Glasses_other_info initially. 
+                    # If it equals "X", we add "Flex"
+                    raw_info = str(row.get("Glasses_other_info", "")).strip().upper()
+                    if raw_info == "X":
+                        final_values.add("Flex")
+                    
+                    # Check the "Skládací" column (mapped to Glasses_collection)
+                    if pd.notna(row.get("Glasses_collection")) and str(row["Glasses_collection"]).strip().upper() == "X":
+                        final_values.add("Flexible glasses")
+                
+                # KERING & MARCOLIN RULES (Identical)
+                elif mfg in ["kering", "marcolin"]:
+                    if pd.notna(row.get("Family_descriptions_raw")):
+                        if "double bridge" in str(row["Family_descriptions_raw"]).lower():
+                            final_values.add("Double bridge")
+
+            # --- 2. STRICT DICTIONARY TRANSLATOR ---
+            # Now we look at the raw values that came straight from the column mapping
+            raw_val = str(row.get(col_name, "")).strip()
+            if raw_val and raw_val.lower() != "nan":
+                
+                # If there is a translator dictionary for this column
+                if col_name in VALUE_TRANSLATOR:
+                    translation_dict = VALUE_TRANSLATOR[col_name]
+                    
+                    # Split by comma in case there are multiple values
+                    parts = [p.strip() for p in raw_val.split(",") if p.strip()]
+                    
+                    for part in parts:
+                        # Ignore "X" because we handled it in Luxottica custom rules
+                        if part.upper() == "X" and col_name == "Glasses_other_info":
+                            continue 
+                            
+                        if part in translation_dict:
+                            final_values.add(translation_dict[part])
+                        else:
+                            # It is NOT specified. Report it and DO NOT fill it.
+                            st.session_state.unmapped_values.add(f"{mfg.title()} -> {col_name}: '{part}'")
+                else:
+                    # If no dictionary exists for this column yet, just keep the raw value
+                    final_values.add(raw_val)
+
+            return ", ".join(sorted(list(final_values)))
+
+        # Apply the Engine to all columns we care about
+        for target_col in new_df.columns:
+            # We only apply this to columns that have rules or dictionaries
+            if target_col in VALUE_TRANSLATOR or target_col == "Glasses_other_info":
+                new_df[target_col] = new_df.apply(lambda row: process_cell_strict(row, target_col, mfg_name), axis=1)
 
         # ZERO-STRIPPER APPLIED HERE
         if "Barcode" in new_df.columns:
@@ -338,6 +473,16 @@ def get_master_database(cat):
     return master_df
 
 master_db = get_master_database(catalog)
+
+# 🚨 REPORT UNMAPPED VALUES
+if 'unmapped_values' in st.session_state and st.session_state.unmapped_values:
+    with st.expander("⚠️ Action Required: Unmapped Values Found!", expanded=True):
+        st.warning("The following values were found in the source files but are NOT in your dictionary. They were ignored.")
+        for missing in sorted(list(st.session_state.unmapped_values)):
+            st.write(f"- {missing}")
+        if st.button("Acknowledge & Clear Warnings"):
+            st.session_state.unmapped_values = set()
+            st.rerun()
 
 st.divider()
 st.subheader("📥 Step 1: Upload Your File to Fill")
