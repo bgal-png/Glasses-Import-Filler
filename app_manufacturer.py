@@ -83,13 +83,11 @@ VALUE_TRANSLATOR = {
         "": "",
         #safilo
         "SQUARE DOUBLE BRIDGE": "Double bridge"
-        #if in D "Model" id flex, add it
-
         #luxottica
         #marcolin
-        "Flex":"Flex"
+        "Flex":"Flex",
         #kering
-        "Flex":"Flex"
+        "Flex":"Flex",
     },
     "Glasses_frame_type": {
         "": "",
