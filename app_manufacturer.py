@@ -90,37 +90,359 @@ VALUE_TRANSLATOR = {
         "Flex":"Flex",
     },
     "Glasses_frame_type": {
-        "": "",
         #safilo
+        "FULL RIM": "Full rim",
+        "RIMLESS": "Rimless",
+        "HALF RIM": "Half rim",
         #luxottica
+        "plná obruba": "Full rim",
+        "bezobroučkové": "Rimless",
+        "polo obruba": "Half rim",
         #marcolin
+        "Full rim": "Full rim",
+        "Rimless": "Rimless",
+        "Half rim": "Half rim",
         #kering
+        "Full rim": "Full rim",
+        "Rimless": "Rimless",
+        "Half rim": "Half rim",
     },
     "Frame_Colour": {
         "": "",
         #safilo
+        "BLACK": "Black",
+        "WHITE": "White",
+        "RED": "Red",
+        "BLUE": "Blue",
+        "AZURE": "Blue",
+        "GREEN": "Green",
+        "VIOLET": "Purple",
+        "ORANGE": "Orange",
+        "GREY": "Grey",
+        "YELLOW": "Yellow",
+        "BROWN": "Brown",
+        "GOLD": "Gold",
+        "SILVER": "Silver",
+        "PINK": "Pink",
+        "BEIGE": "Ivory",
+        "IVORY": "Ivory",
+        "HORN": "Ivory",
+        "MULTICOLOR": "Multicolor",
+        "TRANSPARENT": "Transparent",
+        "CRYSTAL": "Havana",
+        "BURGUNDY": "Burgundy",
+        "TURQUOISE": "Turquoise",
+        "RUTHENIUM": "Ruthenium",
+        "ROSE GOLD": "Rose Gold",
         #luxottica
+        "černá": "Black",
+        "bílá": "White",
+        "červená": "Red",
+        "modrá": "Blue",
+        "Zelená": "Green",
+        "fialová": "Purple",
+        "- Oranžové.": "Orange",
+        "šedá": "Grey",
+        "žlutá": "Yellow",
+        "hnědá": "Brown",
+        "zlato": "Gold",
+        "stříbrná": "Silver",
+        "růžová": "Pink",
+        "béžová": "Ivory",
+        "vícebarevné": "Multicolor",
+        "transparentní": "Transparent",
+        "žíhaná": "Havana",
+        "burgundská": "Burgundy",
+        "tyrkysová": "Turquoise",
+        "měděná": "Ruthenium",
+        "růžové zlato": "Rose Gold",
         #marcolin
+        "BLACK": "Black",
+        "WHITE": "White",
+        "RED": "Red",
+        "BLUE": "Blue",
+        "LIGHT-BLUE": "Blue",
+        "GREEN": "Green",
+        "VIOLET": "Purple",
+        "ORANGE": "Orange",
+        "GREY": "Grey",
+        "YELLOW": "Yellow",
+        "BROWN": "Brown",
+        "GOLD": "Gold",
+        "COPPER": "Gold",
+        "SILVER": "Silver",
+        "PINK": "Pink",
+        "FUCHSIA": "Pink",
+        "BEIGE": "Ivory",
+        "IVORY": "Ivory",
+        "MULTICOLOR": "Multicolor",
+        "TRANSPARENT": "Transparent",
+        "NUDE": "Transparent",
+        "HAVANA": "Havana",
+        "CRYSTAL": "Havana",
+        "BURGUNDY": "Burgundy",
+        "LIGHT-BLUE": "Turquoise",
+        "TURQUOISE": "Turquoise",
+        "RUTHENIUM": "Ruthenium",
+        "BRONZE": "Ruthenium",
+        "ROSE GOLD": "Rose Gold",
         #kering
+        "BLACK": "Black",
+        "WHITE": "White",
+        "RED": "Red",
+        "BLUE": "Blue",
+        "LIGHT-BLUE": "Blue",
+        "GREEN": "Green",
+        "VIOLET": "Purple",
+        "ORANGE": "Orange",
+        "GREY": "Grey",
+        "YELLOW": "Yellow",
+        "BROWN": "Brown",
+        "GOLD": "Gold",
+        "COPPER": "Gold",
+        "SILVER": "Silver",
+        "PINK": "Pink",
+        "FUCHSIA": "Pink",
+        "BEIGE": "Ivory",
+        "IVORY": "Ivory",
+        "MULTICOLOR": "Multicolor",
+        "TRANSPARENT": "Transparent",
+        "NUDE": "Transparent",
+        "HAVANA": "Havana",
+        "CRYSTAL": "Havana",
+        "BURGUNDY": "Burgundy",
+        "LIGHT-BLUE": "Turquoise",
+        "TURQUOISE": "Turquoise",
+        "RUTHENIUM": "Ruthenium",
+        "BRONZE": "Ruthenium",
+        "ROSE GOLD": "Rose Gold",
     },
     "Temple_Colour": {
         "": "",
         #safilo
+        "BLACK": "Black",
+        "WHITE": "White",
+        "RED": "Red",
+        "BLUE": "Blue",
+        "AZURE": "Blue",
+        "GREEN": "Green",
+        "VIOLET": "Purple",
+        "ORANGE": "Orange",
+        "GREY": "Grey",
+        "YELLOW": "Yellow",
+        "BROWN": "Brown",
+        "GOLD": "Gold",
+        "SILVER": "Silver",
+        "PINK": "Pink",
+        "BEIGE": "Ivory",
+        "IVORY": "Ivory",
+        "HORN": "Ivory",
+        "MULTICOLOR": "Multicolor",
+        "TRANSPARENT": "Transparent",
+        "CRYSTAL": "Havana",
+        "BURGUNDY": "Burgundy",
+        "TURQUOISE": "Turquoise",
+        "RUTHENIUM": "Ruthenium",
+        "ROSE GOLD": "Rose Gold",
         #luxottica
+        "černá": "Black",
+        "bílá": "White",
+        "červená": "Red",
+        "modrá": "Blue",
+        "Zelená": "Green",
+        "fialová": "Purple",
+        "- Oranžové.": "Orange",
+        "šedá": "Grey",
+        "žlutá": "Yellow",
+        "hnědá": "Brown",
+        "zlato": "Gold",
+        "stříbrná": "Silver",
+        "růžová": "Pink",
+        "béžová": "Ivory",
+        "vícebarevné": "Multicolor",
+        "transparentní": "Transparent",
+        "žíhaná": "Havana",
+        "burgundská": "Burgundy",
+        "tyrkysová": "Turquoise",
+        "měděná": "Ruthenium",
+        "růžové zlato": "Rose Gold",
         #marcolin
+        "BLACK": "Black",
+        "WHITE": "White",
+        "RED": "Red",
+        "BLUE": "Blue",
+        "LIGHT-BLUE": "Blue",
+        "GREEN": "Green",
+        "VIOLET": "Purple",
+        "ORANGE": "Orange",
+        "GREY": "Grey",
+        "YELLOW": "Yellow",
+        "BROWN": "Brown",
+        "GOLD": "Gold",
+        "COPPER": "Gold",
+        "SILVER": "Silver",
+        "PINK": "Pink",
+        "FUCHSIA": "Pink",
+        "BEIGE": "Ivory",
+        "IVORY": "Ivory",
+        "MULTICOLOR": "Multicolor",
+        "TRANSPARENT": "Transparent",
+        "NUDE": "Transparent",
+        "HAVANA": "Havana",
+        "CRYSTAL": "Havana",
+        "BURGUNDY": "Burgundy",
+        "LIGHT-BLUE": "Turquoise",
+        "TURQUOISE": "Turquoise",
+        "RUTHENIUM": "Ruthenium",
+        "BRONZE": "Ruthenium",
+        "ROSE GOLD": "Rose Gold",
         #kering
+        "BLACK": "Black",
+        "WHITE": "White",
+        "RED": "Red",
+        "BLUE": "Blue",
+        "LIGHT-BLUE": "Blue",
+        "GREEN": "Green",
+        "VIOLET": "Purple",
+        "ORANGE": "Orange",
+        "GREY": "Grey",
+        "YELLOW": "Yellow",
+        "BROWN": "Brown",
+        "GOLD": "Gold",
+        "COPPER": "Gold",
+        "SILVER": "Silver",
+        "PINK": "Pink",
+        "FUCHSIA": "Pink",
+        "BEIGE": "Ivory",
+        "IVORY": "Ivory",
+        "MULTICOLOR": "Multicolor",
+        "TRANSPARENT": "Transparent",
+        "NUDE": "Transparent",
+        "HAVANA": "Havana",
+        "CRYSTAL": "Havana",
+        "BURGUNDY": "Burgundy",
+        "LIGHT-BLUE": "Turquoise",
+        "TURQUOISE": "Turquoise",
+        "RUTHENIUM": "Ruthenium",
+        "BRONZE": "Ruthenium",
+        "ROSE GOLD": "Rose Gold",
     },
     "Glasses_main_material": {
-        "": "",
         #safilo
+        "PLASTIC": "Plastic",
+        "METAL": "Metal",
+        "TITANIUM": "Titanium",
+        "WOOD": "Wood",
         #luxottica
+        "Nylon": "Plastic",
+        "acetát": "Plastic",
+        "polyéteréterketon (PEEK)": "Plastic",
+        "O_matter": "Plastic",
+        "jiný materiál": "Plastic",
+        "propionát": "Plastic",
+        "rohovina": "Plastic",
+        "Tvarovaný acetát": "Plastic",
+        "Karbonové vlákno": "Plastic",
+        "Ocel": "Metal",
+        "C_5": "Metal",
+        "hliník": "Metal",
+        "Kov s paměťovým efektem": "Metal",
+        "Titan": "Titanium",
+        "Dřevo": "Wood",
         #marcolin
+        "INJECTION": "Plastic",
+        "RECYCLED ACETATE": "Plastic",
+        "BIO INJECTION": "Plastic",
+        "NYLON": "Plastic",
+        "BIO NYLON": "Plastic",
+        "BIO INJECTION RILSAN": "Plastic",
+        "BIO ACETATE": "Plastic",
+        "HORN": "Plastic",
+        "RECYCLED INJECTION": "Plastic",
+        "OPTYL": "Plastic",
+        "MEMORY METAL": "Plastic",
+        "RECYCLED INJECTED ACETATE": "Plastic",
+        "RUBBER": "Plastic",
+        "POLYCARBONATE": "Plastic",
+        "METAL": "Metal",
+        "ALLUMINIUM": "Metal",
+        "GOLD": "Metal",
+        "COPPER": "Metal",
+        "STAINLESS STEEL": "Metal",
+        "TITANIUM": "Titanium",
+        "WOOD": "Wood",
         #kering
+        "INJECTION": "Plastic",
+        "RECYCLED ACETATE": "Plastic",
+        "BIO INJECTION": "Plastic",
+        "NYLON": "Plastic",
+        "BIO NYLON": "Plastic",
+        "BIO INJECTION RILSAN": "Plastic",
+        "BIO ACETATE": "Plastic",
+        "HORN": "Plastic",
+        "RECYCLED INJECTION": "Plastic",
+        "OPTYL": "Plastic",
+        "MEMORY METAL": "Plastic",
+        "RECYCLED INJECTED ACETATE": "Plastic",
+        "RUBBER": "Plastic",
+        "POLYCARBONATE": "Plastic",
+        "METAL": "Metal",
+        "ALLUMINIUM": "Metal",
+        "GOLD": "Metal",
+        "COPPER": "Metal",
+        "STAINLESS STEEL": "Metal",
+        "TITANIUM": "Titanium",
+        "WOOD": "Wood",
+
     },
     "Glasses_lens_Colour": {
         "": "",
         #safilo
+        "BLACK": "Black",
+        "RED": "Red",
+        "BLUE": "Blue",
+        "GREEN": "Green",
+        "GOLD": "Gold",
+        "SILVER": "Silver",
+        "GREY": "Grey",
+        "ORANGE": "Orange",
+        "YELLOW": "Yellow",
+        "VIOLET": "Purple",
+        "BROWN": "Brown",
+        "PINK": "Pink",
+        "MULTICOLOR": "Multicolor",
+        "TRANSPARENT": "Transparent",
+        "BURGUNDY": "Burgundy",
         #luxottica
+        "černá": "Black",
+    "Black": "Black",
+    "červená": "Red",
+    "Red": "Red",
+    "modrá": "Blue",
+    "Blue": "Blue",
+    "zelená": "Green",
+    "Green": "Green",
+    "zlatá": "Gold",
+    "Gold": "Gold",
+    "střírbrná": "Silver",
+    "Silver": "Silver",
+    "šedá": "Grey",
+    "Grey": "Grey",
+    "oranžová": "Orange",
+    "Orange": "Orange",
+    "žlutá": "Yellow",
+    "Yellow": "Yellow",
+    "fialová": "Purple",
+    "Purple": "Purple",
+    "hnědá": "Brown",
+    "Brown": "Brown",
+    "růžová": "Pink",
+    "Pink": "Pink",
+    "vícebarvné": "Multicolor",
+    "Multicolor": "Multicolor",
+    "průhledné": "Transparent",
+    "Transparent": "Transparent",
+    "burgundská": "Burgundy",
         #marcolin
         #kering
     },
@@ -213,7 +535,7 @@ MANUFACTURER_CONFIG = {
             "Glasses_shape": "Tvar",
             "Glasses_other_info": "Flex",
             "Glasses_frame_type": "Typ",
-            "Frame_Colour": "Barva očnice", 
+            "Frame_Colour": "Barva očnice", #Column T
             "Temple_Colour": "Barva očnice", 
             "Glasses_main_material": "Materiál očnice",
             "Glasses_lens_Colour": "Barva čočky",
@@ -363,74 +685,75 @@ def load_all_catalogs(config):
         # 🧠 CUSTOM RULES ENGINE & STRICT TRANSLATOR
         # ==========================================
         
-        # We will store unknown values here to report to the user later
         if 'unmapped_values' not in st.session_state:
             st.session_state.unmapped_values = set()
 
         def process_cell_strict(row, col_name, mfg):
             final_values = set()
+            raw_val = str(row.get(col_name, "")).strip()
             
             # --- 1. CUSTOM RULES ENGINE ---
             if col_name == "Glasses_other_info":
-                
-                # SAFILO RULES
                 if mfg == "safilo":
                     if pd.notna(row.get("Glasses_model")) and "FLEX" in str(row["Glasses_model"]).upper():
                         final_values.add("Flex")
                 
-                # LUXOTTICA RULES
                 elif mfg == "luxottica":
-                    # Luxottica mapped "Flex" directly to Glasses_other_info initially. 
-                    # If it equals "X", we add "Flex"
                     raw_info = str(row.get("Glasses_other_info", "")).strip().upper()
                     if raw_info == "X":
                         final_values.add("Flex")
-                    
-                    # Check the "Skládací" column (mapped to Glasses_collection)
                     if pd.notna(row.get("Glasses_collection")) and str(row["Glasses_collection"]).strip().upper() == "X":
                         final_values.add("Flexible glasses")
                 
-                # KERING & MARCOLIN RULES (Identical)
                 elif mfg in ["kering", "marcolin"]:
                     if pd.notna(row.get("Family_descriptions_raw")):
                         if "double bridge" in str(row["Family_descriptions_raw"]).lower():
                             final_values.add("Double bridge")
 
-            # --- 2. STRICT DICTIONARY TRANSLATOR ---
-            # Now we look at the raw values that came straight from the column mapping
-            raw_val = str(row.get(col_name, "")).strip()
-            if raw_val and raw_val.lower() != "nan":
+            # --- 2. KEYWORD SUBSTRING MATCHER (Luxottica Lens Color) ---
+            if col_name == "Glasses_lens_Colour" and mfg == "luxottica":
+                if raw_val and raw_val.lower() != "nan":
+                    matched = False
+                    if col_name in VALUE_TRANSLATOR:
+                        translation_dict = VALUE_TRANSLATOR[col_name]
+                        # Search for keywords inside the raw value
+                        for keyword, mapped_val in translation_dict.items():
+                            if keyword and keyword.lower() in raw_val.lower():
+                                if mapped_val: # Only add if we didn't map it to ""
+                                    final_values.add(mapped_val)
+                                matched = True
+                    
+                    if not matched:
+                        st.session_state.unmapped_values.add(f"{mfg.title()} -> {col_name} (Keyword Search): '{raw_val}'")
                 
-                # If there is a translator dictionary for this column
+                return ", ".join(sorted(list(final_values)))
+
+            # --- 3. STRICT DICTIONARY TRANSLATOR (Everything else) ---
+            if raw_val and raw_val.lower() != "nan":
                 if col_name in VALUE_TRANSLATOR:
                     translation_dict = VALUE_TRANSLATOR[col_name]
-                    
-                    # Split by comma in case there are multiple values
                     parts = [p.strip() for p in raw_val.split(",") if p.strip()]
                     
                     for part in parts:
-                        # Ignore "X" because we handled it in Luxottica custom rules
                         if part.upper() == "X" and col_name == "Glasses_other_info":
                             continue 
                             
                         if part in translation_dict:
-                            final_values.add(translation_dict[part])
+                            if translation_dict[part]: # Ignore if mapped to ""
+                                final_values.add(translation_dict[part])
                         else:
-                            # It is NOT specified. Report it and DO NOT fill it.
                             st.session_state.unmapped_values.add(f"{mfg.title()} -> {col_name}: '{part}'")
                 else:
-                    # If no dictionary exists for this column yet, just keep the raw value
                     final_values.add(raw_val)
 
             return ", ".join(sorted(list(final_values)))
 
-        # Apply the Engine to all columns we care about
+        # Apply the Engine
         for target_col in new_df.columns:
-            # We only apply this to columns that have rules or dictionaries
             if target_col in VALUE_TRANSLATOR or target_col == "Glasses_other_info":
                 new_df[target_col] = new_df.apply(lambda row: process_cell_strict(row, target_col, mfg_name), axis=1)
 
-        # ZERO-STRIPPER APPLIED HERE
+        # ZERO-STRIPPER
         if "Barcode" in new_df.columns:
             new_df["join_key"] = new_df["Barcode"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).str.lstrip('0')
             new_df = new_df[new_df["join_key"].notna() & (new_df["join_key"] != "nan") & (new_df["join_key"] != "")]
