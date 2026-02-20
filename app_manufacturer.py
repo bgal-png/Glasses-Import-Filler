@@ -504,7 +504,7 @@ VALUE_TRANSLATOR = {
 "polyamid": "Plastic",
 "jiné než sklo": "Plastic",
 "Nxt": "Plastic",
-"Acrylic": "Plastic"
+"Acrylic": "Plastic",
         #marcolin
         "BIO NYLON": "Nylon",
 "POLAR BIO NYLON": "Nylon",
@@ -522,7 +522,7 @@ VALUE_TRANSLATOR = {
 "PURE": "Plastic",
 "MAUI ULTRA": "Plastic",
 "PURE LT": "Plastic",
-"ELLUME": "Plastic"
+"ELLUME": "Plastic",
         #kering
         "BIO NYLON": "Nylon",
 "POLAR BIO NYLON": "Nylon",
@@ -540,7 +540,7 @@ VALUE_TRANSLATOR = {
 "PURE": "Plastic",
 "MAUI ULTRA": "Plastic",
 "PURE LT": "Plastic",
-"ELLUME": "Plastic"
+"ELLUME": "Plastic",
     },
     "Glasses_lens_effect": {
         "": "",
