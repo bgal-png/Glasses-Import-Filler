@@ -821,15 +821,20 @@ def load_all_catalogs(config):
             if raw_val and raw_val.lower() != "nan":
                 if col_name in VALUE_TRANSLATOR:
                     translation_dict = VALUE_TRANSLATOR[col_name]
+                    
+                    # 🔥 NEW: Make dictionary matching 100% case-insensitive
+                    lower_dict = {str(k).lower(): v for k, v in translation_dict.items() if k}
+                    
                     parts = [p.strip() for p in raw_val.split(",") if p.strip()]
                     
                     for part in parts:
                         if part.upper() == "X" and col_name == "Glasses_other_info":
                             continue 
                             
-                        if part in translation_dict:
-                            if translation_dict[part]: # Ignore if mapped to ""
-                                final_values.add(translation_dict[part])
+                        part_lower = part.lower()
+                        if part_lower in lower_dict:
+                            if lower_dict[part_lower]: # Ignore if mapped to ""
+                                final_values.add(lower_dict[part_lower])
                         else:
                             st.session_state.unmapped_values.add(f"{mfg.title()} -> {col_name}: '{part}'")
                 else:
