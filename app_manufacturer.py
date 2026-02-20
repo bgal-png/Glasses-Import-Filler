@@ -82,7 +82,7 @@ VALUE_TRANSLATOR = {
     "Glasses_other_info": {
         "": "",
         #safilo
-        "SQUARE DOUBLE BRIDGE": "Double bridge"
+        "SQUARE DOUBLE BRIDGE": "Double bridge",
         #luxottica
         #marcolin
         "Flex":"Flex",
