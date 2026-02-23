@@ -174,6 +174,7 @@ VALUE_TRANSLATOR = {
         "ROSE GOLD": "Rose Gold",
         #luxottica
         "černá": "Black",
+        "černé": "Black",
         "bílá": "White",
         "červená": "Red",
         "modrá": "Blue",
@@ -285,6 +286,7 @@ VALUE_TRANSLATOR = {
         "ROSE GOLD": "Rose Gold",
         #luxottica
         "černá": "Black",
+        "černé": "Black",
         "bílá": "White",
         "červená": "Red",
         "modrá": "Blue",
@@ -376,6 +378,8 @@ VALUE_TRANSLATOR = {
         "TITANIUM": "Titanium",
         "WOOD": "Wood",
         #luxottica
+        "vstřikované":"Plastic",
+        "kov":"Metal",
         "Nylon": "Plastic",
         "acetát": "Plastic",
         "polyéteréterketon (PEEK)": "Plastic",
