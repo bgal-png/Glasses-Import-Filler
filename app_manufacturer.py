@@ -1014,33 +1014,52 @@ def load_all_catalogs(config):
                     pass 
                 
                 return ", ".join(sorted(list(final_values)))
-            # --- ☀️ SUNGLASSES FILTER ENGINE (Safilo Only) ---
+            
+           # --- ☀️ SUNGLASSES FILTER ENGINE (Safilo Only) ---
             elif col_name == "Sunglasses_filter" and mfg == "safilo":
                 raw_val = str(row.get(col_name, "")).strip()
                 
                 if raw_val and raw_val.lower() != "nan":
-                    # This finds the first number in the cell (handles "15%" or "15.5")
                     clean_numbers = re.findall(r'\d+\.?\d*', raw_val)
+                    matched_by_math = False
                     
+                    # 1. Try the Math Engine first
                     if clean_numbers:
                         vlt = float(clean_numbers[0])
-                        
-                        # Apply the Safilo VLT percentage rules
                         if 80 <= vlt <= 100:
                             final_values.add("Category 0")
+                            matched_by_math = True
                         elif 43 <= vlt < 80:
                             final_values.add("Category 1")
+                            matched_by_math = True
                         elif 18 <= vlt < 43:
                             final_values.add("Category 2")
+                            matched_by_math = True
                         elif 8 <= vlt < 18:
                             final_values.add("Category 3")
+                            matched_by_math = True
                         elif 3 <= vlt < 8:
                             final_values.add("Category 4")
+                            matched_by_math = True
+                            
+                    # 2. If math failed (no numbers or out of range), fallback to the Dictionary
+                    if not matched_by_math:
+                        if col_name in VALUE_TRANSLATOR:
+                            translation_dict = VALUE_TRANSLATOR[col_name]
+                            lower_dict = {str(k).lower(): v for k, v in translation_dict.items() if k}
+                            parts = [p.strip() for p in raw_val.split(",") if p.strip()]
+                            
+                            for part in parts:
+                                part_lower = part.lower()
+                                if part_lower in lower_dict:
+                                    if lower_dict[part_lower]: # Add if not banned ("")
+                                        final_values.add(lower_dict[part_lower])
+                                else:
+                                    # Still unmapped? Now we flag it!
+                                    st.session_state.unmapped_values.add(f"Safilo -> {col_name}: '{part}'")
                         else:
-                            st.session_state.unmapped_values.add(f"{mfg.title()} -> {col_name} (Out of range %): '{raw_val}'")
-                    else:
-                        st.session_state.unmapped_values.add(f"{mfg.title()} -> {col_name} (No number found): '{raw_val}'")
-                        
+                            final_values.add(raw_val)
+                            
                 return ", ".join(sorted(list(final_values)))
 
             # --- 2. KEYWORD SUBSTRING MATCHER (Luxottica Lens Color) ---
