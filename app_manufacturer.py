@@ -324,7 +324,17 @@ def load_all_catalogs(config):
 
         # Apply the name builder to create the new column
         new_df["Assembled_Name"] = new_df.apply(lambda row: assemble_name(row, mfg_name), axis=1)
-                
+
+        # --- 🏭 MANUFACTURER PROPER CASING ---
+        if "Manufacturer" in new_df.columns:
+            new_df["Manufacturer"] = new_df["Manufacturer"].apply(
+                lambda x: str(x).strip().title() if pd.notna(x) and str(x).strip().lower() not in ["nan", ""] else ""
+            )
+            # --- 🏷️ BRAND PROPER CASING ---
+        if "Brand" in new_df.columns:
+            new_df["Brand"] = new_df["Brand"].apply(
+                lambda x: str(x).strip().title() if pd.notna(x) and str(x).strip().lower() not in ["nan", ""] else ""
+            )
 
         # ZERO-STRIPPER
         if "Barcode" in new_df.columns:
@@ -474,9 +484,18 @@ if uploaded_file:
                     match_count += 1
                     master_row = master_db.loc[clean_barcode]
                     
+                    # --- 🛑 FRAMES BYPASS RULE ---
+                    # Check if the mapped type is exactly "Frames"
+                    is_frames = str(master_row.get("Glasses_type", "")).strip() == "Frames"
+                    lens_cols_to_skip = ["Glasses_lens_Colour", "Glasses_lens_material", "Sunglasses_filter", "Glasses_lens_effect"]
+                    
                     # 2. Safely pour data (Handles both strings and lists)
                     for global_col, target_col in TARGET_MAPPING.items():
                         if global_col == "Barcode": continue
+                        
+                        # If it's a frame, skip the lens columns entirely
+                        if is_frames and global_col in lens_cols_to_skip:
+                            continue
                         
                         if global_col in master_db.columns:
                             val = master_row[global_col]

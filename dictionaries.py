@@ -294,7 +294,7 @@ VALUE_TRANSLATOR = {
     "Frame_Colour": {
         
         #safilo
-        "0":"NOT MAPPED",
+        "0":"Havana",
         "BLACK": "Black",
         "WHITE": "White",
         "RED": "Red",
