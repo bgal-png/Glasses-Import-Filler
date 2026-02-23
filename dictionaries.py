@@ -29,6 +29,9 @@ TARGET_MAPPING = {
     "Item_origin_country": "Item origin country",
     "Producing_company": "Producing company ID:146",
     "Assembled_Name": ["Glasses name","XML description"],
+    "Extracted_Model": "Glasses model ID:52",
+    "Extracted_Color": "Glasses color code ID:107",
+
     
 }
 # ==========================================
