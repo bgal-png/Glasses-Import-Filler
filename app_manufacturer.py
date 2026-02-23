@@ -435,7 +435,8 @@ if uploaded_file:
         else:
             target_df = pd.read_excel(uploaded_file, dtype=str, engine='openpyxl')
             
-        target_df.columns = target_df.columns.astype(str).str.replace('\n', ' ', regex=False).str.strip()
+        # This strips line breaks, tabs, and squishes multiple spaces into a single space!
+        target_df.columns = target_df.columns.astype(str).str.replace('\n', ' ', regex=False).str.replace(r'\s+', ' ', regex=True).str.strip()
         
     except Exception as e:
         st.error(f"Could not read your uploaded file: {e}")
