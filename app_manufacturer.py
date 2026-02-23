@@ -9,7 +9,7 @@ from dictionaries import TARGET_MAPPING, VALUE_TRANSLATOR, MANUFACTURER_CONFIG
 # 🛑 VERSION CHECK 
 # ==========================================
 st.set_page_config(page_title="Manufacturer Data Linker", layout="wide")
-APP_VERSION = "4.2 - ZERO-STRIPPER ACTIVE"
+APP_VERSION = "v.260223"
 
 st.title(f"🏭 Manufacturer Data Linker")
 st.caption(f"🚀 Running Code Version: **{APP_VERSION}**")
