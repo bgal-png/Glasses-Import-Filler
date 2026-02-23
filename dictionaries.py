@@ -384,6 +384,9 @@ VALUE_TRANSLATOR = {
         "Titan": "Titanium",
         "Dřevo": "Wood",
         #marcolin
+        "ACETATE":"Plastic",
+        "LEATHER":"",
+        "RECYCLED FABRIC":"",
         "INJECTION": "Plastic",
         "RECYCLED ACETATE": "Plastic",
         "BIO INJECTION": "Plastic",
@@ -406,6 +409,9 @@ VALUE_TRANSLATOR = {
         "TITANIUM": "Titanium",
         "WOOD": "Wood",
         #kering
+        "ACETATE":"Plastic",
+        "LEATHER":"",
+        "RECYCLED FABRIC":"",
         "INJECTION": "Plastic",
         "RECYCLED ACETATE": "Plastic",
         "BIO INJECTION": "Plastic",
