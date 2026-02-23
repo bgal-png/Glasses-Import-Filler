@@ -14,7 +14,6 @@ APP_VERSION = "4.2 - ZERO-STRIPPER ACTIVE"
 st.title(f"🏭 Manufacturer Data Linker")
 st.caption(f"🚀 Running Code Version: **{APP_VERSION}**")
 
-
 # ==========================================
 # 📥 THE LOADER
 # ==========================================
@@ -173,6 +172,31 @@ def load_all_catalogs(config):
                 
                 return ", ".join(sorted(list(final_values)))
             
+            # --- 👓 GLASSES SHAPE ENGINE ---
+            elif col_name == "Glasses_shape" and mfg in ["kering", "marcolin"]:
+                raw_shape = str(row.get(col_name, "")).strip()
+                
+                if raw_shape and raw_shape.lower() != "nan":
+                    # Split the string by '/' and grab only the first item
+                    first_shape = raw_shape.split("/")[0].strip()
+                    
+                    # Run that single extracted shape through the dictionary
+                    if col_name in VALUE_TRANSLATOR:
+                        translation_dict = VALUE_TRANSLATOR[col_name]
+                        lower_dict = {str(k).lower(): v for k, v in translation_dict.items() if k}
+                        
+                        shape_lower = first_shape.lower()
+                        if shape_lower in lower_dict:
+                            if lower_dict[shape_lower]: # Add it if it's not mapped to ""
+                                final_values.add(lower_dict[shape_lower])
+                        else:
+                            # Flag only the first shape if it's unknown
+                            st.session_state.unmapped_values.add(f"{mfg.title()} -> {col_name}: '{first_shape}'")
+                    else:
+                        final_values.add(first_shape)
+                        
+                return ", ".join(sorted(list(final_values)))
+
            # --- ☀️ SUNGLASSES FILTER ENGINE (Safilo Only) ---
             elif col_name == "Sunglasses_filter" and mfg == "safilo":
                 raw_val = str(row.get(col_name, "")).strip()
