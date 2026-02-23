@@ -325,14 +325,19 @@ def load_all_catalogs(config):
             return final_name, model_out, color_out
 
         # 2. Safely apply and expand the results into the three columns
+        # 1. Apply the function and store the result in a temporary column
         if not new_df.empty:
-            new_df[["Assembled_Name", "Extracted_Model", "Extracted_Color"]] = new_df.apply(
-                lambda row: assemble_name_and_parts(row, mfg_name), 
-                axis=1, 
-                result_type='expand'
-            )
+            # We create a temporary column to hold the returned tuple/list
+            temp_col = new_df.apply(lambda row: assemble_name_and_parts(row, mfg_name), axis=1)
+            
+            # 2. Explicitly extract each piece into its own column
+            # This bypasses the Pandas 'Columns must be same length as key' check
+            new_df["Assembled_Name"] = temp_col.apply(lambda x: x[0] if isinstance(x, (list, tuple)) else "")
+            new_df["Extracted_Model"] = temp_col.apply(lambda x: x[1] if isinstance(x, (list, tuple)) else "")
+            new_df["Extracted_Color"] = temp_col.apply(lambda x: x[2] if isinstance(x, (list, tuple)) else "")
+            
+            # Drop the temp column if you want to keep the DF clean
         else:
-            # Failsafe if the dataframe is empty
             new_df["Assembled_Name"] = ""
             new_df["Extracted_Model"] = ""
             new_df["Extracted_Color"] = ""
