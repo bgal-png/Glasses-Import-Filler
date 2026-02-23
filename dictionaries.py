@@ -66,7 +66,7 @@ VALUE_TRANSLATOR = {
         "Sunglasses": "Sunglass",
         "Frames": "Optical Frame",
     },
-    "Glasses_shape": { #na shape až budou kompletní data od výrobců
+    "Glasses_shape": {
     #safilo
     "OTHER SHAPE": "Extravagant",
     "ROUND GEOMETRICAL": "Round",
@@ -87,6 +87,14 @@ VALUE_TRANSLATOR = {
     "BUTTERFLY GEOMETRICAL": "Butterfly",
     "RECTANGULAR BROWLINE": "Browline",
     #luxottica - napsat dotaz na kategorie
+    "Motýlí styl":"Butterfly",
+    "Oválný tvar":"Oval / Elipse",
+    "Phantos":"Panthos / Tea cup",
+    "Tvar pillow":"Butterfly",
+    "kulatý tvar":"Round",
+    "obdélníkový tvar":"Rectangular",
+    "čtvercový tvar":"Square",
+    "štít":"Single lens",
     #kering
     "SHIELD": "Single lens",
     "MASK": "Single lens",
@@ -1436,6 +1444,10 @@ VALUE_TRANSLATOR = {
 "Prizm Road Cylindrical": "",
 "fotochromatické": "",
 "Iridium, polarizační": "",
+"Prizm, denní, polarizační":"",
+"Prizm, tmavá Golf":"",
+"Zrcadlo s gradientem, odstín růže":"",
+"zkušební čočky":"",
 
         #marcolin
         "NONE":"",
@@ -1494,6 +1506,10 @@ VALUE_TRANSLATOR = {
         "ECO CO-POLYESTER": "Plastic",
         "TRIACETATE LENS": "Plastic",
         #luxottica
+        "vstřikované":"Plastic",
+        "kov":"Metal",
+        "zkušební čočky":"",
+        "polykarbonát":"Plastic",
         "Cr39": "CR 39",
         "MINERÁLNÍ": "Glass",
         "sklo": "Glass",
@@ -2116,6 +2132,8 @@ VALUE_TRANSLATOR = {
 "Bronzová Polar": "",
 "Tmavě Fialová/Šedá": "",
 "Šedá levandulová": "",
+"zkušební čočky":"",
+"čiré":"",
         #marcolin
         "ANTIFOG": "",
         "AR (ANTI RIFLESSO)": "",
