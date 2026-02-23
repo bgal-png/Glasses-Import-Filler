@@ -451,29 +451,40 @@ if uploaded_file:
     if st.button("🚀 Run Auto-Filler", type="primary"):
         with st.spinner("Matching barcodes and pouring data..."):
             
+            # 1. Safely create missing columns (Handles both strings and lists)
             for global_col, target_col in TARGET_MAPPING.items():
-                if target_col not in target_df.columns:
-                    target_df[target_col] = "" 
+                if isinstance(target_col, list):
+                    for tc in target_col:
+                        if tc not in target_df.columns:
+                            target_df[tc] = ""
+                else:
+                    if target_col not in target_df.columns:
+                        target_df[target_col] = "" 
 
             match_count = 0
             
             for index, row in target_df.iterrows():
                 raw_barcode = str(row[target_barcode_col]).strip()
                 
-                # 🔥 ZERO-STRIPPER APPLIED HERE TOO
+                # 🔥 ZERO-STRIPPER
                 clean_barcode = re.sub(r'\.0$', '', raw_barcode).lstrip('0')
                 
                 if clean_barcode in master_db.index:
                     match_count += 1
                     master_row = master_db.loc[clean_barcode]
                     
+                    # 2. Safely pour data (Handles both strings and lists)
                     for global_col, target_col in TARGET_MAPPING.items():
                         if global_col == "Barcode": continue
                         
                         if global_col in master_db.columns:
                             val = master_row[global_col]
                             if pd.notna(val) and str(val).strip() != "":
-                                target_df.at[index, target_col] = val
+                                if isinstance(target_col, list):
+                                    for tc in target_col:
+                                        target_df.at[index, tc] = val
+                                else:
+                                    target_df.at[index, target_col] = val
 
             st.success(f"✅ Match Complete! Successfully filled {match_count} out of {len(target_df)} products.")
             
