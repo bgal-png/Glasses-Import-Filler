@@ -963,6 +963,34 @@ def load_all_catalogs(config):
                     pass 
                 
                 return ", ".join(sorted(list(final_values)))
+            # --- ☀️ SUNGLASSES FILTER ENGINE (Safilo Only) ---
+            elif col_name == "Sunglasses_filter" and mfg == "safilo":
+                raw_val = str(row.get(col_name, "")).strip()
+                
+                if raw_val and raw_val.lower() != "nan":
+                    # This finds the first number in the cell (handles "15%" or "15.5")
+                    clean_numbers = re.findall(r'\d+\.?\d*', raw_val)
+                    
+                    if clean_numbers:
+                        vlt = float(clean_numbers[0])
+                        
+                        # Apply the Safilo VLT percentage rules
+                        if 80 <= vlt <= 100:
+                            final_values.add("Category 0")
+                        elif 43 <= vlt < 80:
+                            final_values.add("Category 1")
+                        elif 18 <= vlt < 43:
+                            final_values.add("Category 2")
+                        elif 8 <= vlt < 18:
+                            final_values.add("Category 3")
+                        elif 3 <= vlt < 8:
+                            final_values.add("Category 4")
+                        else:
+                            st.session_state.unmapped_values.add(f"{mfg.title()} -> {col_name} (Out of range %): '{raw_val}'")
+                    else:
+                        st.session_state.unmapped_values.add(f"{mfg.title()} -> {col_name} (No number found): '{raw_val}'")
+                        
+                return ", ".join(sorted(list(final_values)))
 
             # --- 2. KEYWORD SUBSTRING MATCHER (Luxottica Lens Color) ---
             elif col_name == "Glasses_lens_Colour" and mfg == "luxottica":
