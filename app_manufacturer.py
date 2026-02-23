@@ -280,6 +280,59 @@ def load_all_catalogs(config):
         for target_col in new_df.columns:
             if target_col in VALUE_TRANSLATOR or target_col in ["Glasses_other_info", "Glasses_lens_effect", "SunGlasses_RX_lenses"]:
                 new_df[target_col] = new_df.apply(lambda row: process_cell_strict(row, target_col, mfg_name), axis=1)
+                # Apply the Engine
+        for target_col in new_df.columns:
+            if target_col in VALUE_TRANSLATOR or target_col in ["Glasses_other_info", "Glasses_lens_effect", "SunGlasses_RX_lenses", "Glasses_shape"]:
+                new_df[target_col] = new_df.apply(lambda row: process_cell_strict(row, target_col, mfg_name), axis=1)
+
+        # --- 🏷️ NAME ASSEMBLY ENGINE ---
+        def assemble_name(row, mfg):
+            # 1. Get and format the Brand (Title Case / Proper)
+            brand = str(row.get("Brand", "")).strip().title()
+            if brand.lower() == "nan": brand = ""
+
+            # 2. Manufacturer Specific Logic
+            if mfg == "safilo":
+                model = str(row.get("Glasses_model", "")).strip()
+                color = str(row.get("Glasses_color_code", "")).strip()
+                if model.lower() == "nan": model = ""
+                if color.lower() == "nan": color = ""
+                
+                parts = [brand, model, color]
+
+            elif mfg == "luxottica":
+                model = str(row.get("Glasses_model", "")).strip()
+                # Remove leading zeros from model
+                model = model.lstrip("0")
+                if model.lower() == "nan": model = ""
+                
+                color = str(row.get("Glasses_color_code", "")).strip()
+                if color.lower() == "nan": color = ""
+                
+                parts = [brand, model, color]
+
+            elif mfg in ["kering", "marcolin"]:
+                mat_num = str(row.get("Material_Number", "")).strip()
+                if mat_num and mat_num.lower() != "nan":
+                    # Get everything before the first space
+                    first_part = mat_num.split(" ")[0]
+                    # Replace hyphen with space
+                    model_color = first_part.replace("-", " ")
+                    parts = [brand, model_color]
+                else:
+                    parts = [brand]
+            else:
+                parts = [brand]
+
+            # Join parts with a space, filtering out any empty strings
+            return " ".join([p for p in parts if p])
+
+        # Apply the name builder to create the new column
+        new_df["Assembled_Name"] = new_df.apply(lambda row: assemble_name(row, mfg_name), axis=1)
+
+
+        # ZERO-STRIPPER
+        if "Barcode" in new_df.columns:
 
         # ZERO-STRIPPER
         if "Barcode" in new_df.columns:
