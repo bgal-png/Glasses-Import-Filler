@@ -588,9 +588,28 @@ VALUE_TRANSLATOR = {
     "Glasses_gendre": {
         "": "",
         #safilo
+        "MAN": "Man",
+        "WOMAN": "Woman",
+        "YOUNG KIDS (4-6)": "Child",
+        "GIRLTEEN (11-15)": "Child",
+        "INFANT AND TODDLERS (0-3)": "Child",
+        "BOYTEEN (11-15)": "Child",
+        "UNISEX TEENAGER (11-15)": "Child",
+        "JUNIOR (7-10)": "Child",
         #luxottica
+        "Muž": "Man",
+        "Žena": "Woman",
+        "Unisex": "Man|Woman",
         #marcolin
+        "WOMAN": "Woman",
+        "MAN": "Man",
+        "UNISEX": "Man|Woman",
+        "KID": "Child",
         #kering
+        "WOMAN": "Woman",
+        "MAN": "Man",
+        "UNISEX": "Man|Woman",
+        "KID": "Child",
     },
     "SunGlasses_RX_lenses": {
         "": "",
@@ -843,14 +862,11 @@ def load_all_catalogs(config):
 
             # 🔥 NEW: GLASSES LENS EFFECT ENGINE 🔥
             elif col_name == "Glasses_lens_effect":
-                
-                # SAFILO RULES
                 if mfg == "safilo":
                     if str(row.get("Polarized_raw", "")).strip().upper() == "X":
                         final_values.add("Polarized")
                     if str(row.get("Photochromic_raw", "")).strip().upper() == "X":
                         final_values.add("Photochromic")
-                    
                     raw_eff = str(row.get("Treatement_Description_raw", "")).strip()
                     if raw_eff and raw_eff.lower() != "nan":
                         t_dict = VALUE_TRANSLATOR.get(col_name, {})
@@ -861,13 +877,11 @@ def load_all_catalogs(config):
                             else:
                                 st.session_state.unmapped_values.add(f"Safilo -> {col_name}: '{p}'")
 
-                # LUXOTTICA RULES (Includes Keyword Matcher)
                 elif mfg == "luxottica":
                     if str(row.get("Polarizovane_raw", "")).strip().upper() == "X":
                         final_values.add("Polarized")
                     if str(row.get("Fotochromaticke_raw", "")).strip().upper() == "X":
                         final_values.add("Photochromic")
-                        
                     raw_eff = str(row.get("Barva_cocky_raw", "")).strip()
                     if raw_eff and raw_eff.lower() != "nan":
                         matched = False
@@ -879,13 +893,11 @@ def load_all_catalogs(config):
                         if not matched:
                             st.session_state.unmapped_values.add(f"Luxottica -> {col_name} (Keyword Search): '{raw_eff}'")
 
-                # KERING & MARCOLIN RULES (Identical)
                 elif mfg in ["kering", "marcolin"]:
                     if str(row.get("Polarized_Lens_raw", "")).strip().upper() == "X":
                         final_values.add("Polarized")
                     if str(row.get("Photocromic_raw", "")).strip().upper() == "YES":
                         final_values.add("Photochromic")
-                        
                     raw_eff = str(row.get("Lens_Effect_Description_raw", "")).strip()
                     if raw_eff and raw_eff.lower() != "nan":
                         t_dict = VALUE_TRANSLATOR.get(col_name, {})
@@ -896,9 +908,22 @@ def load_all_catalogs(config):
                             else:
                                 st.session_state.unmapped_values.add(f"{mfg.title()} -> {col_name}: '{p}'")
                 
-                # Bypass the generic dictionary translator for this column
                 return ", ".join(sorted(list(final_values)))
 
+            # --- 🕶️ RX LENSES ENGINE ---
+            elif col_name == "SunGlasses_RX_lenses":
+                raw_rx = str(row.get(col_name, "")).strip().upper()
+                
+                # Safilo, Kering, and Marcolin all use "X" for Yes
+                if mfg in ["safilo", "kering", "marcolin"]:
+                    if raw_rx == "X":
+                        final_values.add("Yes")
+                        
+                # Luxottica rule pending (from To-Do list)
+                elif mfg == "luxottica":
+                    pass 
+                
+                return ", ".join(sorted(list(final_values)))
 
             # --- 2. KEYWORD SUBSTRING MATCHER (Luxottica Lens Color) ---
             elif col_name == "Glasses_lens_Colour" and mfg == "luxottica":
@@ -913,7 +938,6 @@ def load_all_catalogs(config):
                     if not matched:
                         st.session_state.unmapped_values.add(f"{mfg.title()} -> {col_name} (Keyword Search): '{raw_val}'")
                 return ", ".join(sorted(list(final_values)))
-
 
             # --- 3. STRICT DICTIONARY TRANSLATOR (Everything else) ---
             elif raw_val and raw_val.lower() != "nan":
@@ -935,7 +959,7 @@ def load_all_catalogs(config):
 
         # Apply the Engine
         for target_col in new_df.columns:
-            if target_col in VALUE_TRANSLATOR or target_col in ["Glasses_other_info", "Glasses_lens_effect"]:
+            if target_col in VALUE_TRANSLATOR or target_col in ["Glasses_other_info", "Glasses_lens_effect", "SunGlasses_RX_lenses"]:
                 new_df[target_col] = new_df.apply(lambda row: process_cell_strict(row, target_col, mfg_name), axis=1)
 
         # ZERO-STRIPPER
