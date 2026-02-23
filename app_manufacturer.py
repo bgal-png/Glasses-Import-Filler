@@ -629,6 +629,9 @@ MANUFACTURER_CONFIG = {
             "Glasses_lens_Colour": "Description Lens Color Family",
             "Glasses_lens_material": "Lens Material Description",
             "Glasses_lens_effect": ["Polarized", "Photochromic", "Treatement Description"],
+            "Polarized_raw": "Polarized",
+            "Photochromic_raw": "Photochromic",
+            "Treatement_Description_raw": "Treatement Description",
             "Sunglasses_filter": "Transparency (%)",
             "Glasses_gendre": "Gender",
             "Glasses_model": "Model",
@@ -659,6 +662,9 @@ MANUFACTURER_CONFIG = {
             "Glasses_lens_Colour": "Barva čočky",
             "Glasses_lens_material": "Materiál čočky",
             "Glasses_lens_effect": ["Polarizované", "Fotochromatické", "Barva čočky"],
+            "Polarizovane_raw": "Polarizované",
+            "Fotochromaticke_raw": "Fotochromatické",
+            "Barva_cocky_raw": "Barva čočky",
             "Glasses_gendre": "Pohlaví",
             "Glasses_usable": "Motiv",
             "Glasses_collection": "Skládací",
@@ -689,6 +695,9 @@ MANUFACTURER_CONFIG = {
             "Glasses_lens_Colour": "Lens Main Color Description",
             "Glasses_lens_material": "Lens Material Description",
             "Glasses_lens_effect": ["Polarized Lens", "Photocromic", "Lens Effect Description"],
+            "Polarized_Lens_raw": "Polarized Lens",
+            "Photocromic_raw": "Photocromic",
+            "Lens_Effect_Description_raw": "Lens Effect Description",
             "Sunglasses_filter": "Filter Category",
             "Glasses_gendre": "Fashion Attribute 2",
             "Glasses_collection": "Foldable",
@@ -722,6 +731,9 @@ MANUFACTURER_CONFIG = {
             "Glasses_lens_Colour": "Lens Main Color Description",
             "Glasses_lens_material": "Lens Material Description",
             "Glasses_lens_effect": ["Polarized Lens", "Photocromic", "Lens Effect Description"],
+            "Polarized_Lens_raw": "Polarized Lens",
+            "Photocromic_raw": "Photocromic",
+            "Lens_Effect_Description_raw": "Lens Effect Description",
             "Sunglasses_filter": "Filter Category",
             "Glasses_gendre": "Fashion Attribute 2",
             "Glasses_collection": "Foldable",
@@ -803,6 +815,7 @@ def load_all_catalogs(config):
         # 🧠 CUSTOM RULES ENGINE & STRICT TRANSLATOR
         # ==========================================
         
+        # We will store unknown values here to report to the user later
         if 'unmapped_values' not in st.session_state:
             st.session_state.unmapped_values = set()
 
@@ -828,44 +841,91 @@ def load_all_catalogs(config):
                         if "double bridge" in str(row["Family_descriptions_raw"]).lower():
                             final_values.add("Double bridge")
 
-            # --- 2. KEYWORD SUBSTRING MATCHER (Luxottica Colors) ---
-            if col_name in ["Glasses_lens_Colour", "Frame_Colour", "Temple_Colour"] and mfg == "luxottica":
+            # 🔥 NEW: GLASSES LENS EFFECT ENGINE 🔥
+            elif col_name == "Glasses_lens_effect":
+                
+                # SAFILO RULES
+                if mfg == "safilo":
+                    if str(row.get("Polarized_raw", "")).strip().upper() == "X":
+                        final_values.add("Polarized")
+                    if str(row.get("Photochromic_raw", "")).strip().upper() == "X":
+                        final_values.add("Photochromic")
+                    
+                    raw_eff = str(row.get("Treatement_Description_raw", "")).strip()
+                    if raw_eff and raw_eff.lower() != "nan":
+                        t_dict = VALUE_TRANSLATOR.get(col_name, {})
+                        l_dict = {str(k).lower(): v for k, v in t_dict.items() if k}
+                        for p in [x.strip() for x in raw_eff.split(",") if x.strip()]:
+                            if p.lower() in l_dict:
+                                if l_dict[p.lower()]: final_values.add(l_dict[p.lower()])
+                            else:
+                                st.session_state.unmapped_values.add(f"Safilo -> {col_name}: '{p}'")
+
+                # LUXOTTICA RULES (Includes Keyword Matcher)
+                elif mfg == "luxottica":
+                    if str(row.get("Polarizovane_raw", "")).strip().upper() == "X":
+                        final_values.add("Polarized")
+                    if str(row.get("Fotochromaticke_raw", "")).strip().upper() == "X":
+                        final_values.add("Photochromic")
+                        
+                    raw_eff = str(row.get("Barva_cocky_raw", "")).strip()
+                    if raw_eff and raw_eff.lower() != "nan":
+                        matched = False
+                        t_dict = VALUE_TRANSLATOR.get(col_name, {})
+                        for kw, m_val in t_dict.items():
+                            if kw and kw.lower() in raw_eff.lower():
+                                if m_val: final_values.add(m_val)
+                                matched = True
+                        if not matched:
+                            st.session_state.unmapped_values.add(f"Luxottica -> {col_name} (Keyword Search): '{raw_eff}'")
+
+                # KERING & MARCOLIN RULES (Identical)
+                elif mfg in ["kering", "marcolin"]:
+                    if str(row.get("Polarized_Lens_raw", "")).strip().upper() == "X":
+                        final_values.add("Polarized")
+                    if str(row.get("Photocromic_raw", "")).strip().upper() == "YES":
+                        final_values.add("Photochromic")
+                        
+                    raw_eff = str(row.get("Lens_Effect_Description_raw", "")).strip()
+                    if raw_eff and raw_eff.lower() != "nan":
+                        t_dict = VALUE_TRANSLATOR.get(col_name, {})
+                        l_dict = {str(k).lower(): v for k, v in t_dict.items() if k}
+                        for p in [x.strip() for x in raw_eff.split(",") if x.strip()]:
+                            if p.lower() in l_dict:
+                                if l_dict[p.lower()]: final_values.add(l_dict[p.lower()])
+                            else:
+                                st.session_state.unmapped_values.add(f"{mfg.title()} -> {col_name}: '{p}'")
+                
+                # Bypass the generic dictionary translator for this column
+                return ", ".join(sorted(list(final_values)))
+
+
+            # --- 2. KEYWORD SUBSTRING MATCHER (Luxottica Lens Color) ---
+            elif col_name == "Glasses_lens_Colour" and mfg == "luxottica":
                 if raw_val and raw_val.lower() != "nan":
                     matched = False
                     if col_name in VALUE_TRANSLATOR:
                         translation_dict = VALUE_TRANSLATOR[col_name]
-                        
-                        # Search for keywords inside the raw value
                         for keyword, mapped_val in translation_dict.items():
-                            # We only search if the keyword isn't an empty string ""
                             if keyword and keyword.lower() in raw_val.lower():
-                                if mapped_val: # Only add if we didn't map it to ""
-                                    final_values.add(mapped_val)
+                                if mapped_val: final_values.add(mapped_val)
                                 matched = True
-                    
                     if not matched:
                         st.session_state.unmapped_values.add(f"{mfg.title()} -> {col_name} (Keyword Search): '{raw_val}'")
-                
                 return ", ".join(sorted(list(final_values)))
 
+
             # --- 3. STRICT DICTIONARY TRANSLATOR (Everything else) ---
-            if raw_val and raw_val.lower() != "nan":
+            elif raw_val and raw_val.lower() != "nan":
                 if col_name in VALUE_TRANSLATOR:
                     translation_dict = VALUE_TRANSLATOR[col_name]
-                    
-                    # 🔥 NEW: Make dictionary matching 100% case-insensitive
                     lower_dict = {str(k).lower(): v for k, v in translation_dict.items() if k}
-                    
                     parts = [p.strip() for p in raw_val.split(",") if p.strip()]
                     
                     for part in parts:
-                        if part.upper() == "X" and col_name == "Glasses_other_info":
-                            continue 
-                            
                         part_lower = part.lower()
                         if part_lower in lower_dict:
-                            if lower_dict[part_lower]: # Ignore if mapped to ""
-                                final_values.add(lower_dict[part_lower])
+                            if lower_dict[part_lower]: final_values.add(lower_dict[part_lower])
                         else:
                             st.session_state.unmapped_values.add(f"{mfg.title()} -> {col_name}: '{part}'")
                 else:
@@ -875,7 +935,7 @@ def load_all_catalogs(config):
 
         # Apply the Engine
         for target_col in new_df.columns:
-            if target_col in VALUE_TRANSLATOR or target_col == "Glasses_other_info":
+            if target_col in VALUE_TRANSLATOR or target_col in ["Glasses_other_info", "Glasses_lens_effect"]:
                 new_df[target_col] = new_df.apply(lambda row: process_cell_strict(row, target_col, mfg_name), axis=1)
 
         # ZERO-STRIPPER
