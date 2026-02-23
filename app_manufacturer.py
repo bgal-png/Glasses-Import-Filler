@@ -280,12 +280,7 @@ def load_all_catalogs(config):
         for target_col in new_df.columns:
             if target_col in VALUE_TRANSLATOR or target_col in ["Glasses_other_info", "Glasses_lens_effect", "SunGlasses_RX_lenses"]:
                 new_df[target_col] = new_df.apply(lambda row: process_cell_strict(row, target_col, mfg_name), axis=1)
-                # Apply the Engine
-        for target_col in new_df.columns:
-            if target_col in VALUE_TRANSLATOR or target_col in ["Glasses_other_info", "Glasses_lens_effect", "SunGlasses_RX_lenses", "Glasses_shape"]:
-                new_df[target_col] = new_df.apply(lambda row: process_cell_strict(row, target_col, mfg_name), axis=1)
-
-        # --- 🏷️ NAME ASSEMBLY ENGINE ---
+                # --- 🏷️ NAME ASSEMBLY ENGINE ---
         def assemble_name(row, mfg):
             # 1. Get and format the Brand (Title Case / Proper)
             brand = str(row.get("Brand", "")).strip().title()
@@ -329,10 +324,7 @@ def load_all_catalogs(config):
 
         # Apply the name builder to create the new column
         new_df["Assembled_Name"] = new_df.apply(lambda row: assemble_name(row, mfg_name), axis=1)
-
-
-        # ZERO-STRIPPER
-        if "Barcode" in new_df.columns:
+                
 
         # ZERO-STRIPPER
         if "Barcode" in new_df.columns:
