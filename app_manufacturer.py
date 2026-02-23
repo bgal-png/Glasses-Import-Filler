@@ -656,8 +656,8 @@ MANUFACTURER_CONFIG = {
             "Glasses_shape": "Tvar",
             "Glasses_other_info": "Flex",
             "Glasses_frame_type": "Typ",
-            "Frame_Colour": "Barva očnice", #Column T
-            "Temple_Colour": "Barva očnice", 
+            "Frame_Colour": "Barva očnice.1", 
+            "Temple_Colour": "Barva očnice.1",
             "Glasses_main_material": "Materiál očnice",
             "Glasses_lens_Colour": "Barva čočky",
             "Glasses_lens_material": "Materiál čočky",
