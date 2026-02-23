@@ -52,6 +52,27 @@ TARGET_MAPPING = {
 VALUE_TRANSLATOR = {
     "Glasses_type": {
         "": "",
+        #safilo
+        "SUN + CLIP-IN": "Sunglasses",
+        "VISOR/CUP": "Sunglasses",
+        "BLUE BLOCK SUN": "Sunglasses",
+        "OPT + CLIP-ON": "Frames",
+        "OPTICAL FRAMES": "Frames",
+        "SUNCOVER": "Frames",
+        "BLUE BLOCK": "PC Glasses without power",
+        "READERS + CLIP-ON": "PC Glasses without power",
+        "READERS": "Reading glasses",
+        #luxottica
+        "Sluneční Brýle": "Sunglasses",
+        "Dětské Sluneční Brýle": "Sunglasses",
+        "Dětské Brýle": "Frames",
+        "Brýle": "Frames",
+        #kering
+        "Sunglasses": "Sunglass",
+        "Frames": "Optical Frame",
+        #marcholin
+        "Sunglasses": "Sunglass",
+        "Frames": "Optical Frame",
     },
     "Glasses_shape": { #na shape až budou kompletní data od výrobců
     #safilo
@@ -75,6 +96,25 @@ VALUE_TRANSLATOR = {
     "RECTANGULAR BROWLINE": "Browline",
     #luxottica - napsat dotaz na kategorie
     #kering
+    "SHIELD": "Single lens",
+    "MASK": "Single lens",
+    "SQUARED": "Square",
+    "PILOT/NAVIGATOR": "Pilot",
+    "RECTANGULAR": "Rectangular",
+    "ROUND": "Round",
+    "PANTHOS": "Panthos / Tea cup",
+    "OVAL": "Oval / Elipse",
+    "BUTTERFLY": "Butterfly",
+    #marcolin
+    "SHIELD": "Single lens",
+    "MASK": "Single lens",
+    "SQUARED": "Square",
+    "PILOT/NAVIGATOR": "Pilot",
+    "RECTANGULAR": "Rectangular",
+    "ROUND": "Round",
+    "PANTHOS": "Panthos / Tea cup",
+    "OVAL": "Oval / Elipse",
+    "BUTTERFLY": "Butterfly",
     },
     "Glasses_other_info": {
         "": "",
@@ -503,6 +543,8 @@ VALUE_TRANSLATOR = {
         "Nxt": "Plastic",
         "Acrylic": "Plastic",
         #marcolin
+        "ACETATE":"Plastic",
+        "NYLON":"Nylon",
         "BIO NYLON": "Nylon",
         "POLAR BIO NYLON": "Nylon",
         "POLAR NYLON": "Nylon",
@@ -521,6 +563,8 @@ VALUE_TRANSLATOR = {
         "PURE LT": "Plastic",
         "ELLUME": "Plastic",
         #kering
+        "ACETATE":"Plastic",
+        "NYLON":"Nylon",
         "BIO NYLON": "Nylon",
         "POLAR BIO NYLON": "Nylon",
         "POLAR NYLON": "Nylon",
