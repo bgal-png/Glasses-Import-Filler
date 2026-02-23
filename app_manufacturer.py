@@ -53,6 +53,9 @@ VALUE_TRANSLATOR = {
     "Glasses_type": {
         "": "",
         #safilo
+        "SUNGLASSES FRAMES":"Sunglasses",
+        "CLIP-ON":"Sunglasses",
+        "CLIP-IN/ADAPTOR":"Sunglasses",
         "SUN + CLIP-IN": "Sunglasses",
         "VISOR/CUP": "Sunglasses",
         "BLUE BLOCK SUN": "Sunglasses",
@@ -258,6 +261,7 @@ VALUE_TRANSLATOR = {
     "Temple_Colour": {
         "": "",
         #safilo
+        "0":"Havana",
         "BLACK": "Black",
         "WHITE": "White",
         "RED": "Red",
@@ -590,6 +594,22 @@ VALUE_TRANSLATOR = {
     "Glasses_lens_effect": {
         "": "",
         #safilo
+        "BLUE FILTER + ANTIREFLEX": "",
+        "BLUE FILTER": "",
+        "CILIARY NET": "",
+        "DECOR": "",
+        "HIGH CONTRAST ANTIREFLEX": "",
+        "HIGH CONTRAST BLUE FILTER": "",
+        "HIGH CONTRAST MULTILAYER": "",
+        "HIGH CONTRAST": "",
+        "INFRARED": "",
+        "MIRROR + OLEOPHOBIC": "Mirror",
+        "MULTILAYER + OLEOPHOBIC": "",
+        "MULTILAYER": "",
+        "OLEOPHOBIC": "",
+        "SLEWING": "",
+        "SOLID TINT": "",
+        "ANTIREFLEX":"",
         "0": "",
         "GRADIENT + MIRROR": "Gradient!Mirror",
         "MIRROR": "Mirror",
@@ -630,6 +650,7 @@ VALUE_TRANSLATOR = {
     "Sunglasses_filter": {
         "": "",
         #safilo
+        "0":"",
         #luxottica
         #marcolin
         "0": "Category 0",
@@ -648,7 +669,7 @@ VALUE_TRANSLATOR = {
         "2-4": "Category range 2 - 4",
         "3-4": "Category range 3 - 4",
         #kering
-                "0": "Category 0",
+        "0": "Category 0",
         "1": "Category 1",
         "2": "Category 2",
         "3": "Category 3",
