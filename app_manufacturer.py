@@ -147,6 +147,7 @@ VALUE_TRANSLATOR = {
     "Frame_Colour": {
         "": "",
         #safilo
+        "0": "",
         "BLACK": "Black",
         "WHITE": "White",
         "RED": "Red",
@@ -435,6 +436,7 @@ VALUE_TRANSLATOR = {
     "Glasses_lens_Colour": {
         "": "",
         #safilo
+        "0": "",
         "BLACK": "Black",
         "RED": "Red",
         "BLUE": "Blue",
@@ -523,6 +525,8 @@ VALUE_TRANSLATOR = {
     },
     "Glasses_lens_material": {
         #safilo
+        "ONLY FOR USA - NOT DEFINED":"",
+        "0":"",
         "BIO NYLON LENS": "Nylon",
         "NYLON LENS": "Nylon",
         "POLICARBONATE LENS": "Polycarbonate",
@@ -586,6 +590,7 @@ VALUE_TRANSLATOR = {
     "Glasses_lens_effect": {
         "": "",
         #safilo
+        "0": "",
         "GRADIENT + MIRROR": "Gradient!Mirror",
         "MIRROR": "Mirror",
         "DOUBLE GRADIENT": "Gradient",
@@ -632,6 +637,7 @@ VALUE_TRANSLATOR = {
     "Glasses_gendre": {
         "": "",
         #safilo
+        "UNISEX ADULT":"Man|Woman",
         "MAN": "Man",
         "WOMAN": "Woman",
         "YOUNG KIDS (4-6)": "Child",
