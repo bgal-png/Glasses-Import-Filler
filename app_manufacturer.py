@@ -280,50 +280,51 @@ def load_all_catalogs(config):
         for target_col in new_df.columns:
             if target_col in VALUE_TRANSLATOR or target_col in ["Glasses_other_info", "Glasses_lens_effect", "SunGlasses_RX_lenses"]:
                 new_df[target_col] = new_df.apply(lambda row: process_cell_strict(row, target_col, mfg_name), axis=1)
-                # --- 🏷️ NAME ASSEMBLY ENGINE ---
-        def assemble_name(row, mfg):
-            # 1. Get and format the Brand (Title Case / Proper)
+                # --- 🏷️ NAME ASSEMBLY & EXTRACTION ENGINE ---
+        def assemble_name_and_parts(row, mfg):
             brand = str(row.get("Brand", "")).strip().title()
             if brand.lower() == "nan": brand = ""
+            
+            model_out = ""
+            color_out = ""
 
-            # 2. Manufacturer Specific Logic
             if mfg == "safilo":
-                model = str(row.get("Glasses_model", "")).strip()
-                color = str(row.get("Glasses_color_code", "")).strip()
-                if model.lower() == "nan": model = ""
-                if color.lower() == "nan": color = ""
-                
-                parts = [brand, model, color]
+                model_out = str(row.get("Glasses_model", "")).strip()
+                color_out = str(row.get("Glasses_color_code", "")).strip()
+                if model_out.lower() == "nan": model_out = ""
+                if color_out.lower() == "nan": color_out = ""
+                parts = [brand, model_out, color_out]
 
             elif mfg == "luxottica":
-                model = str(row.get("Glasses_model", "")).strip()
-                # Remove leading zeros from model
-                model = model.lstrip("0")
-                if model.lower() == "nan": model = ""
-                
-                color = str(row.get("Glasses_color_code", "")).strip()
-                if color.lower() == "nan": color = ""
-                
-                parts = [brand, model, color]
+                model_out = str(row.get("Glasses_model", "")).strip().lstrip("0")
+                color_out = str(row.get("Glasses_color_code", "")).strip()
+                if model_out.lower() == "nan": model_out = ""
+                if color_out.lower() == "nan": color_out = ""
+                parts = [brand, model_out, color_out]
 
             elif mfg in ["kering", "marcolin"]:
                 mat_num = str(row.get("Material_Number", "")).strip()
                 if mat_num and mat_num.lower() != "nan":
-                    # Get everything before the first space
                     first_part = mat_num.split(" ")[0]
-                    # Replace hyphen with space
                     model_color = first_part.replace("-", " ")
+                    
+                    # Try to split into model and color if there's a space
+                    mc_parts = model_color.split(" ")
+                    model_out = mc_parts[0]
+                    if len(mc_parts) > 1:
+                        color_out = mc_parts[1]
+                        
                     parts = [brand, model_color]
                 else:
                     parts = [brand]
             else:
                 parts = [brand]
 
-            # Join parts with a space, filtering out any empty strings
-            return " ".join([p for p in parts if p])
+            final_name = " ".join([p for p in parts if p])
+            return pd.Series([final_name, model_out, color_out])
 
-        # Apply the name builder to create the new column
-        new_df["Assembled_Name"] = new_df.apply(lambda row: assemble_name(row, mfg_name), axis=1)
+        # Apply the builder to create THREE new columns at once
+        new_df[["Assembled_Name", "Extracted_Model", "Extracted_Color"]] = new_df.apply(lambda row: assemble_name_and_parts(row, mfg_name), axis=1)
 
         # --- 🏭 MANUFACTURER PROPER CASING ---
         if "Manufacturer" in new_df.columns:
@@ -488,6 +489,9 @@ if uploaded_file:
                     # Check if the mapped type is exactly "Frames"
                     is_frames = str(master_row.get("Glasses_type", "")).strip() == "Frames"
                     lens_cols_to_skip = ["Glasses_lens_Colour", "Glasses_lens_material", "Sunglasses_filter", "Glasses_lens_effect"]
+                    # --- 📦 STATIC BUCKET FILLS ---
+                    target_df.at[index, "Items type ID: 20"] = "Glasses"
+                    target_df.at[index, "Items packing ID: 21"] = "Basic"
                     
                     # 2. Safely pour data (Handles both strings and lists)
                     for global_col, target_col in TARGET_MAPPING.items():
