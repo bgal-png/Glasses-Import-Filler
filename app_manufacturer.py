@@ -278,7 +278,7 @@ def load_all_catalogs(config):
 
         # Apply the Engine
         for target_col in new_df.columns:
-            if target_col in VALUE_TRANSLATOR or target_col in ["Glasses_other_info", "Glasses_lens_effect", "SunGlasses_RX_lenses"]:
+            if target_col in VALUE_TRANSLATOR or target_col in ["Glasses_other_info", "Glasses_lens_effect", "SunGlasses_RX_lenses", "Glasses_type", "Glasses_shape", "Sunglasses_filter"]:
                 new_df[target_col] = new_df.apply(lambda row: process_cell_strict(row, target_col, mfg_name), axis=1)
                 # --- 🏷️ NAME ASSEMBLY & EXTRACTION ENGINE ---
         def assemble_name_and_parts(row, mfg):
@@ -341,12 +341,6 @@ def load_all_catalogs(config):
             new_df["Assembled_Name"] = ""
             new_df["Extracted_Model"] = ""
             new_df["Extracted_Color"] = ""
-
-        # Force Pandas to unpack the tuple perfectly into the three columns
-        new_df["Assembled_Name"], new_df["Extracted_Model"], new_df["Extracted_Color"] = zip(*new_df.apply(lambda row: assemble_name_and_parts(row, mfg_name), axis=1))
-
-        # Apply the builder to create THREE new columns at once
-        new_df[["Assembled_Name", "Extracted_Model", "Extracted_Color"]] = new_df.apply(lambda row: assemble_name_and_parts(row, mfg_name), axis=1)
 
         # --- 🏭 MANUFACTURER PROPER CASING ---
         if "Manufacturer" in new_df.columns:
