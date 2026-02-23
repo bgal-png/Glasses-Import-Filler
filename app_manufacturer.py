@@ -321,7 +321,12 @@ def load_all_catalogs(config):
                 parts = [brand]
 
             final_name = " ".join([p for p in parts if p])
-            return pd.Series([final_name, model_out, color_out])
+            
+            # Return a simple tuple instead of a Pandas Series
+            return final_name, model_out, color_out
+
+        # Force Pandas to unpack the tuple perfectly into the three columns
+        new_df["Assembled_Name"], new_df["Extracted_Model"], new_df["Extracted_Color"] = zip(*new_df.apply(lambda row: assemble_name_and_parts(row, mfg_name), axis=1))
 
         # Apply the builder to create THREE new columns at once
         new_df[["Assembled_Name", "Extracted_Model", "Extracted_Color"]] = new_df.apply(lambda row: assemble_name_and_parts(row, mfg_name), axis=1)
