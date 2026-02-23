@@ -995,13 +995,29 @@ master_db = get_master_database(catalog)
 
 # 🚨 REPORT UNMAPPED VALUES
 if 'unmapped_values' in st.session_state and st.session_state.unmapped_values:
-    with st.expander("⚠️ Action Required: Unmapped Values Found!", expanded=True):
-        st.warning("The following values were found in the source files but are NOT in your dictionary. They were ignored.")
-        for missing in sorted(list(st.session_state.unmapped_values)):
-            st.write(f"- {missing}")
-        if st.button("Acknowledge & Clear Warnings"):
-            st.session_state.unmapped_values = set()
-            st.rerun()
+    st.warning("⚠️ Action Required: Unmapped Values Found! The following values are not in your dictionary and were ignored.")
+    
+    # Group the errors by Manufacturer
+    unmapped_grouped = {}
+    for error in st.session_state.unmapped_values:
+        if " -> " in error:
+            mfg, detail = error.split(" -> ", 1)
+        else:
+            mfg, detail = "Other", error
+            
+        if mfg not in unmapped_grouped:
+            unmapped_grouped[mfg] = []
+        unmapped_grouped[mfg].append(detail)
+        
+    # Generate a separate rollout (expander) for each manufacturer
+    for mfg in sorted(unmapped_grouped.keys()):
+        with st.expander(f"📦 {mfg} Unmapped Values ({len(unmapped_grouped[mfg])})", expanded=False):
+            for detail in sorted(unmapped_grouped[mfg]):
+                st.write(f"- {detail}")
+                
+    if st.button("Acknowledge & Clear All Warnings"):
+        st.session_state.unmapped_values = set()
+        st.rerun()
 
 st.divider()
 st.subheader("📥 Step 1: Upload Your File to Fill")
