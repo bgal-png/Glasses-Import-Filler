@@ -611,17 +611,6 @@ VALUE_TRANSLATOR = {
         "UNISEX": "Man|Woman",
         "KID": "Child",
     },
-    "SunGlasses_RX_lenses": {
-        "": "",
-        #safilo
-        #luxottica
-        #marcolin
-        #kering
-    },
-    
-    "Glasses_lens_effect": {
-        "Dark Grey Mirror Water Polarized": "Polarized, Mirrored" # Example of turning one value into two
-    }
 }
 # ==========================================
 # 🗺️ THE CONFIGURATION (Global -> Manufacturer)
