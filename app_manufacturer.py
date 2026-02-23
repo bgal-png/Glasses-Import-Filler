@@ -71,9 +71,13 @@ VALUE_TRANSLATOR = {
         "Dětské Brýle": "Frames",
         "Brýle": "Frames",
         #kering
+        "Optical Frame":"Frames",
+        "Sunglass":"Sunglasses",
         "Sunglasses": "Sunglass",
         "Frames": "Optical Frame",
         #marcholin
+        "Optical Frame":"Frames",
+        "Sunglass":"Sunglasses",
         "Sunglasses": "Sunglass",
         "Frames": "Optical Frame",
     },
@@ -309,6 +313,8 @@ VALUE_TRANSLATOR = {
         "měděná": "Ruthenium",
         "růžové zlato": "Rose Gold",
         #marcolin
+        "SHINY":"",
+        "NONE":"",
         "BLACK": "Black",
         "WHITE": "White",
         "RED": "Red",
@@ -339,6 +345,7 @@ VALUE_TRANSLATOR = {
         "BRONZE": "Ruthenium",
         "ROSE GOLD": "Rose Gold",
         #kering
+        "NONE":"",
         "BLACK": "Black",
         "WHITE": "White",
         "RED": "Red",
@@ -487,6 +494,7 @@ VALUE_TRANSLATOR = {
         "Transparent": "Transparent",
         "burgundská": "Burgundy",
         #marcolin
+        "NONE":"",
         "BLACK": "Black",
         "RED": "Red",
         "BLUE": "Blue",
@@ -507,6 +515,7 @@ VALUE_TRANSLATOR = {
         "SMOKE": "Transparent",
         "BURGUNDY": "Burgundy",
         #kering
+        "NONE":"",
         "BLACK": "Black",
         "RED": "Red",
         "BLUE": "Blue",
@@ -629,6 +638,20 @@ VALUE_TRANSLATOR = {
         "zrcadlo":"Mirror",
         "přech":"Gradient",
         #marcolin
+        "ANTIFOG": "",
+        "AR (ANTI RIFLESSO)": "",
+        "BLUE NEON": "",
+        "MULTI TREATMENT": "",
+        "NONE": "",
+        "DEMO LENS": "",
+        "ACETATE": "Plastic",
+        "LEATHER": "",
+        "RECYCLED FABRIC": "",
+        "": "",
+        "": "",
+        "": "",
+        "": "",
+
         "MIRROR": "Mirror",
         "MIRROR(DOUBLE)": "Mirror",
         "FLASH": "Mirror",
@@ -657,6 +680,7 @@ VALUE_TRANSLATOR = {
         "1": "Category 1",
         "2": "Category 2",
         "3": "Category 3",
+        "3-3": "Category 3",
         "4": "Category 4",
         "0-1": "Category range 0 - 1",
         "0-2": "Category range 0 - 2",
