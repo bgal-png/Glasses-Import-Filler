@@ -11,7 +11,7 @@ from dictionaries import TARGET_MAPPING, VALUE_TRANSLATOR, MANUFACTURER_CONFIG
 st.set_page_config(page_title="Manufacturer Data Linker", layout="wide")
 APP_VERSION = "v.260223"
 
-st.title(f"🏭 Manufacturer Data Linker")
+st.title(f"🏭 Manufacturer Data Filler")
 st.caption(f"🚀 Running Code Version: **{APP_VERSION}**")
 
 # ==========================================
