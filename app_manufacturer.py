@@ -547,7 +547,7 @@ if st.sidebar.button("⬆️ Push Master DB to Supabase", type="primary"):
             from sqlalchemy import create_engine
             
             # ⚠️ PASTE YOUR POOLER CONNECTION STRING HERE (Same one from the test)
-            DB_URL = "postgresql://postgres.[your-project-ref]:[your-password]@aws-0-eu-central-1.pooler.supabase.com:5432/postgres"
+            DB_URL = "postgresql://postgres.nxlwkzgfcmzsbogcenyi:lzAxicGTtsq1iEqB@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"
             
             engine = create_engine(DB_URL)
             
