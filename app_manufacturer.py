@@ -652,6 +652,39 @@ if uploaded_file:
                     if raw_brand in PREMIUM_KERING_BRANDS:
                         target_df.at[index, "Glasses collection ID: 33"] = "Prémiové brýle - Kering"
 
+                        # --- 🌍 HS CODE ENGINE ---
+                    # We reuse 'g_type' from the very beginning of the loop!
+                    raw_material = str(master_row.get("Glasses_main_material", "")).strip().lower()
+                    
+                    if "Sunglasses" in g_type:
+                        target_df.at[index, "HS Code"] = "90041091"
+                    elif "Sport glasses" in g_type:
+                        target_df.at[index, "HS Code"] = "90049090"
+                    elif "Frames" in g_type:
+                        if "plastic" in raw_material:
+                            target_df.at[index, "HS Code"] = "90031100"
+                        elif "metal" in raw_material:
+                            target_df.at[index, "HS Code"] = "90031900"
+                    
+                    # --- 📝 ITEM DESCRIPTION ENGINE ---
+                    # We continue to reuse 'g_type' and 'raw_material' from above!
+                    if "Frames" in g_type:
+                        target_df.at[index, "Item description"] = "Eyeglasses"
+                    elif "PC Glasses without power" in g_type:
+                        target_df.at[index, "Item description"] = "PC Glasses without power"
+                    elif "Driving glasses" in g_type:
+                        target_df.at[index, "Item description"] = "Driving glasses"
+                    elif "Sunglasses" in g_type:
+                        has_plastic = "plastic" in raw_material
+                        has_metal = "metal" in raw_material
+                        
+                        if has_plastic and has_metal:
+                            target_df.at[index, "Item description"] = "Sunglasses, mixed plastic and metal frame"
+                        elif has_plastic:
+                            target_df.at[index, "Item description"] = "Sunglasses, plastic frame"
+                        elif has_metal:
+                            target_df.at[index, "Item description"] = "Sunglasses, metal frame"
+
 
 
             st.success(f"✅ Match Complete! Successfully filled {match_count} out of {len(target_df)} products.")
