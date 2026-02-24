@@ -527,6 +527,7 @@ if uploaded_file:
                         target_df[target_col] = "" 
 
             match_count = 0
+            found_sport_glasses = False  # 🚨 Our new tripwire!
             
             for index, row in target_df.iterrows():
                 raw_barcode = str(row[target_barcode_col]).strip()
@@ -565,6 +566,25 @@ if uploaded_file:
                     if private_name:
                         target_df.at[index, "Name private"] = private_name.strip()
                     
+                    # --- 📝 META DESCRIPTION ENGINE ---
+                    assembled_name = str(master_row.get("Assembled_Name", "")).strip()
+                    meta_desc = ""
+                    
+                    if "Sunglasses" in g_type:
+                        meta_desc = f"Sunglasses {assembled_name}"
+                    elif "Sport glasses" in g_type:
+                        meta_desc = f"Ski goggles {assembled_name}"
+                        found_sport_glasses = True  # Trip the wire!
+                    elif "Driving glasses" in g_type:
+                        meta_desc = f"Driving glasses {assembled_name}"
+                    elif "PC Glasses without power" in g_type:
+                        meta_desc = f"Computer glasses {assembled_name}"
+                    elif "Frames" in g_type:
+                        meta_desc = f"Eyeglasses {assembled_name}"
+                        
+                    if meta_desc:
+                        target_df.at[index, "Meta description"] = meta_desc.strip()
+
                     # 2. Safely pour data (Handles both strings and lists)
                     for global_col, target_col in TARGET_MAPPING.items():
                         if global_col == "Barcode": continue
@@ -583,6 +603,10 @@ if uploaded_file:
                                     target_df.at[index, target_col] = val
 
             st.success(f"✅ Match Complete! Successfully filled {match_count} out of {len(target_df)} products.")
+
+            # 🚨 Trigger the Sport Glasses Warning if the tripwire was crossed
+            if found_sport_glasses:
+                st.warning("⚠️ **Heads Up:** We found 'Sport glasses' in this batch and labeled them as 'Ski goggles' in the Meta Description. Please double-check the final file to ensure they aren't cycling or swimming glasses!")
             
             st.write("### Preview of Filled Data:")
             st.dataframe(target_df.head(20), use_container_width=True)
