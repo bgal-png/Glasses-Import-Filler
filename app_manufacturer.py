@@ -485,6 +485,23 @@ if search_btn and search_ean:
         st.dataframe(found_data[display_cols], use_container_width=True)
     else:
         st.error(f"❌ EAN '{search_ean}' (Cleaned: {clean_search}) was NOT found in any loaded manufacturer catalog.")
+# --- 📦 AUTOMATIC PACKAGE DATA LOADER (LOCAL REPO) ---
+st.divider()
+package_df = pd.DataFrame() 
+package_file_path = "package_data.xlsx"
+
+if os.path.exists(package_file_path):
+    try:
+        # Read the file directly from your GitHub repo folder
+        package_df = pd.read_excel(package_file_path)
+        st.success(f"✅ Package Data loaded from repository! ({len(package_df)} items ready)")
+        
+        with st.expander("👀 Preview Package Data"):
+            st.dataframe(package_df.head())
+    except Exception as e:
+        st.error(f"⚠️ Error reading local package_data.xlsx: {e}")
+else:
+    st.info("ℹ️ Local 'package_data.xlsx' not found in root directory. Weights will not be filled.")
 
 st.divider()
 st.subheader("📥 Step 1: Upload Your File to Fill")
