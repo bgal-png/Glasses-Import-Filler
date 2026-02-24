@@ -601,20 +601,24 @@ if uploaded_file:
                                         target_df.at[index, tc] = val
                                 else:
                                     target_df.at[index, target_col] = val
-                    # --- 👤 FACE SHAPE ENGINE ---
+                                    # --- 👤 FACE SHAPE ENGINE ---
                     g_shape_raw = str(master_row.get("Glasses_shape", "")).strip()
                     
                     if g_shape_raw and g_shape_raw.lower() not in ["nan", ""]:
+                        # Handle potential multiple shapes separated by commas
                         shapes = [s.strip() for s in g_shape_raw.split(",")]
                         recommended_faces = set()
                         
                         for s in shapes:
                             for shape_key, face_val in FACE_SHAPE_MAP.items():
                                 if shape_key.lower() == s.lower():
+                                    # Split the mapped string by '|' and add to our set to remove duplicates
                                     for face in face_val.split("|"):
                                         recommended_faces.add(face)
                         
                         if recommended_faces:
+                            # Join the unique face shapes back together with the pipe separator
+                            # (We sort them so they always appear in a clean, alphabetical order!)
                             target_df.at[index, "Glasses for your face shape ID:94"] = "|".join(sorted(list(recommended_faces)))
 
             st.success(f"✅ Match Complete! Successfully filled {match_count} out of {len(target_df)} products.")
