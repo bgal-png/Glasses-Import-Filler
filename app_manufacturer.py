@@ -535,6 +535,30 @@ priv_pc = st.sidebar.text_input("PC Glasses", placeholder="e.g. 3001")
 priv_sport = st.sidebar.text_input("Sport Glasses", placeholder="e.g. 4001")
 priv_drive = st.sidebar.text_input("Driving Glasses", placeholder="e.g. 5001")
 
+# ==========================================
+# ☁️ TEMPORARY CLOUD PUSHER (ADMIN ONLY)
+# ==========================================
+st.sidebar.divider()
+st.sidebar.subheader("☁️ Database Admin")
+
+if st.sidebar.button("⬆️ Push Master DB to Supabase", type="primary"):
+    with st.spinner("Uploading Master Catalog to PostgreSQL... This might take a minute!"):
+        try:
+            from sqlalchemy import create_engine
+            
+            # ⚠️ PASTE YOUR POOLER CONNECTION STRING HERE (Same one from the test)
+            DB_URL = "postgresql://postgres.[your-project-ref]:[your-password]@aws-0-eu-central-1.pooler.supabase.com:5432/postgres"
+            
+            engine = create_engine(DB_URL)
+            
+            # This pushes the entire dataframe to a table called 'master_catalog'
+            # if_exists='replace' means if you click it twice, it just overwrites it with a fresh copy!
+            master_db.to_sql(name='master_catalog', con=engine, if_exists='replace', index=True, index_label='Barcode')
+            
+            st.sidebar.success("✅ Upload Complete! Your Vault is filled.")
+        except Exception as e:
+            st.sidebar.error(f"❌ Upload Failed: {e}")
+
 # 🚨 REPORT UNMAPPED VALUES
 if "unmapped_values" in st.session_state and st.session_state.unmapped_values:
     st.warning(
