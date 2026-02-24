@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import re
 from io import BytesIO
-from dictionaries import TARGET_MAPPING, VALUE_TRANSLATOR, MANUFACTURER_CONFIG
+from dictionaries import TARGET_MAPPING, VALUE_TRANSLATOR, MANUFACTURER_CONFIG, FACE_SHAPE_MAP
 
 # ==========================================
 # 🛑 VERSION CHECK 
@@ -601,6 +601,21 @@ if uploaded_file:
                                         target_df.at[index, tc] = val
                                 else:
                                     target_df.at[index, target_col] = val
+                    # --- 👤 FACE SHAPE ENGINE ---
+                    g_shape_raw = str(master_row.get("Glasses_shape", "")).strip()
+                    
+                    if g_shape_raw and g_shape_raw.lower() not in ["nan", ""]:
+                        shapes = [s.strip() for s in g_shape_raw.split(",")]
+                        recommended_faces = set()
+                        
+                        for s in shapes:
+                            for shape_key, face_val in FACE_SHAPE_MAP.items():
+                                if shape_key.lower() == s.lower():
+                                    for face in face_val.split("|"):
+                                        recommended_faces.add(face)
+                        
+                        if recommended_faces:
+                            target_df.at[index, "Glasses for your face shape ID:94"] = "|".join(sorted(list(recommended_faces)))
 
             st.success(f"✅ Match Complete! Successfully filled {match_count} out of {len(target_df)} products.")
 

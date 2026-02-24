@@ -179,6 +179,23 @@ MANUFACTURER_CONFIG = {
         }
     }
 }
+
+# --- 👤 FACE SHAPE RECOMMENDATION DICTIONARY ---
+FACE_SHAPE_MAP = {
+    "Extravagant": "Round face|Oval face|Heart-shaped face|Square face",
+    "Round": "Oval face|Square face",
+    "Pilot": "Round face|Oval face|Heart-shaped face|Square face",
+    "Cat Eye": "Oval face|Heart-shaped face",
+    "Square": "Round face|Oval face|Heart-shaped face",
+    "Oversize": "Round face|Oval face|Heart-shaped face|Square face",
+    "Rectangular": "Round face|Oval face|Heart-shaped face",
+    "Panthos / Tea cup": "Round face|Oval face|Heart-shaped face|Square face",
+    "Oval / Elipse": "Oval face|Heart-shaped face|Square face",
+    "Single lens": "Round face|Oval face|Heart-shaped face|Square face",
+    "Butterfly": "Oval face|Square face",
+    "Hexagonal": "Round face|Oval face",
+    "Browline": "Round face|Oval face|Heart-shaped face|Square face"
+}
 # ==========================================
 # 🔤 THE VALUE TRANSLATOR (Standardizing Data)
 # ==========================================
