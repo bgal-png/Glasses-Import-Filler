@@ -502,9 +502,15 @@ if uploaded_file:
         # This strips line breaks, tabs, and squishes multiple spaces into a single space!
         target_df.columns = target_df.columns.astype(str).str.replace('\n', ' ', regex=False).str.replace(r'\s+', ' ', regex=True).str.strip()
         
-        # 🕵️‍♂️ THE CHEAT CODE: Progress Tracker Edition
-        # 1. Grab all the target columns you mapped in your dictionary
-        mapped_targets = set(TARGET_MAPPING.values())
+       # 🕵️‍♂️ THE CHEAT CODE: Progress Tracker Edition
+        # 1. Grab all the target columns safely (flattens any lists it finds!)
+        mapped_targets = set()
+        for val in TARGET_MAPPING.values():
+            if isinstance(val, list):
+                for item in val:
+                    mapped_targets.add(item)
+            else:
+                mapped_targets.add(val)
         
         # 2. List the columns we built custom engines for
         custom_targets = {
