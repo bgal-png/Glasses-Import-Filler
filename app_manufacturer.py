@@ -552,15 +552,15 @@ if uploaded_file:
                     
                     # The order here acts as a strict priority hierarchy!
                     if "Sunglasses" in g_type:
-                        if priv_sun: private_name = f"Sunglasses {priv_sun}"
+                        if priv_sun: private_name = f"(Sunglasses {priv_sun})"
                     elif "Sport glasses" in g_type:
-                        if priv_sport: private_name = f"Sports glasses {priv_sport}"
+                        if priv_sport: private_name = f"(Sports glasses {priv_sport})"
                     elif "Driving glasses" in g_type:
-                        if priv_drive: private_name = f"Eyeglasses driving {priv_drive}"
+                        if priv_drive: private_name = f"(Eyeglasses driving {priv_drive})"
                     elif "PC Glasses without power" in g_type:
-                        if priv_pc: private_name = f"Eyeglasses PC {priv_pc}"
+                        if priv_pc: private_name = f"(Eyeglasses PC {priv_pc})"
                     elif "Frames" in g_type:
-                        if priv_eye: private_name = f"Eyeglasses {priv_eye}"
+                        if priv_eye: private_name = f"(Eyeglasses {priv_eye})"
                         
                     if private_name:
                         target_df.at[index, "Name private"] = private_name.strip()
