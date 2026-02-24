@@ -553,7 +553,7 @@ if st.sidebar.button("⬆️ Push Master DB to Supabase", type="primary"):
             
             # This pushes the entire dataframe to a table called 'master_catalog'
             # if_exists='replace' means if you click it twice, it just overwrites it with a fresh copy!
-            master_db.to_sql(name='master_catalog', con=engine, if_exists='replace', index=True, index_label='Barcode')
+            master_db.reset_index().to_sql(name='master_catalog', con=engine, if_exists='replace', index=False)
             
             st.sidebar.success("✅ Upload Complete! Your Vault is filled.")
         except Exception as e:
