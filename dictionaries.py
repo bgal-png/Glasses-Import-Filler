@@ -196,6 +196,40 @@ FACE_SHAPE_MAP = {
     "Hexagonal": "Round face|Oval face",
     "Browline": "Round face|Oval face|Heart-shaped face|Square face"
 }
+# --- 🏷️ BRAND TO USABLE CATEGORY MAP ---
+BRAND_USABLE_MAP = {
+    # FASHION GLASSES
+    "botaniq": "Fashion glasses", "brioni": "Fashion glasses", "calvin klein": "Fashion glasses", 
+    "carrera": "Fashion glasses", "coco song": "Fashion glasses", "crullé": "Fashion glasses", 
+    "dsquared2": "Fashion glasses", "fossil": "Fashion glasses", "guess": "Fashion glasses", 
+    "hawkers": "Fashion glasses", "hugo boss": "Fashion glasses", "boss": "Fashion glasses", 
+    "boss by hugo boss": "Fashion glasses", "julbo": "Fashion glasses", "kate spade": "Fashion glasses", 
+    "kimikado": "Fashion glasses", "lacoste": "Fashion glasses", "levis": "Fashion glasses", 
+    "levi's": "Fashion glasses", "marc jacobs": "Fashion glasses", "marisio": "Fashion glasses", 
+    "max mara": "Fashion glasses", "max&co.": "Fashion glasses", "persol": "Fashion glasses", 
+    "polaroid": "Fashion glasses", "police": "Fashion glasses", "puma": "Fashion glasses", 
+    "radley": "Fashion glasses", "ray-ban": "Fashion glasses", "ray ban": "Fashion glasses", 
+    "seventh street": "Fashion glasses", "superdry": "Fashion glasses", "swarovski": "Fashion glasses", 
+    "swidoo": "Fashion glasses", "tommy hilfiger": "Fashion glasses", "vogue": "Fashion glasses", 
+    "under armour": "Fashion glasses", "armani exchange": "Fashion glasses", "nike": "Fashion glasses",
+
+    # LUXURY GLASSES
+    "alexander mcqueen": "Luxury glasses", "balenciaga": "Luxury glasses", "bottega venetta": "Luxury glasses", 
+    "bottega veneta": "Luxury glasses", "burberry": "Luxury glasses", "celine": "Luxury glasses", 
+    "chiara ferreagni": "Luxury glasses", "chiara ferragni": "Luxury glasses", "chloe": "Luxury glasses", 
+    "chloé": "Luxury glasses", "christian dior": "Luxury glasses", "dior": "Luxury glasses", 
+    "dolce & gabbana": "Luxury glasses", "dolce&gabbana": "Luxury glasses", "emporio armani": "Luxury glasses", 
+    "fendi": "Luxury glasses", "givenchy": "Luxury glasses", "gucci": "Luxury glasses", 
+    "impressio": "Luxury glasses", "jimmy choo": "Luxury glasses", "liu jo": "Luxury glasses", 
+    "michael kors": "Luxury glasses", "missoni": "Luxury glasses", "moschino": "Luxury glasses", 
+    "love moschino": "Luxury glasses", "myth": "Luxury glasses", "pierre cardin": "Luxury glasses", 
+    "polo ralph lauren": "Luxury glasses", "ralph by ralph lauren": "Luxury glasses", "prada": "Luxury glasses", 
+    "saint laurent": "Luxury glasses", "stella mccarteny": "Luxury glasses", "stella mccartney": "Luxury glasses", 
+    "tiffany": "Luxury glasses", "tom ford": "Luxury glasses", "versace": "Luxury glasses", 
+    "miu miu": "Luxury glasses", "beron": "Luxury glasses", "lewish": "Luxury glasses", 
+    "giorgio armani": "Luxury glasses", "carolina herrera": "Luxury glasses", "david beckham": "Luxury glasses", 
+    "ralph lauren": "Luxury glasses", "victoria beckham": "Luxury glasses"
+}
 # ==========================================
 # 🔤 THE VALUE TRANSLATOR (Standardizing Data)
 # ==========================================

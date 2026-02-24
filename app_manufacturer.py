@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import re
 from io import BytesIO
-from dictionaries import TARGET_MAPPING, VALUE_TRANSLATOR, MANUFACTURER_CONFIG, FACE_SHAPE_MAP
+from dictionaries import TARGET_MAPPING, VALUE_TRANSLATOR, MANUFACTURER_CONFIG, FACE_SHAPE_MAP, BRAND_USABLE_MAP
 
 # ==========================================
 # 🛑 VERSION CHECK 
@@ -624,6 +624,28 @@ if uploaded_file:
                     # --- ☀️ UV FILTER ENGINE ---
                     if "Sunglasses" in g_type:
                         target_df.at[index, "UV filter ID: 60"] = "400"
+                    
+                    # --- 🎯 GLASSES USABLE ENGINE ---
+                    usable_tags = set()
+                    
+                    # 1. Brand Logic
+                    raw_brand = str(master_row.get("Brand", "")).strip().lower()
+                    if raw_brand in BRAND_USABLE_MAP:
+                        usable_tags.add(BRAND_USABLE_MAP[raw_brand])
+                        
+                    # 2. Polarized / Sunglasses Logic
+                    lens_effect = str(master_row.get("Glasses_lens_effect", "")).strip()
+                    
+                    if "Sunglasses" in g_type:
+                        if "Polarized" in lens_effect:
+                            usable_tags.add("Driving glasses")
+                        else:
+                            usable_tags.add("Common use")
+                            
+                    # 3. Join and Pour
+                    if usable_tags:
+                        # Sorting them ensures it always looks clean, e.g., "Common use|Luxury glasses"
+                        target_df.at[index, "Glasses usable ID: 51"] = "|".join(sorted(list(usable_tags)))
 
             st.success(f"✅ Match Complete! Successfully filled {match_count} out of {len(target_df)} products.")
 
