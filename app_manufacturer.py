@@ -620,6 +620,10 @@ if uploaded_file:
                             # Join the unique face shapes back together with the pipe separator
                             # (We sort them so they always appear in a clean, alphabetical order!)
                             target_df.at[index, "Glasses for your face shape ID:94"] = "|".join(sorted(list(recommended_faces)))
+                    
+                    # --- ☀️ UV FILTER ENGINE ---
+                    if "Sunglasses" in g_type:
+                        target_df.at[index, "UV filter ID: 60"] = "400"
 
             st.success(f"✅ Match Complete! Successfully filled {match_count} out of {len(target_df)} products.")
 
