@@ -4,7 +4,7 @@ import re
 from dictionaries import TARGET_MAPPING, VALUE_TRANSLATOR, MANUFACTURER_CONFIG, FACE_SHAPE_MAP, BRAND_USABLE_MAP, PREMIUM_KERING_BRANDS
 
 # ⚠️ REMEMBER: Change your password in Supabase after we are done!
-DB_URL = "postgresql://postgres.nxlwkzgfcmzsbogcenyi:YQe2oULo6y6WXOZN@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"
+DB_URL = "postgresql://postgres.nxlwkzgfcmzsbogcenyi:YQe2oULo6y6WXOZN@aws-1-eu-central-1.pooler.supabase.com:6543/postgres"
 
 def build_master_catalog():
     print("🚀 Connecting to Supabase Vault to build Master Catalog...")
