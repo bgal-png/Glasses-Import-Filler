@@ -421,6 +421,14 @@ def get_master_database(cat):
 
 master_db = get_master_database(catalog)
 
+st.sidebar.divider()
+st.sidebar.subheader("🏷️ Private Name Numbers")
+priv_sun = st.sidebar.text_input("Sunglasses", placeholder="e.g. 1001")
+priv_eye = st.sidebar.text_input("Eyeglasses (Frames)", placeholder="e.g. 2001")
+priv_pc = st.sidebar.text_input("PC Glasses", placeholder="e.g. 3001")
+priv_sport = st.sidebar.text_input("Sport Glasses", placeholder="e.g. 4001")
+priv_drive = st.sidebar.text_input("Driving Glasses", placeholder="e.g. 5001")
+
 # 🚨 REPORT UNMAPPED VALUES
 if 'unmapped_values' in st.session_state and st.session_state.unmapped_values:
     st.warning("⚠️ Action Required: Unmapped Values Found! The following values are not in your dictionary and were ignored.")
@@ -537,6 +545,25 @@ if uploaded_file:
                     # --- 📦 STATIC BUCKET FILLS ---
                     target_df.at[index, "Items type ID: 20"] = "Glasses"
                     target_df.at[index, "Items packing ID: 21"] = "Basic"
+
+                    # --- 🕵️ PRIVATE NAME ENGINE ---
+                    g_type = str(master_row.get("Glasses_type", "")).strip()
+                    private_name = ""
+                    
+                    # The order here acts as a strict priority hierarchy!
+                    if "Sunglasses" in g_type:
+                        if priv_sun: private_name = f"Sunglasses {priv_sun}"
+                    elif "Sport glasses" in g_type:
+                        if priv_sport: private_name = f"Sports glasses {priv_sport}"
+                    elif "Driving glasses" in g_type:
+                        if priv_drive: private_name = f"Eyeglasses driving {priv_drive}"
+                    elif "PC Glasses without power" in g_type:
+                        if priv_pc: private_name = f"Eyeglasses PC {priv_pc}"
+                    elif "Frames" in g_type:
+                        if priv_eye: private_name = f"Eyeglasses {priv_eye}"
+                        
+                    if private_name:
+                        target_df.at[index, "Name private"] = private_name.strip()
                     
                     # 2. Safely pour data (Handles both strings and lists)
                     for global_col, target_col in TARGET_MAPPING.items():
