@@ -499,8 +499,36 @@ if uploaded_file:
         # This strips line breaks, tabs, and squishes multiple spaces into a single space!
         target_df.columns = target_df.columns.astype(str).str.replace('\n', ' ', regex=False).str.replace(r'\s+', ' ', regex=True).str.strip()
         
-        # 🕵️‍♂️ THE CHEAT CODE: Print the exact headers to the screen
-        st.write("🔍 EXACT BUCKET NAMES:", list(target_df.columns))
+        # This strips line breaks, tabs, and squishes multiple spaces into a single space!
+        target_df.columns = target_df.columns.astype(str).str.replace('\n', ' ', regex=False).str.replace(r'\s+', ' ', regex=True).str.strip()
+        
+        # 🕵️‍♂️ THE CHEAT CODE: Progress Tracker Edition
+        # 1. Grab all the target columns you mapped in your dictionary
+        mapped_targets = set(TARGET_MAPPING.values())
+        
+        # 2. List the columns we built custom engines for
+        custom_targets = {
+            "Items type ID: 20", "Items packing ID: 21", "Name private",
+            "Meta description", "Glasses for your face shape ID:94",
+            "UV filter ID: 60", "Glasses usable ID: 51", "Glasses collection ID: 33",
+            "HS Code", "Item description", "Glasses other features ID:99"
+        }
+        
+        # Combine them into one master list of "Finished" columns
+        all_completed_targets = mapped_targets.union(custom_targets)
+        
+        # 3. Build the visual list
+        status_list = []
+        for col in target_df.columns:
+            if col in all_completed_targets:
+                status_list.append(f"✅ {col}")
+            else:
+                status_list.append(f"⏳ {col}")
+                
+        # 4. Display in a clean, click-to-open box
+        with st.expander("🔍 PROGRESS TRACKER: Exact Bucket Names"):
+            st.markdown("**✅ = Rule Applied | ⏳ = Still Needs Logic/Mapping**")
+            st.write(status_list)
         
     except Exception as e:
         st.error(f"Could not read your uploaded file: {e}")
@@ -601,7 +629,7 @@ if uploaded_file:
                                         target_df.at[index, tc] = val
                                 else:
                                     target_df.at[index, target_col] = val
-                                    # --- 👤 FACE SHAPE ENGINE ---
+                    # --- 👤 FACE SHAPE ENGINE ---
                     g_shape_raw = str(master_row.get("Glasses_shape", "")).strip()
                     
                     if g_shape_raw and g_shape_raw.lower() not in ["nan", ""]:
