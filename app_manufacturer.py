@@ -16,7 +16,7 @@ st.title(f"🏭 Manufacturer Data Filler")
 st.caption(f"🚀 Running Code Version: **{APP_VERSION}**")
 
 # ⚠️ REMEMBER: Change your password in Supabase later!
-DB_URL = "postgresql://postgres.nxlwkzgfcmzsbogcenyi:lzAxicGTtsq1iEqB@aws-1-eu-central-1.pooler.supabase.com:5432/postgres?sslmode=require"
+DB_URL = "postgresql://postgres.nxlwkzgfcmzsbogcenyi:YQe2oULo6y6WXOZN@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"
 
 # ==========================================
 # ☁️ CLOUD DATABASE CONNECTION
