@@ -491,6 +491,9 @@ if uploaded_file:
         # This strips line breaks, tabs, and squishes multiple spaces into a single space!
         target_df.columns = target_df.columns.astype(str).str.replace('\n', ' ', regex=False).str.replace(r'\s+', ' ', regex=True).str.strip()
         
+        # 🕵️‍♂️ THE CHEAT CODE: Print the exact headers to the screen
+        st.write("🔍 EXACT BUCKET NAMES:", list(target_df.columns))
+        
     except Exception as e:
         st.error(f"Could not read your uploaded file: {e}")
         st.stop()
