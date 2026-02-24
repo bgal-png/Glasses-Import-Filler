@@ -230,6 +230,13 @@ BRAND_USABLE_MAP = {
     "giorgio armani": "Luxury glasses", "carolina herrera": "Luxury glasses", "david beckham": "Luxury glasses", 
     "ralph lauren": "Luxury glasses", "victoria beckham": "Luxury glasses"
 }
+# --- 💎 PREMIUM KERING BRANDS ---
+PREMIUM_KERING_BRANDS = {
+    "alexander mcqueen", "balenciaga", "gucci", "saint laurent", "chloe", "chloé",
+    "dior", "christian dior", "fendi", "dolce & gabbana", "dolce&gabbana", 
+    "celine", "céline", "miu miu", "tom ford", "prada", "giorgio armani", 
+    "beron", "lewish"
+}
 # ==========================================
 # 🔤 THE VALUE TRANSLATOR (Standardizing Data)
 # ==========================================

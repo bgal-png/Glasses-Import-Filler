@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import re
 from io import BytesIO
-from dictionaries import TARGET_MAPPING, VALUE_TRANSLATOR, MANUFACTURER_CONFIG, FACE_SHAPE_MAP, BRAND_USABLE_MAP
+from dictionaries import TARGET_MAPPING, VALUE_TRANSLATOR, MANUFACTURER_CONFIG, FACE_SHAPE_MAP, BRAND_USABLE_MAP, PREMIUM_KERING_BRANDS
 
 # ==========================================
 # 🛑 VERSION CHECK 
@@ -646,6 +646,13 @@ if uploaded_file:
                     if usable_tags:
                         # Sorting them ensures it always looks clean, e.g., "Common use|Luxury glasses"
                         target_df.at[index, "Glasses usable ID: 51"] = "|".join(sorted(list(usable_tags)))
+
+                    # --- 💎 PREMIUM COLLECTION ENGINE ---
+                    # We reuse the 'raw_brand' variable from the Usable Engine above!
+                    if raw_brand in PREMIUM_KERING_BRANDS:
+                        target_df.at[index, "Glasses collection ID: 33"] = "Prémiové brýle - Kering"
+
+
 
             st.success(f"✅ Match Complete! Successfully filled {match_count} out of {len(target_df)} products.")
 
