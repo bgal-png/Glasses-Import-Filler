@@ -353,6 +353,32 @@ def load_all_catalogs(config):
                 lambda x: str(x).strip().title() if pd.notna(x) and str(x).strip().lower() not in ["nan", ""] else ""
             )
 
+            # --- 📏 DIMENSIONS ROUNDING ENGINE ---
+        dimension_cols = [
+            "Glasses_size_temple_length", 
+            "Glasses_size_lens_height", 
+            "Glasses_size_lens_width", 
+            "Glasses_size_bridge"
+        ]
+        
+        for dim_col in dimension_cols:
+            if dim_col in new_df.columns:
+                def round_dimension(val):
+                    if pd.isna(val) or str(val).strip() == "" or str(val).strip().lower() == "nan":
+                        return ""
+                    try:
+                        # Strip out "mm" or letters, change comma to dot
+                        clean_str = re.sub(r'[^\d,.-]', '', str(val).strip()).replace(',', '.')
+                        if clean_str:
+                            # Convert to float, round to nearest whole number, convert to int string
+                            return str(int(round(float(clean_str))))
+                    except Exception:
+                        pass
+                    return str(val).strip() # Fallback to original if math completely fails
+                
+                new_df[dim_col] = new_df[dim_col].apply(round_dimension)
+
+
         # ZERO-STRIPPER
         if "Barcode" in new_df.columns:
             new_df["join_key"] = new_df["Barcode"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).str.lstrip('0')
