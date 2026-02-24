@@ -684,6 +684,55 @@ if uploaded_file:
                             target_df.at[index, "Item description"] = "Sunglasses, plastic frame"
                         elif has_metal:
                             target_df.at[index, "Item description"] = "Sunglasses, metal frame"
+                            # ---------------------------------------------------------
+                    # THE FOLLOWING RULES MUST RUN *AFTER* THE GENERIC POUR
+                    # ---------------------------------------------------------
+
+                    # --- 🌟 OTHER FEATURES ENGINE ---
+                    other_features = set()
+                    
+                    # If the column already received data from the generic pour, grab it so we don't overwrite it!
+                    if "Glasses other features ID:99" in target_df.columns:
+                        existing_features = str(target_df.at[index, "Glasses other features ID:99"]).strip()
+                        if existing_features and existing_features.lower() not in ["nan", ""]:
+                            for e in existing_features.split("|"):
+                                other_features.add(e.strip())
+                    
+                    # 1. Check RX Lenses
+                    if "SunGlasses RX lenses ID:108" in target_df.columns:
+                        rx_val = str(target_df.at[index, "SunGlasses RX lenses ID:108"]).strip().lower()
+                        if rx_val == "yes":
+                            other_features.add("Prescription sunglasses")
+                            
+                    # 2. Check Clip-ons
+                    if "Glasses contain ID: 84" in target_df.columns:
+                        contain_val = str(target_df.at[index, "Glasses contain ID: 84"]).strip().lower()
+                        
+                        # Split by comma or pipe to isolate the exact phrases 
+                        # (Prevents "magnetic sun clip-on" from accidentally triggering the basic "sun clip-on" rule!)
+                        contain_items = [item.strip() for item in re.split(r'[,|]', contain_val) if item.strip()]
+                        
+                        clip_on_found = False
+                        if "sun clip-on" in contain_items:
+                            other_features.add("Sun clip-on")
+                            clip_on_found = True
+                        if "sun clip-on p" in contain_items:
+                            other_features.add("Sun clip-on p")
+                            clip_on_found = True
+                        if "magnetic sun clip-on" in contain_items:
+                            other_features.add("Magnetic sun clip-on")
+                            clip_on_found = True
+                        if "magnetic sun clip-on p" in contain_items:
+                            other_features.add("Magnetic sun clip-on p")
+                            clip_on_found = True
+                            
+                        # 3. Add the universal clip-on tag
+                        if clip_on_found:
+                            other_features.add("Glasses with sun clip-on")
+                            
+                    # 4. Pour into target
+                    if other_features:
+                        target_df.at[index, "Glasses other features ID:99"] = "|".join(sorted(list(other_features)))
 
 
 
