@@ -77,28 +77,7 @@ def load_all_catalogs(config):
                         return ", ".join(vals) if vals else ""
                     new_df[global_name] = df.apply(merge_row, axis=1)
 
-                    # --- 📦 PACKAGE DATA UPLOAD ---
-        st.markdown("### Step 3: Upload Package Data (Optional)")
-        package_file = st.file_uploader("Upload your Package Data file (CSV or Excel)", type=["csv", "xlsx"])
         
-        # Initialize an empty dataframe so the app doesn't crash if you don't upload one
-        package_df = pd.DataFrame() 
-        
-        if package_file is not None:
-            try:
-                # Handle both CSV and Excel formats safely
-                if package_file.name.endswith('.csv'):
-                    package_df = pd.read_csv(package_file)
-                else:
-                    package_df = pd.read_excel(package_file)
-                    
-                st.success(f"✅ Package Data Loaded Successfully! ({len(package_df)} items found)")
-                
-                with st.expander("👀 Preview Package Data"):
-                    st.dataframe(package_df.head())
-                    
-            except Exception as e:
-                st.error(f"❌ Error reading Package file: {e}")
 
         # ==========================================
         # 🧠 CUSTOM RULES ENGINE & STRICT TRANSLATOR
