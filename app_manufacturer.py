@@ -700,6 +700,10 @@ if uploaded_file:
             "HS Code",
             "Item description",
             "Glasses other features ID:99",
+            "Case length (mm)", 
+            "Case height (mm)", 
+            "Case width (mm)", 
+            "Case weight (g)",
         }
 
         # Combine them into one master list of "Finished" columns
