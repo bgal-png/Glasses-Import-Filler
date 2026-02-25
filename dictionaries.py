@@ -773,7 +773,7 @@ VALUE_TRANSLATOR = {
     },
     "Glasses_lens_Colour": {
         # safilo
-        "0": "Havana",
+        "0": "",
         "BLACK": "Black",
         "RED": "Red",
         "BLUE": "Blue",
