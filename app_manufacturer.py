@@ -542,19 +542,23 @@ st.sidebar.divider()
 st.sidebar.subheader("☁️ Database Admin")
 
 if st.sidebar.button("⬆️ Push Master DB to Supabase", type="primary"):
-    with st.spinner("Uploading Master Catalog to PostgreSQL... This might take a minute!"):
+    with st.spinner(
+        "Uploading Master Catalog to PostgreSQL... This might take a minute!"
+    ):
         try:
             from sqlalchemy import create_engine
-            
+
             # ⚠️ PASTE YOUR POOLER CONNECTION STRING HERE (Same one from the test)
             DB_URL = "postgresql://postgres.nxlwkzgfcmzsbogcenyi:YQe2oULo6y6WXOZN@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"
-            
+
             engine = create_engine(DB_URL)
-            
+
             # This pushes the entire dataframe to a table called 'master_catalog'
             # if_exists='replace' means if you click it twice, it just overwrites it with a fresh copy!
-            master_db.reset_index().to_sql(name='master_catalog', con=engine, if_exists='replace', index=False)
-            
+            master_db.reset_index().to_sql(
+                name="master_catalog", con=engine, if_exists="replace", index=False
+            )
+
             st.sidebar.success("✅ Upload Complete! Your Vault is filled.")
         except Exception as e:
             st.sidebar.error(f"❌ Upload Failed: {e}")
@@ -646,6 +650,26 @@ else:
     st.info(
         "ℹ️ Local 'package_data.xlsx' not found in root directory. Weights will not be filled."
     )
+    # --- 📜 AUTOMATIC HISTORICAL DATA LOADER (MASTER CLEAN) ---
+st.divider()
+master_clean_df = pd.DataFrame()
+master_clean_path = "master_clean.xlsx"
+
+if os.path.exists(master_clean_path):
+    try:
+        # Load the file as strings to prevent barcode math errors
+        temp_clean_df = pd.read_excel(master_clean_path, dtype=str, engine="openpyxl")
+        
+        # Filter ONLY for "Glasses" in the "Items type" column (Column V)
+        if "Items type" in temp_clean_df.columns:
+            master_clean_df = temp_clean_df[temp_clean_df["Items type"].astype(str).str.strip().str.lower() == "glasses"]
+            st.success(f"✅ Historical Data loaded! ({len(master_clean_df)} valid glasses found in master_clean.xlsx)")
+        else:
+            st.warning("⚠️ 'Items type' column missing in master_clean.xlsx. Cannot filter glasses.")
+    except Exception as e:
+        st.error(f"⚠️ Error reading master_clean.xlsx: {e}")
+else:
+    st.info("ℹ️ Local 'master_clean.xlsx' not found. 'Glasses contain' prediction will be skipped.")
 
 st.divider()
 st.subheader("📥 Step 1: Upload Your File to Fill")
@@ -700,10 +724,12 @@ if uploaded_file:
             "HS Code",
             "Item description",
             "Glasses other features ID:99",
-            "Case length (mm)", 
-            "Case height (mm)", 
-            "Case width (mm)", 
+            "Case length (mm)",
+            "Case height (mm)",
+            "Case width (mm)",
             "Case weight (g)",
+            "Case weight (g)",
+            "Glasses contain ID: 84"
         }
 
         # Combine them into one master list of "Finished" columns
@@ -755,19 +781,30 @@ if uploaded_file:
 
             # --- 📦 PREP PACKAGE DATA MAJORITY CACHE ---
             brand_majority_cache = {}
-            
+            brand_contain_cache = {} # Cache for Glasses Contain predictions
+
             # Ensure the target case columns exist in the output file
-            case_cols = ["Case length (mm)", "Case height (mm)", "Case width (mm)", "Case weight (g)"]
+            case_cols = [
+                "Case length (mm)",
+                "Case height (mm)",
+                "Case width (mm)",
+                "Case weight (g)",
+            ]
             for c in case_cols:
                 if c not in target_df.columns:
                     target_df[c] = ""
-                    
+
             # Make sure package_df column names are perfectly clean
             if not package_df.empty:
                 package_df.columns = package_df.columns.astype(str).str.strip()
-            
+
             # Ensure target columns exist in the output file
-            for c in ["Case length (mm)", "Case height (mm)", "Case width (mm)", "Case weight (g)"]:
+            for c in [
+                "Case length (mm)",
+                "Case height (mm)",
+                "Case width (mm)",
+                "Case weight (g)",
+            ]:
                 if c not in target_df.columns:
                     target_df[c] = ""
 
@@ -894,43 +931,94 @@ if uploaded_file:
                     # --- 🧳 CASE DIMENSIONS MAJORITY ENGINE ---
                     # We reuse the 'raw_brand' variable from above
                     if not package_df.empty and raw_brand and raw_brand != "nan":
-                        
+
                         # Only calculate the majority if we haven't seen this brand yet
                         if raw_brand not in brand_majority_cache:
-                            
+
                             # Safely search for the brand name inside column B ("item_name")
                             # We use word boundaries (\b) so searching for "Boss" doesn't accidentally match "Hugo Boss"
-                            mask = package_df['item_name'].astype(str).str.contains(rf'\b{re.escape(raw_brand)}\b', case=False, na=False)
+                            mask = (
+                                package_df["item_name"]
+                                .astype(str)
+                                .str.contains(
+                                    rf"\b{re.escape(raw_brand)}\b", case=False, na=False
+                                )
+                            )
                             brand_matches = package_df[mask]
-                            
+
                             if not brand_matches.empty:
+
                                 def get_mode(col_name):
                                     if col_name in brand_matches.columns:
                                         # .mode() finds the most frequent value. dropna() ignores empty cells.
                                         modes = brand_matches[col_name].dropna().mode()
                                         if not modes.empty:
                                             # Strip out the ".0" if Excel turned it into a float
-                                            return re.sub(r'\.0$', '', str(modes.iloc[0]).strip())
+                                            return re.sub(
+                                                r"\.0$", "", str(modes.iloc[0]).strip()
+                                            )
                                     return ""
-                                
+
                                 # Store the majority vote for this brand in the cache!
                                 brand_majority_cache[raw_brand] = {
                                     "Case length (mm)": get_mode("case_length"),
                                     "Case height (mm)": get_mode("case_height"),
                                     "Case width (mm)": get_mode("case_width"),
-                                    "Case weight (g)": get_mode("case_weight")
+                                    "Case weight (g)": get_mode("case_weight"),
                                 }
                             else:
                                 # Brand not found in package data, remember to skip it next time
                                 brand_majority_cache[raw_brand] = None
-                                
+
                         # Pour the cached majority data if it exists for this brand
                         cached_data = brand_majority_cache.get(raw_brand)
                         if cached_data:
-                            target_df.at[index, "Case length (mm)"] = cached_data["Case length (mm)"]
-                            target_df.at[index, "Case height (mm)"] = cached_data["Case height (mm)"]
-                            target_df.at[index, "Case width (mm)"] = cached_data["Case width (mm)"]
-                            target_df.at[index, "Case weight (g)"] = cached_data["Case weight (g)"]
+                            target_df.at[index, "Case length (mm)"] = cached_data[
+                                "Case length (mm)"
+                            ]
+                            target_df.at[index, "Case height (mm)"] = cached_data[
+                                "Case height (mm)"
+                            ]
+                            target_df.at[index, "Case width (mm)"] = cached_data[
+                                "Case width (mm)"
+                            ]
+                            target_df.at[index, "Case weight (g)"] = cached_data[
+                                "Case weight (g)"
+                            ]
+                            # --- 🎁 GLASSES CONTAIN MAJORITY ENGINE ---
+                    if not master_clean_df.empty and raw_brand and raw_brand != "nan":
+                        
+                        # Check if we already calculated the majority for this brand
+                        if raw_brand not in brand_contain_cache:
+                            if "Brand" in master_clean_df.columns and "Glasses contain" in master_clean_df.columns:
+                                
+                                # Exact match for the brand name
+                                brand_mask = master_clean_df['Brand'].astype(str).str.strip().str.lower() == raw_brand
+                                brand_matches = master_clean_df[brand_mask]
+                                
+                                if not brand_matches.empty:
+                                    # Find the most frequent package contents
+                                    modes = brand_matches["Glasses contain"].dropna().mode()
+                                    
+                                    if not modes.empty:
+                                        raw_contain = str(modes.iloc[0]).strip()
+                                        
+                                        # 🧹 THE CLEANER: Splits by comma, ignores empty ones (,,,), joins with |
+                                        parts = [p.strip() for p in raw_contain.split(',') if p.strip() and p.strip().lower() != 'nan']
+                                        clean_contain = "|".join(parts)
+                                        
+                                        brand_contain_cache[raw_brand] = clean_contain
+                                    else:
+                                        brand_contain_cache[raw_brand] = ""
+                                else:
+                                    brand_contain_cache[raw_brand] = ""
+                            else:
+                                brand_contain_cache[raw_brand] = ""
+                                
+                        # Pour the cached, beautifully formatted string into the Target DF!
+                        cached_contain = brand_contain_cache.get(raw_brand)
+                        if cached_contain:
+                            target_df.at[index, "Glasses contain ID: 84"] = cached_contain
 
                     # 2. Polarized / Sunglasses Logic
                     lens_effect = str(master_row.get("Glasses_lens_effect", "")).strip()
