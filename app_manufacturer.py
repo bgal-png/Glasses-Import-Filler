@@ -749,13 +749,18 @@ if uploaded_file:
             match_count = 0
             found_sport_glasses = False  # 🚨 Our new tripwire!
 
-            # --- 📦 PREP PACKAGE DATA FOR FAST LOOKUP ---
-            package_lookup = {}
-            if not package_df.empty and 'Brand' in package_df.columns:
-                # Create a fast dictionary lookup based on the Brand name (lowercased)
-                temp_pkg = package_df.copy()
-                temp_pkg['lookup_key'] = temp_pkg['Brand'].astype(str).str.strip().str.lower()
-                package_lookup = temp_pkg.set_index('lookup_key').to_dict('index')
+            # --- 📦 PREP PACKAGE DATA MAJORITY CACHE ---
+            brand_majority_cache = {}
+            
+            # Ensure the target case columns exist in the output file
+            case_cols = ["Case length (mm)", "Case height (mm)", "Case width (mm)", "Case weight (g)"]
+            for c in case_cols:
+                if c not in target_df.columns:
+                    target_df[c] = ""
+                    
+            # Make sure package_df column names are perfectly clean
+            if not package_df.empty:
+                package_df.columns = package_df.columns.astype(str).str.strip()
             
             # Ensure target columns exist in the output file
             for c in ["Case length (mm)", "Case height (mm)", "Case width (mm)", "Case weight (g)"]:
@@ -882,19 +887,46 @@ if uploaded_file:
                     if raw_brand in BRAND_USABLE_MAP:
                         usable_tags.add(BRAND_USABLE_MAP[raw_brand])
 
-                        # --- 🧳 CASE DIMENSIONS ENGINE ---
-                    # We reuse the 'raw_brand' variable we just created above!
-                    if raw_brand in package_lookup:
-                        pkg_data = package_lookup[raw_brand]
+                    # --- 🧳 CASE DIMENSIONS MAJORITY ENGINE ---
+                    # We reuse the 'raw_brand' variable from above
+                    if not package_df.empty and raw_brand and raw_brand != "nan":
                         
-                        def clean_pkg_val(val):
-                            if pd.isna(val) or str(val).strip().lower() in ["nan", ""]: return ""
-                            return re.sub(r'\.0$', '', str(val).strip()) # Removes trailing .0 if Excel made it a float
+                        # Only calculate the majority if we haven't seen this brand yet
+                        if raw_brand not in brand_majority_cache:
                             
-                        target_df.at[index, "Case length (mm)"] = clean_pkg_val(pkg_data.get("case_length"))
-                        target_df.at[index, "Case height (mm)"] = clean_pkg_val(pkg_data.get("case_height"))
-                        target_df.at[index, "Case width (mm)"] = clean_pkg_val(pkg_data.get("case_width"))
-                        target_df.at[index, "Case weight (g)"] = clean_pkg_val(pkg_data.get("case_weight"))
+                            # Safely search for the brand name inside column B ("item_name")
+                            # We use word boundaries (\b) so searching for "Boss" doesn't accidentally match "Hugo Boss"
+                            mask = package_df['item_name'].astype(str).str.contains(rf'\b{re.escape(raw_brand)}\b', case=False, na=False)
+                            brand_matches = package_df[mask]
+                            
+                            if not brand_matches.empty:
+                                def get_mode(col_name):
+                                    if col_name in brand_matches.columns:
+                                        # .mode() finds the most frequent value. dropna() ignores empty cells.
+                                        modes = brand_matches[col_name].dropna().mode()
+                                        if not modes.empty:
+                                            # Strip out the ".0" if Excel turned it into a float
+                                            return re.sub(r'\.0$', '', str(modes.iloc[0]).strip())
+                                    return ""
+                                
+                                # Store the majority vote for this brand in the cache!
+                                brand_majority_cache[raw_brand] = {
+                                    "Case length (mm)": get_mode("case_length"),
+                                    "Case height (mm)": get_mode("case_height"),
+                                    "Case width (mm)": get_mode("case_width"),
+                                    "Case weight (g)": get_mode("case_weight")
+                                }
+                            else:
+                                # Brand not found in package data, remember to skip it next time
+                                brand_majority_cache[raw_brand] = None
+                                
+                        # Pour the cached majority data if it exists for this brand
+                        cached_data = brand_majority_cache.get(raw_brand)
+                        if cached_data:
+                            target_df.at[index, "Case length (mm)"] = cached_data["Case length (mm)"]
+                            target_df.at[index, "Case height (mm)"] = cached_data["Case height (mm)"]
+                            target_df.at[index, "Case width (mm)"] = cached_data["Case width (mm)"]
+                            target_df.at[index, "Case weight (g)"] = cached_data["Case weight (g)"]
 
                     # 2. Polarized / Sunglasses Logic
                     lens_effect = str(master_row.get("Glasses_lens_effect", "")).strip()
