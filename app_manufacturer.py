@@ -81,15 +81,14 @@ def load_all_catalogs(config):
                         col_data = col_data.iloc[:, 0]
                     new_df[global_name] = col_data
                 else:
-
-                   def merge_row(row):
+                    def merge_row(row):
                         vals = [
                             str(row[c]).strip()
                             for c in existing_cols
                             if pd.notna(row[c])
                             and str(row[c]).strip().lower() not in ("nan", "")
                         ]
-                        return ", ".join(vals) if vals else ""  # <--- Change this line!
+                        return "|".join(vals) if vals else ""
 
                     new_df[global_name] = df.apply(merge_row, axis=1)
 
