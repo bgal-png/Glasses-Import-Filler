@@ -1078,8 +1078,28 @@ if uploaded_file:
                             final_contain.append(clip_on_val)
                             
                         if final_contain:
-                            # Use set() to remove any accidental duplicates, then sort alphabetically
-                            target_df.at[index, "Glasses contain ID: 84"] = "|".join(sorted(list(set(final_contain))))
+                            # 1. Remove duplicates securely (ignoring uppercase/lowercase differences)
+                            unique_contain_dict = {item.strip().lower(): item.strip() for item in final_contain if item.strip()}
+                            
+                            # 2. Build the exact ordered list
+                            ordered_items = []
+                            
+                            # Priority 1: Original glasses case
+                            if "original glasses case" in unique_contain_dict:
+                                ordered_items.append("Original glasses case")
+                                del unique_contain_dict["original glasses case"]
+                                
+                            # Priority 2: Cleaning cloth
+                            if "cleaning cloth" in unique_contain_dict:
+                                ordered_items.append("Cleaning cloth")
+                                del unique_contain_dict["cleaning cloth"]
+                                
+                            # Priority 3: Whatever else is left (Clip-ons, etc.), sorted neatly
+                            remaining_items = sorted(list(unique_contain_dict.values()))
+                            ordered_items.extend(remaining_items)
+                            
+                            # 4. Pour the perfectly ordered list!
+                            target_df.at[index, "Glasses contain ID: 84"] = "|".join(ordered_items)
 
                     # 2. Polarized / Sunglasses Logic
                     lens_effect = str(master_row.get("Glasses_lens_effect", "")).strip()
