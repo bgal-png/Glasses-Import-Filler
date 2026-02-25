@@ -749,6 +749,19 @@ if uploaded_file:
             match_count = 0
             found_sport_glasses = False  # 🚨 Our new tripwire!
 
+            # --- 📦 PREP PACKAGE DATA FOR FAST LOOKUP ---
+            package_lookup = {}
+            if not package_df.empty and 'Brand' in package_df.columns:
+                # Create a fast dictionary lookup based on the Brand name (lowercased)
+                temp_pkg = package_df.copy()
+                temp_pkg['lookup_key'] = temp_pkg['Brand'].astype(str).str.strip().str.lower()
+                package_lookup = temp_pkg.set_index('lookup_key').to_dict('index')
+            
+            # Ensure target columns exist in the output file
+            for c in ["Case length (mm)", "Case height (mm)", "Case width (mm)", "Case weight (g)"]:
+                if c not in target_df.columns:
+                    target_df[c] = ""
+
             for index, row in target_df.iterrows():
                 raw_barcode = str(row[target_barcode_col]).strip()
 
@@ -834,6 +847,7 @@ if uploaded_file:
                                         target_df.at[index, tc] = val
                                 else:
                                     target_df.at[index, target_col] = val
+
                     # --- 👤 FACE SHAPE ENGINE ---
                     g_shape_raw = str(master_row.get("Glasses_shape", "")).strip()
 
@@ -867,6 +881,20 @@ if uploaded_file:
                     raw_brand = str(master_row.get("Brand", "")).strip().lower()
                     if raw_brand in BRAND_USABLE_MAP:
                         usable_tags.add(BRAND_USABLE_MAP[raw_brand])
+
+                        # --- 🧳 CASE DIMENSIONS ENGINE ---
+                    # We reuse the 'raw_brand' variable we just created above!
+                    if raw_brand in package_lookup:
+                        pkg_data = package_lookup[raw_brand]
+                        
+                        def clean_pkg_val(val):
+                            if pd.isna(val) or str(val).strip().lower() in ["nan", ""]: return ""
+                            return re.sub(r'\.0$', '', str(val).strip()) # Removes trailing .0 if Excel made it a float
+                            
+                        target_df.at[index, "Case length (mm)"] = clean_pkg_val(pkg_data.get("case_length"))
+                        target_df.at[index, "Case height (mm)"] = clean_pkg_val(pkg_data.get("case_height"))
+                        target_df.at[index, "Case width (mm)"] = clean_pkg_val(pkg_data.get("case_width"))
+                        target_df.at[index, "Case weight (g)"] = clean_pkg_val(pkg_data.get("case_weight"))
 
                     # 2. Polarized / Sunglasses Logic
                     lens_effect = str(master_row.get("Glasses_lens_effect", "")).strip()
