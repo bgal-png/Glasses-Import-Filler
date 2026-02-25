@@ -103,7 +103,11 @@ def load_all_catalogs(config):
 
             if mfg_name == "safilo":
                 # Normalize spaces just in case it's "+ CLIP-ON" or "+  CLIP-ON"
-                prod_type = re.sub(r'\s+', ' ', str(raw_row.get("Product Type Desc.", "")).strip().upper())
+                prod_type = re.sub(
+                    r"\s+",
+                    " ",
+                    str(raw_row.get("Product Type Desc.", "")).strip().upper(),
+                )
                 pol = str(raw_row.get("Polarized", "")).strip().upper()
 
                 if "+ CLIP-ON" in prod_type:
@@ -113,23 +117,28 @@ def load_all_catalogs(config):
                         clip_val = "Magnetic sun clip-on p"
 
             elif mfg_name == "luxottica":
-                pass # TO-DO: Luxottica clip on definition
+                pass  # TO-DO: Luxottica clip on definition
 
             elif mfg_name in ["kering", "marcolin"]:
                 acc_type = str(raw_row.get("Accessory type", "")).strip().title()
                 lens_color = str(raw_row.get("Lens Color mkt", "")).strip().lower()
-                sku_desc = str(raw_row.get("SKU Marketing Description", "")).strip().lower()
+                sku_desc = (
+                    str(raw_row.get("SKU Marketing Description", "")).strip().lower()
+                )
                 pol_lens = str(raw_row.get("Polarized Lens", "")).strip().upper()
 
                 combined_text = lens_color + " " + sku_desc
 
                 if acc_type == "Clip-On":
-                    if "magnetic clip-on" in combined_text or "magnetic clip on" in combined_text:
+                    if (
+                        "magnetic clip-on" in combined_text
+                        or "magnetic clip on" in combined_text
+                    ):
                         clip_val = "Magnetic sun clip-on"
                     elif "clip-on" in combined_text or "clip on" in combined_text:
                         if "magnetic" not in combined_text:
                             clip_val = "Sun clip-on"
-                    
+
                     # 🚨 Alert Tripwire Check
                     if clip_val:
                         if "polarized" in combined_text or pol_lens == "X":
@@ -642,83 +651,78 @@ if "unmapped_values" in st.session_state and st.session_state.unmapped_values:
         st.session_state.unmapped_values = set()
         st.rerun()
 
-        # ==========================================
+# ==========================================
 # 🔍 QUICK EAN LOOKUP UTILITY
 # ==========================================
 st.divider()
-st.subheader("🔍 Quick EAN / Barcode Lookup")
-col1, col2 = st.columns([3, 1])
+with st.expander("🔍 Quick EAN / Barcode Lookup", expanded=False):
+    col1, col2 = st.columns([3, 1])
 
-with col1:
-    search_ean = st.text_input(
-        "Enter EAN to search in loaded catalogs:", placeholder="e.g. 8056597123456"
-    )
-with col2:
-    st.write("")  # Spacing to align the button
-    st.write("")
-    search_btn = st.button("Search Database", use_container_width=True)
-
-if search_btn and search_ean:
-    # Clean the input exactly like the engine cleans the source barcodes
-    clean_search = re.sub(r"\.0$", "", str(search_ean).strip()).lstrip("0")
-
-    if clean_search in master_db.index:
-        st.success(f"✅ EAN '{search_ean}' found in the database!")
-        # Fetch the row(s) and display a few key columns so you know exactly what it is
-        found_data = master_db.loc[[clean_search]]
-
-        # We will show Manufacturer, Brand, and whatever else is available
-        display_cols = [
-            c
-            for c in ["Producing_company", "Brand", "Glasses_type", "Glasses_shape"]
-            if c in found_data.columns
-        ]
-        st.dataframe(found_data[display_cols], use_container_width=True)
-    else:
-        st.error(
-            f"❌ EAN '{search_ean}' (Cleaned: {clean_search}) was NOT found in any loaded manufacturer catalog."
+    with col1:
+        search_ean = st.text_input(
+            "Enter EAN to search in loaded catalogs:", placeholder="e.g. 8056597123456"
         )
-# --- 📦 AUTOMATIC PACKAGE DATA LOADER (LOCAL REPO) ---
-st.divider()
-package_df = pd.DataFrame()
-package_file_path = "package_data.xlsx"
+    with col2:
+        st.write("")  # Spacing to align the button
+        st.write("")
+        search_btn = st.button("Search Database", use_container_width=True)
 
-if os.path.exists(package_file_path):
-    try:
-        # Read the file directly from your GitHub repo folder
-        package_df = pd.read_excel(package_file_path)
-        st.success(
-            f"✅ Package Data loaded from repository! ({len(package_df)} items ready)"
-        )
+    if search_btn and search_ean:
+        clean_search = re.sub(r"\.0$", "", str(search_ean).strip()).lstrip("0")
 
-        with st.expander("👀 Preview Package Data"):
-            st.dataframe(package_df.head())
-    except Exception as e:
-        st.error(f"⚠️ Error reading local package_data.xlsx: {e}")
-else:
-    st.info(
-        "ℹ️ Local 'package_data.xlsx' not found in root directory. Weights will not be filled."
-    )
-    # --- 📜 AUTOMATIC HISTORICAL DATA LOADER (MASTER CLEAN) ---
-st.divider()
-master_clean_df = pd.DataFrame()
-master_clean_path = "master_clean.xlsx"
+        if clean_search in master_db.index:
+            st.success(f"✅ EAN '{search_ean}' found in the database!")
+            found_data = master_db.loc[[clean_search]]
 
-if os.path.exists(master_clean_path):
-    try:
-        # Load the file as strings to prevent barcode math errors
-        temp_clean_df = pd.read_excel(master_clean_path, dtype=str, engine="openpyxl")
-        
-        # Filter ONLY for "Glasses" in the "Items type" column (Column V)
-        if "Items type" in temp_clean_df.columns:
-            master_clean_df = temp_clean_df[temp_clean_df["Items type"].astype(str).str.strip().str.lower() == "glasses"]
-            st.success(f"✅ Historical Data loaded! ({len(master_clean_df)} valid glasses found in master_clean.xlsx)")
+            display_cols = [
+                c
+                for c in ["Producing_company", "Brand", "Glasses_type", "Glasses_shape"]
+                if c in found_data.columns
+            ]
+            st.dataframe(found_data[display_cols], use_container_width=True)
         else:
-            st.warning("⚠️ 'Items type' column missing in master_clean.xlsx. Cannot filter glasses.")
+            st.error(
+                f"❌ EAN '{search_ean}' (Cleaned: {clean_search}) was NOT found in any loaded manufacturer catalog."
+            )
+# --- 📦 COMPACT BACKGROUND DATA LOADERS ---
+st.divider()
+
+# 1. Load Package Data Silently
+package_df = pd.DataFrame()
+pkg_status = "ℹ️ `package_data.xlsx` not found locally."
+if os.path.exists("package_data.xlsx"):
+    try:
+        package_df = pd.read_excel("package_data.xlsx")
+        pkg_status = f"✅ **Package Data:** Loaded ({len(package_df)} items)"
     except Exception as e:
-        st.error(f"⚠️ Error reading master_clean.xlsx: {e}")
-else:
-    st.info("ℹ️ Local 'master_clean.xlsx' not found. 'Glasses contain' prediction will be skipped.")
+        pkg_status = f"⚠️ **Package Data Error:** {e}"
+
+# 2. Load Historical Data Silently
+master_clean_df = pd.DataFrame()
+mc_status = "ℹ️ `master_clean.xlsx` not found locally."
+if os.path.exists("master_clean.xlsx"):
+    try:
+        temp_clean_df = pd.read_excel("master_clean.xlsx", dtype=str, engine="openpyxl")
+        if "Items type" in temp_clean_df.columns:
+            master_clean_df = temp_clean_df[
+                temp_clean_df["Items type"].astype(str).str.strip().str.lower()
+                == "glasses"
+            ]
+            mc_status = (
+                f"✅ **Historical Data:** Loaded ({len(master_clean_df)} glasses)"
+            )
+        else:
+            mc_status = "⚠️ **Historical Data:** Missing 'Items type' column"
+    except Exception as e:
+        mc_status = f"⚠️ **Historical Data Error:** {e}"
+
+# 3. Display Compactly Side-by-Side!
+st.markdown("### 📂 Background Data Status")
+col_a, col_b = st.columns(2)
+with col_a:
+    st.markdown(pkg_status)
+with col_b:
+    st.markdown(mc_status)
 
 st.divider()
 st.subheader("📥 Step 1: Upload Your File to Fill")
@@ -778,7 +782,7 @@ if uploaded_file:
             "Case width (mm)",
             "Case weight (g)",
             "Case weight (g)",
-            "Glasses contain ID: 84"
+            "Glasses contain ID: 84",
         }
 
         # Combine them into one master list of "Finished" columns
@@ -831,7 +835,7 @@ if uploaded_file:
 
             # --- 📦 PREP PACKAGE DATA MAJORITY CACHE ---
             brand_majority_cache = {}
-            brand_contain_cache = {} # Cache for Glasses Contain predictions
+            brand_contain_cache = {}  # Cache for Glasses Contain predictions
 
             # Ensure the target case columns exist in the output file
             case_cols = [
@@ -1035,71 +1039,103 @@ if uploaded_file:
                             target_df.at[index, "Case weight (g)"] = cached_data[
                                 "Case weight (g)"
                             ]
-                   # --- 🎁 GLASSES CONTAIN MAJORITY ENGINE (WITH RAW CLIP-ONS) ---
+                    # --- 🎁 GLASSES CONTAIN MAJORITY ENGINE (WITH RAW CLIP-ONS) ---
                     if not master_clean_df.empty and raw_brand and raw_brand != "nan":
-                        
+
                         if raw_brand not in brand_contain_cache:
-                            if "Brand" in master_clean_df.columns and "Glasses contain" in master_clean_df.columns:
-                                brand_mask = master_clean_df['Brand'].astype(str).str.strip().str.lower() == raw_brand
+                            if (
+                                "Brand" in master_clean_df.columns
+                                and "Glasses contain" in master_clean_df.columns
+                            ):
+                                brand_mask = (
+                                    master_clean_df["Brand"]
+                                    .astype(str)
+                                    .str.strip()
+                                    .str.lower()
+                                    == raw_brand
+                                )
                                 brand_matches = master_clean_df[brand_mask]
-                                
+
                                 if not brand_matches.empty:
-                                    modes = brand_matches["Glasses contain"].dropna().mode()
+                                    modes = (
+                                        brand_matches["Glasses contain"].dropna().mode()
+                                    )
                                     if not modes.empty:
                                         raw_contain = str(modes.iloc[0]).strip()
-                                        parts = [p.strip() for p in raw_contain.split(',') if p.strip() and p.strip().lower() != 'nan']
-                                        
+                                        parts = [
+                                            p.strip()
+                                            for p in raw_contain.split(",")
+                                            if p.strip() and p.strip().lower() != "nan"
+                                        ]
+
                                         # 🧹 FILTER: Only allow the essentials from historical data
-                                        allowed_historical = {"original glasses case", "cleaning cloth"}
-                                        filtered_parts = [p for p in parts if p.lower() in allowed_historical]
-                                        
-                                        brand_contain_cache[raw_brand] = "|".join(filtered_parts)
+                                        allowed_historical = {
+                                            "original glasses case",
+                                            "cleaning cloth",
+                                        }
+                                        filtered_parts = [
+                                            p
+                                            for p in parts
+                                            if p.lower() in allowed_historical
+                                        ]
+
+                                        brand_contain_cache[raw_brand] = "|".join(
+                                            filtered_parts
+                                        )
                                     else:
                                         brand_contain_cache[raw_brand] = ""
                                 else:
                                     brand_contain_cache[raw_brand] = ""
                             else:
                                 brand_contain_cache[raw_brand] = ""
-                                
+
                         cached_contain = brand_contain_cache.get(raw_brand, "")
-                        
+
                         # 🧲 Add the exact Clip-On we extracted from the raw catalog!
-                        clip_on_val = str(master_row.get("Extracted_Clip_on", "")).strip()
+                        clip_on_val = str(
+                            master_row.get("Extracted_Clip_on", "")
+                        ).strip()
                         needs_alert = master_row.get("Clip_on_Alert", False)
-                        
-                        if needs_alert: 
-                            found_polarized_clip_on = True # Trip the wire!
-                            
+
+                        if needs_alert:
+                            found_polarized_clip_on = True  # Trip the wire!
+
                         # Merge the historical basics with the new clip-on data
                         final_contain = []
                         if cached_contain:
                             final_contain.extend(cached_contain.split("|"))
                         if clip_on_val and clip_on_val.lower() not in ["nan", ""]:
                             final_contain.append(clip_on_val)
-                            
+
                         if final_contain:
                             # 1. Remove duplicates securely (ignoring uppercase/lowercase differences)
-                            unique_contain_dict = {item.strip().lower(): item.strip() for item in final_contain if item.strip()}
-                            
+                            unique_contain_dict = {
+                                item.strip().lower(): item.strip()
+                                for item in final_contain
+                                if item.strip()
+                            }
+
                             # 2. Build the exact ordered list
                             ordered_items = []
-                            
+
                             # Priority 1: Original glasses case
                             if "original glasses case" in unique_contain_dict:
                                 ordered_items.append("Original glasses case")
                                 del unique_contain_dict["original glasses case"]
-                                
+
                             # Priority 2: Cleaning cloth
                             if "cleaning cloth" in unique_contain_dict:
                                 ordered_items.append("Cleaning cloth")
                                 del unique_contain_dict["cleaning cloth"]
-                                
+
                             # Priority 3: Whatever else is left (Clip-ons, etc.), sorted neatly
                             remaining_items = sorted(list(unique_contain_dict.values()))
                             ordered_items.extend(remaining_items)
-                            
+
                             # 4. Pour the perfectly ordered list!
-                            target_df.at[index, "Glasses contain ID: 84"] = "|".join(ordered_items)
+                            target_df.at[index, "Glasses contain ID: 84"] = "|".join(
+                                ordered_items
+                            )
 
                     # 2. Polarized / Sunglasses Logic
                     lens_effect = str(master_row.get("Glasses_lens_effect", "")).strip()
@@ -1245,7 +1281,9 @@ if uploaded_file:
                     "⚠️ **Heads Up:** We found 'Sport glasses' in this batch and labeled them as 'Ski goggles' in the Meta Description. Please double-check the final file to ensure they aren't cycling or swimming glasses!"
                 )
             if found_polarized_clip_on:
-                st.warning("⚠️ **Polarized Clip-On Alert:** We found a Marcolin/Kering clip-on that is marked as polarized, but it was assigned standard 'Sun clip-on' or 'Magnetic sun clip-on'. Please verify if it needs the ' p' suffix manually!")    
+                st.warning(
+                    "⚠️ **Polarized Clip-On Alert:** We found a Marcolin/Kering clip-on that is marked as polarized, but it was assigned standard 'Sun clip-on' or 'Magnetic sun clip-on'. Please verify if it needs the ' p' suffix manually!"
+                )
 
             st.write("### Preview of Filled Data:")
             st.dataframe(target_df.head(20), use_container_width=True)
