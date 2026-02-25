@@ -82,14 +82,14 @@ def load_all_catalogs(config):
                     new_df[global_name] = col_data
                 else:
 
-                    def merge_row(row):
+                   def merge_row(row):
                         vals = [
                             str(row[c]).strip()
                             for c in existing_cols
                             if pd.notna(row[c])
                             and str(row[c]).strip().lower() not in ("nan", "")
                         ]
-                        return ", ".join(vals) if vals else ""
+                        return ", ".join(vals) if vals else ""  # <--- Change this line!
 
                     new_df[global_name] = df.apply(merge_row, axis=1)
 
@@ -247,7 +247,7 @@ def load_all_catalogs(config):
                                     f"{mfg.title()} -> {col_name}: '{p}'"
                                 )
 
-                return ", ".join(sorted(list(final_values)))
+                return "|".join(sorted(list(final_values)))
 
             # --- 🕶️ RX LENSES ENGINE ---
             elif col_name == "SunGlasses_RX_lenses":
@@ -262,7 +262,7 @@ def load_all_catalogs(config):
                 elif mfg == "luxottica":
                     pass
 
-                return ", ".join(sorted(list(final_values)))
+                return "|".join(sorted(list(final_values)))
 
             # --- 👓 GLASSES SHAPE ENGINE ---
             elif col_name == "Glasses_shape" and mfg in ["kering", "marcolin"]:
@@ -293,7 +293,7 @@ def load_all_catalogs(config):
                     else:
                         final_values.add(first_shape)
 
-                return ", ".join(sorted(list(final_values)))
+                return "|".join(sorted(list(final_values)))
 
             # --- ☀️ SUNGLASSES FILTER ENGINE (Safilo Only) ---
             elif col_name == "Sunglasses_filter" and mfg == "safilo":
@@ -346,7 +346,7 @@ def load_all_catalogs(config):
                         else:
                             final_values.add(raw_val)
 
-                return ", ".join(sorted(list(final_values)))
+                return "|".join(sorted(list(final_values)))
 
             # --- 2. KEYWORD SUBSTRING MATCHER (Luxottica Lens Color) ---
             elif col_name == "Glasses_lens_Colour" and mfg == "luxottica":
@@ -363,7 +363,7 @@ def load_all_catalogs(config):
                         st.session_state.unmapped_values.add(
                             f"{mfg.title()} -> {col_name} (Keyword Search): '{raw_val}'"
                         )
-                return ", ".join(sorted(list(final_values)))
+                return "|".join(sorted(list(final_values)))
 
             # --- 3. STRICT DICTIONARY TRANSLATOR (Everything else) ---
             elif raw_val and raw_val.lower() != "nan":
@@ -386,7 +386,7 @@ def load_all_catalogs(config):
                 else:
                     final_values.add(raw_val)
 
-            return ", ".join(sorted(list(final_values)))
+            return "|".join(sorted(list(final_values)))
 
         # Apply the Engine
         for target_col in new_df.columns:
