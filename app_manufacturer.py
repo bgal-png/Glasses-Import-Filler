@@ -93,6 +93,55 @@ def load_all_catalogs(config):
 
                     new_df[global_name] = df.apply(merge_row, axis=1)
 
+                    # --- 🧲 RAW CLIP-ON ENGINE ---
+        extracted_clip_ons = []
+        clip_on_alerts = []
+
+        for idx, raw_row in df.iterrows():
+            clip_val = ""
+            alert = False
+
+            if mfg_name == "safilo":
+                # Normalize spaces just in case it's "+ CLIP-ON" or "+  CLIP-ON"
+                prod_type = re.sub(r'\s+', ' ', str(raw_row.get("Product Type Desc.", "")).strip().upper())
+                pol = str(raw_row.get("Polarized", "")).strip().upper()
+
+                if "+ CLIP-ON" in prod_type:
+                    if pol == "0":
+                        clip_val = "Magnetic sun clip-on"
+                    elif pol == "X":
+                        clip_val = "Magnetic sun clip-on p"
+
+            elif mfg_name == "luxottica":
+                pass # TO-DO: Luxottica clip on definition
+
+            elif mfg_name in ["kering", "marcolin"]:
+                acc_type = str(raw_row.get("Accessory type", "")).strip().title()
+                lens_color = str(raw_row.get("Lens Color mkt", "")).strip().lower()
+                sku_desc = str(raw_row.get("SKU Marketing Description", "")).strip().lower()
+                pol_lens = str(raw_row.get("Polarized Lens", "")).strip().upper()
+
+                combined_text = lens_color + " " + sku_desc
+
+                if acc_type == "Clip-On":
+                    if "magnetic clip-on" in combined_text or "magnetic clip on" in combined_text:
+                        clip_val = "Magnetic sun clip-on"
+                    elif "clip-on" in combined_text or "clip on" in combined_text:
+                        if "magnetic" not in combined_text:
+                            clip_val = "Sun clip-on"
+                    
+                    # 🚨 Alert Tripwire Check
+                    if clip_val:
+                        if "polarized" in combined_text or pol_lens == "X":
+                            alert = True
+
+            extracted_clip_ons.append(clip_val)
+            clip_on_alerts.append(alert)
+
+        # Attach these safely to the Master Database for later use!
+        new_df["Extracted_Clip_on"] = extracted_clip_ons
+        new_df["Clip_on_Alert"] = clip_on_alerts
+
         # ==========================================
         # 🧠 CUSTOM RULES ENGINE & STRICT TRANSLATOR
         # ==========================================
@@ -778,6 +827,7 @@ if uploaded_file:
 
             match_count = 0
             found_sport_glasses = False  # 🚨 Our new tripwire!
+            found_polarized_clip_on = False  # 🚨 New Marcolin/Kering Tripwire!
 
             # --- 📦 PREP PACKAGE DATA MAJORITY CACHE ---
             brand_majority_cache = {}
@@ -985,29 +1035,25 @@ if uploaded_file:
                             target_df.at[index, "Case weight (g)"] = cached_data[
                                 "Case weight (g)"
                             ]
-                            # --- 🎁 GLASSES CONTAIN MAJORITY ENGINE ---
+                   # --- 🎁 GLASSES CONTAIN MAJORITY ENGINE (WITH RAW CLIP-ONS) ---
                     if not master_clean_df.empty and raw_brand and raw_brand != "nan":
                         
-                        # Check if we already calculated the majority for this brand
                         if raw_brand not in brand_contain_cache:
                             if "Brand" in master_clean_df.columns and "Glasses contain" in master_clean_df.columns:
-                                
-                                # Exact match for the brand name
                                 brand_mask = master_clean_df['Brand'].astype(str).str.strip().str.lower() == raw_brand
                                 brand_matches = master_clean_df[brand_mask]
                                 
                                 if not brand_matches.empty:
-                                    # Find the most frequent package contents
                                     modes = brand_matches["Glasses contain"].dropna().mode()
-                                    
                                     if not modes.empty:
                                         raw_contain = str(modes.iloc[0]).strip()
-                                        
-                                        # 🧹 THE CLEANER: Splits by comma, ignores empty ones (,,,), joins with |
                                         parts = [p.strip() for p in raw_contain.split(',') if p.strip() and p.strip().lower() != 'nan']
-                                        clean_contain = "|".join(parts)
                                         
-                                        brand_contain_cache[raw_brand] = clean_contain
+                                        # 🧹 FILTER: Only allow the essentials from historical data
+                                        allowed_historical = {"original glasses case", "cleaning cloth"}
+                                        filtered_parts = [p for p in parts if p.lower() in allowed_historical]
+                                        
+                                        brand_contain_cache[raw_brand] = "|".join(filtered_parts)
                                     else:
                                         brand_contain_cache[raw_brand] = ""
                                 else:
@@ -1015,10 +1061,25 @@ if uploaded_file:
                             else:
                                 brand_contain_cache[raw_brand] = ""
                                 
-                        # Pour the cached, beautifully formatted string into the Target DF!
-                        cached_contain = brand_contain_cache.get(raw_brand)
+                        cached_contain = brand_contain_cache.get(raw_brand, "")
+                        
+                        # 🧲 Add the exact Clip-On we extracted from the raw catalog!
+                        clip_on_val = str(master_row.get("Extracted_Clip_on", "")).strip()
+                        needs_alert = master_row.get("Clip_on_Alert", False)
+                        
+                        if needs_alert: 
+                            found_polarized_clip_on = True # Trip the wire!
+                            
+                        # Merge the historical basics with the new clip-on data
+                        final_contain = []
                         if cached_contain:
-                            target_df.at[index, "Glasses contain ID: 84"] = cached_contain
+                            final_contain.extend(cached_contain.split("|"))
+                        if clip_on_val and clip_on_val.lower() not in ["nan", ""]:
+                            final_contain.append(clip_on_val)
+                            
+                        if final_contain:
+                            # Use set() to remove any accidental duplicates, then sort alphabetically
+                            target_df.at[index, "Glasses contain ID: 84"] = "|".join(sorted(list(set(final_contain))))
 
                     # 2. Polarized / Sunglasses Logic
                     lens_effect = str(master_row.get("Glasses_lens_effect", "")).strip()
@@ -1163,6 +1224,8 @@ if uploaded_file:
                 st.warning(
                     "⚠️ **Heads Up:** We found 'Sport glasses' in this batch and labeled them as 'Ski goggles' in the Meta Description. Please double-check the final file to ensure they aren't cycling or swimming glasses!"
                 )
+            if found_polarized_clip_on:
+                st.warning("⚠️ **Polarized Clip-On Alert:** We found a Marcolin/Kering clip-on that is marked as polarized, but it was assigned standard 'Sun clip-on' or 'Magnetic sun clip-on'. Please verify if it needs the ' p' suffix manually!")    
 
             st.write("### Preview of Filled Data:")
             st.dataframe(target_df.head(20), use_container_width=True)
