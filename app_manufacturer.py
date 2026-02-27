@@ -38,7 +38,10 @@ def load_cloud_data():
     historical_df = pd.DataFrame()
     
     try:
-        engine = create_engine(DB_URL)
+        # 🔥 THE BULLETPROOF ENGINE 🔥
+        # pool_pre_ping=True checks if the database is awake before pulling data!
+        engine = create_engine(DB_URL, pool_pre_ping=True, pool_recycle=300)
+        
         
         # 1. Fetch Master Catalog
         master_db = pd.read_sql_table('master_catalog', con=engine)
