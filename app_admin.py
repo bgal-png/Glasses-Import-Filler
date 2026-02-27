@@ -25,6 +25,11 @@ DB_URL = st.secrets["DB_URL"]
 def get_engine():
     return create_engine(DB_URL)
 
+@st.cache_resource
+def get_engine():
+    # pool_pre_ping checks if the connection is alive before sending data!
+    return create_engine(DB_URL, pool_pre_ping=True, pool_recycle=300)
+
 engine = get_engine()
 
 # ==========================================
