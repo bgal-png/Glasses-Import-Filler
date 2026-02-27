@@ -21,9 +21,6 @@ APP_VERSION = "v.260223"
 st.title(f"🏭 Manufacturer Data Filler")
 st.caption(f"🚀 Running Code Version: **{APP_VERSION}**")
 
-
-
-
 # ==========================================
 # 🚀 APP EXECUTION & UI
 # ==========================================
