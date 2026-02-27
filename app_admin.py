@@ -19,7 +19,7 @@ st.title("⚙️ Cloud Database Admin Panel")
 st.caption("Upload individual files here to process and merge them into the Supabase Vault.")
 
 # ⚠️ Using port 6543 for the safe transaction pooler!
-DB_URL = "postgresql://postgres.pffajpiosudvcnlatoeh:[YOUR-PASSWORD]@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require"
+DB_URL = "postgresql://postgres.pffajpiosudvcnlatoeh:Md6rl6P0hZtUeAxY@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require"
 
 @st.cache_resource
 def get_engine():
