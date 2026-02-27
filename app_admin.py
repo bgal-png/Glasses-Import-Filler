@@ -330,7 +330,7 @@ def load_single_catalog(mfg_name, config_settings, file_path):
     return pd.DataFrame()
 
 # ==========================================
-# 🔄 UPSERT ENGINE
+# 🔄 UPSERT ENGINE (WITH DETAILED TRACKING)
 # ==========================================
 def perform_upsert(new_data_df):
     """Takes freshly processed data and intelligently merges it with the Cloud Vault."""
@@ -341,15 +341,22 @@ def perform_upsert(new_data_df):
         existing_df = pd.read_sql_table('master_catalog', con=engine)
         existing_df.set_index("join_key", inplace=True)
         
-        # A. Update existing rows with fresh data (if specs changed)
+        # 📊 TRACKING: Calculate exactly what overlaps and what is new
+        common_indices = new_data_df.index.intersection(existing_df.index)
+        updated_count = len(common_indices)
+        
+        # A. Update existing rows with fresh data
         existing_df.update(new_data_df)
         
         # B. Find brand new rows that don't exist in the database yet
         new_rows = new_data_df[~new_data_df.index.isin(existing_df.index)]
+        added_count = len(new_rows)
         
         # C. Stitch together
         final_df = pd.concat([existing_df, new_rows])
-        upsert_msg = f"✅ Updated existing rows. ✨ Added {len(new_rows)} completely new products!"
+        
+        upsert_msg = f"🔄 Refreshed {updated_count} existing products. ✨ Added {added_count} completely new products!"
+        
     except Exception as e:
         final_df = new_data_df
         upsert_msg = f"✨ Created database from scratch with {len(new_data_df)} products!"
