@@ -376,16 +376,21 @@ with col1:
     if uploaded_mfg and st.button(f"🚀 Process & Upsert {mfg_choice.title()} Catalog", type="primary"):
         with st.spinner(f"Processing raw {mfg_choice.title()} file through the Rules Engine..."):
             
-            # Save uploaded file temporarily to disk so our engine can read it properly
             temp_path = f"temp_{uploaded_mfg.name}"
-            with open(temp_path, "wb") as f:
-                f.write(uploaded_mfg.getbuffer())
-                
-            config_settings = MANUFACTURER_CONFIG[mfg_choice]
-            processed_df = load_single_catalog(mfg_choice, config_settings, temp_path)
+            processed_df = pd.DataFrame()
             
-            # Clean up temp file
-            os.remove(temp_path)
+            try:
+                # Save uploaded file temporarily to disk securely
+                with open(temp_path, "wb") as f:
+                    f.write(uploaded_mfg.getbuffer())
+                    
+                config_settings = MANUFACTURER_CONFIG[mfg_choice]
+                processed_df = load_single_catalog(mfg_choice, config_settings, temp_path)
+                
+            finally:
+                # 🧹 SAFELY clean up the temp file (prevents FileNotFoundError crashes)
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
             
             if not processed_df.empty:
                 st.success(f"🧹 Cleaned successfully! Extracted {len(processed_df)} raw rows. Pushing to Cloud...")
