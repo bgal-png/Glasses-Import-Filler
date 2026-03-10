@@ -1914,7 +1914,7 @@ VALUE_TRANSLATOR = {
         "SOLID TINT": "NOT MAPPED",
         "ANTIREFLEX": "",
         "0": "NOT MAPPED",
-        "GRADIENT + MIRROR": "Gradient!Mirror",
+        "GRADIENT + MIRROR": "Gradient|Mirror",
         "MIRROR": "Mirror",
         "DOUBLE GRADIENT": "Gradient",
         "FLASH MIRROR": "Mirror",
