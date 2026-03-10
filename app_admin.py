@@ -180,7 +180,8 @@ def load_single_catalog(mfg_name, config_settings, file_path):
             raw_rx = str(row.get(col_name, "")).strip().upper()
             if mfg in ["safilo", "kering", "marcolin"]:
                 if raw_rx == "X": final_values.add("Yes")
-            elif mfg == "luxottica": pass
+            elif mfg == "luxottica":
+                if raw_rx == "YES": final_values.add("Yes")
             return "|".join(sorted(list(final_values)))
 
         elif col_name == "Glasses_shape" and mfg in ["kering", "marcolin"]:

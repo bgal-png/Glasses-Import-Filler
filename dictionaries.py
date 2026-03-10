@@ -125,6 +125,7 @@ MANUFACTURER_CONFIG = {
             "Glasses_color_code": "Kód barvy",
             "Brand": "Název značky",
             "Producing_company": "",
+            "SunGlasses_RX_lenses": "Standartní",
         },
     },
     "kering": {
