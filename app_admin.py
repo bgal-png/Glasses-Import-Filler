@@ -253,23 +253,31 @@ def load_single_catalog(mfg_name, config_settings, file_path):
         if target_col in VALUE_TRANSLATOR or target_col in ["Glasses_other_info", "Glasses_lens_effect", "SunGlasses_RX_lenses", "Glasses_type", "Glasses_shape", "Sunglasses_filter"]:
             new_df[target_col] = new_df.apply(lambda row: process_cell_strict(row, target_col, mfg_name), axis=1)
 
-    def assemble_name_and_parts(row, mfg):
-        brand_raw = str(row.get("Brand", "")).strip().title()
-        mfg_raw = str(row.get("Manufacturer", "")).strip().title()
-        
-        is_kids = False
-        if "Kids" in brand_raw or "Kids" in mfg_raw:
-            is_kids = True
-            
-        # Clean "Kids" out of the Brand and Manufacturer strings
-        brand = re.sub(r'(?i)\bkids\b', '', brand_raw).strip()
-        brand = re.sub(r'\s+', ' ', brand) # clean double spaces
-        if brand.lower() == "nan": brand = ""
-        
-        mfg_clean = re.sub(r'(?i)\bkids\b', '', mfg_raw).strip()
-        mfg_clean = re.sub(r'\s+', ' ', mfg_clean)
-        if mfg_clean.lower() == "nan": mfg_clean = ""
+    # ==========================================
+    # 🧼 PRE-CLEAN: EXTRACT "KIDS" FROM BRAND/MFG
+    # ==========================================
+    if "Brand" not in new_df.columns: new_df["Brand"] = ""
+    if "Manufacturer" not in new_df.columns: new_df["Manufacturer"] = ""
 
+    # Flag the row if "Kids" is anywhere in the brand or manufacturer
+    new_df["Is_Kids"] = new_df["Brand"].astype(str).str.contains(r"(?i)\bkids\b", regex=True, na=False) | \
+                        new_df["Manufacturer"].astype(str).str.contains(r"(?i)\bkids\b", regex=True, na=False)
+
+    # Scrub "Kids" completely out of those columns and fix the spacing
+    new_df["Brand"] = new_df["Brand"].astype(str).str.replace(r"(?i)\bkids\b", "", regex=True).str.replace(r"\s+", " ", regex=True).str.strip()
+    new_df["Brand"] = new_df["Brand"].apply(lambda x: str(x).title() if x and x.lower() != "nan" else "")
+
+    new_df["Manufacturer"] = new_df["Manufacturer"].astype(str).str.replace(r"(?i)\bkids\b", "", regex=True).str.replace(r"\s+", " ", regex=True).str.strip()
+    new_df["Manufacturer"] = new_df["Manufacturer"].apply(lambda x: str(x).title() if x and x.lower() != "nan" else "")
+
+
+    # ==========================================
+    # 🏗️ ASSEMBLE MODEL AND NAMES
+    # ==========================================
+    def assemble_name_and_parts(row, mfg):
+        brand = str(row.get("Brand", "")).strip()
+        is_kids = row.get("Is_Kids", False)
+        
         model_out, color_out = "", ""
 
         if mfg == "safilo":
@@ -318,7 +326,16 @@ def load_single_catalog(mfg_name, config_settings, file_path):
             parts = [brand, model_out] if model_out else [brand]
 
         final_name = " ".join([p for p in parts if p])
-        return final_name, model_out, color_out, brand, mfg_clean
+        return final_name, model_out, color_out
+
+    if not new_df.empty:
+        temp_col = new_df.apply(lambda row: assemble_name_and_parts(row, mfg_name), axis=1)
+        new_df["Assembled_Name"] = temp_col.apply(lambda x: x[0] if isinstance(x, (list, tuple)) else "")
+        new_df["Extracted_Model"] = temp_col.apply(lambda x: x[1] if isinstance(x, (list, tuple)) else "")
+        new_df["Extracted_Color"] = temp_col.apply(lambda x: x[2] if isinstance(x, (list, tuple)) else "")
+        
+    if "Is_Kids" in new_df.columns:
+        new_df.drop(columns=["Is_Kids"], inplace=True)
 
     if not new_df.empty:
         temp_col = new_df.apply(lambda row: assemble_name_and_parts(row, mfg_name), axis=1)
