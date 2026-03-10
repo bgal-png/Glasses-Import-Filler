@@ -254,8 +254,22 @@ def load_single_catalog(mfg_name, config_settings, file_path):
             new_df[target_col] = new_df.apply(lambda row: process_cell_strict(row, target_col, mfg_name), axis=1)
 
     def assemble_name_and_parts(row, mfg):
-        brand = str(row.get("Brand", "")).strip().title()
+        brand_raw = str(row.get("Brand", "")).strip().title()
+        mfg_raw = str(row.get("Manufacturer", "")).strip().title()
+        
+        is_kids = False
+        if "Kids" in brand_raw or "Kids" in mfg_raw:
+            is_kids = True
+            
+        # Clean "Kids" out of the Brand and Manufacturer strings
+        brand = re.sub(r'(?i)\bkids\b', '', brand_raw).strip()
+        brand = re.sub(r'\s+', ' ', brand) # clean double spaces
         if brand.lower() == "nan": brand = ""
+        
+        mfg_clean = re.sub(r'(?i)\bkids\b', '', mfg_raw).strip()
+        mfg_clean = re.sub(r'\s+', ' ', mfg_clean)
+        if mfg_clean.lower() == "nan": mfg_clean = ""
+
         model_out, color_out = "", ""
 
         if mfg == "safilo":
@@ -263,38 +277,60 @@ def load_single_catalog(mfg_name, config_settings, file_path):
             color_out = str(row.get("Glasses_color_code", "")).strip()
             if model_out.lower() == "nan": model_out = ""
             if color_out.lower() == "nan": color_out = ""
+            
+            if is_kids and model_out: model_out = f"Kids {model_out}"
+            elif is_kids: model_out = "Kids"
+            
             parts = [brand, model_out, color_out]
+            
         elif mfg == "luxottica":
             model_out = str(row.get("Glasses_model", "")).strip().lstrip("0")
             color_out = str(row.get("Glasses_color_code", "")).strip()
             if model_out.lower() == "nan": model_out = ""
             if color_out.lower() == "nan": color_out = ""
+            
+            if is_kids and model_out: model_out = f"Kids {model_out}"
+            elif is_kids: model_out = "Kids"
+            
             parts = [brand, model_out, color_out]
+            
         elif mfg in ["kering", "marcolin"]:
             mat_num = str(row.get("Material_Number", "")).strip()
             if mat_num and mat_num.lower() != "nan":
                 first_part = mat_num.split(" ")[0]
                 model_color = first_part.replace("-", " ")
                 mc_parts = model_color.split(" ")
+                
                 model_out = mc_parts[0]
-                if len(mc_parts) > 1: color_out = mc_parts[1]
-                parts = [brand, model_color]
-            else: parts = [brand]
-        else: parts = [brand]
+                if is_kids and model_out: model_out = f"Kids {model_out}"
+                elif is_kids: model_out = "Kids"
+                
+                if len(mc_parts) > 1: 
+                    color_out = mc_parts[1]
+                    parts = [brand, model_out, color_out]
+                else: 
+                    parts = [brand, model_out]
+            else: 
+                if is_kids: model_out = "Kids"
+                parts = [brand, model_out] if model_out else [brand]
+        else: 
+            if is_kids: model_out = "Kids"
+            parts = [brand, model_out] if model_out else [brand]
 
         final_name = " ".join([p for p in parts if p])
-        return final_name, model_out, color_out
+        return final_name, model_out, color_out, brand, mfg_clean
 
     if not new_df.empty:
         temp_col = new_df.apply(lambda row: assemble_name_and_parts(row, mfg_name), axis=1)
         new_df["Assembled_Name"] = temp_col.apply(lambda x: x[0] if isinstance(x, (list, tuple)) else "")
         new_df["Extracted_Model"] = temp_col.apply(lambda x: x[1] if isinstance(x, (list, tuple)) else "")
         new_df["Extracted_Color"] = temp_col.apply(lambda x: x[2] if isinstance(x, (list, tuple)) else "")
-
-    if "Manufacturer" in new_df.columns:
-        new_df["Manufacturer"] = new_df["Manufacturer"].apply(lambda x: str(x).strip().title() if pd.notna(x) and str(x).strip().lower() not in ["nan", ""] else "")
-    if "Brand" in new_df.columns:
-        new_df["Brand"] = new_df["Brand"].apply(lambda x: str(x).strip().title() if pd.notna(x) and str(x).strip().lower() not in ["nan", ""] else "")
+        
+        # Override the original columns with the freshly cleaned Brand/Manufacturer
+        if "Brand" in new_df.columns:
+            new_df["Brand"] = temp_col.apply(lambda x: str(x[3]).strip().title() if pd.notna(x[3]) and str(x[3]).strip().lower() not in ["nan", ""] else "")
+        if "Manufacturer" in new_df.columns:
+            new_df["Manufacturer"] = temp_col.apply(lambda x: str(x[4]).strip().title() if pd.notna(x[4]) and str(x[4]).strip().lower() not in ["nan", ""] else "")
 
     for dim_col in ["Glasses_size_temple_length", "Glasses_size_lens_height", "Glasses_size_lens_width", "Glasses_size_bridge"]:
         if dim_col in new_df.columns:
