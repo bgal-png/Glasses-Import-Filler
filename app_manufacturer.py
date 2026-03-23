@@ -393,6 +393,25 @@ if uploaded_file:
                     if other_features:
                         target_df.at[index, "Glasses other features ID:99"] = "|".join(sorted(list(other_features)))
 
+                    # --- 🚫 LENSES NO-ORDERS ENGINE ---
+                    no_orders = set()
+                    frame_type = str(target_df.at[index, "Glasses frame type ID: 50"]).strip() if "Glasses frame type ID: 50" in target_df.columns else ""
+                    other_feat = str(target_df.at[index, "Glasses other features ID:99"]).strip().lower() if "Glasses other features ID:99" in target_df.columns else ""
+
+                    if frame_type == "Half Rim":
+                        no_orders.add("CoatingPolarized")
+                        no_orders.add("Glasses index 1.5")
+                    elif frame_type == "Rimless":
+                        no_orders.add("CoatingPolarized")
+                        no_orders.add("Glasses index 1.5")
+                        no_orders.add("Glasses index 1.74")
+
+                    if "clip" in other_feat:
+                        no_orders.add("Glasses index 1.5")
+
+                    if no_orders and "Glasses lenses no-orders ID:103" in target_df.columns:
+                        target_df.at[index, "Glasses lenses no-orders ID:103"] = "|".join(sorted(no_orders))
+
             st.success(f"✅ Match Complete! Successfully filled {match_count} out of {len(target_df)} products.")
 
             if found_sport_glasses:
