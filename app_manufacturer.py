@@ -395,13 +395,13 @@ if uploaded_file:
 
                     # --- 🚫 LENSES NO-ORDERS ENGINE ---
                     no_orders = set()
-                    frame_type = str(target_df.at[index, "Glasses frame type ID: 50"]).strip() if "Glasses frame type ID: 50" in target_df.columns else ""
+                    frame_type = str(target_df.at[index, "Glasses frame type ID: 50"]).strip().lower() if "Glasses frame type ID: 50" in target_df.columns else ""
                     other_feat = str(target_df.at[index, "Glasses other features ID:99"]).strip().lower() if "Glasses other features ID:99" in target_df.columns else ""
 
-                    if frame_type == "Half Rim":
+                    if frame_type == "half rim":
                         no_orders.add("CoatingPolarized")
                         no_orders.add("Glasses index 1.5")
-                    elif frame_type == "Rimless":
+                    elif frame_type == "rimless":
                         no_orders.add("CoatingPolarized")
                         no_orders.add("Glasses index 1.5")
                         no_orders.add("Glasses index 1.74")
