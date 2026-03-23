@@ -360,18 +360,6 @@ def load_single_catalog(mfg_name, config_settings, file_path):
     if "Is_Kids" in new_df.columns:
         new_df.drop(columns=["Is_Kids"], inplace=True)
 
-    if not new_df.empty:
-        temp_col = new_df.apply(lambda row: assemble_name_and_parts(row, mfg_name), axis=1)
-        new_df["Assembled_Name"] = temp_col.apply(lambda x: x[0] if isinstance(x, (list, tuple)) else "")
-        new_df["Extracted_Model"] = temp_col.apply(lambda x: x[1] if isinstance(x, (list, tuple)) else "")
-        new_df["Extracted_Color"] = temp_col.apply(lambda x: x[2] if isinstance(x, (list, tuple)) else "")
-        
-        # Override the original columns with the freshly cleaned Brand/Manufacturer
-        if "Brand" in new_df.columns:
-            new_df["Brand"] = temp_col.apply(lambda x: str(x[3]).strip().title() if pd.notna(x[3]) and str(x[3]).strip().lower() not in ["nan", ""] else "")
-        if "Manufacturer" in new_df.columns:
-            new_df["Manufacturer"] = temp_col.apply(lambda x: str(x[4]).strip().title() if pd.notna(x[4]) and str(x[4]).strip().lower() not in ["nan", ""] else "")
-
     for dim_col in ["Glasses_size_temple_length", "Glasses_size_lens_height", "Glasses_size_lens_width", "Glasses_size_bridge"]:
         if dim_col in new_df.columns:
             def round_dimension(val):
