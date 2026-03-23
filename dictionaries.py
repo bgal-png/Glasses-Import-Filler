@@ -248,6 +248,14 @@ MANUFACTURER_CONFIG = {
     },
 }
 
+# ==========================================
+# 🏷️ KNOWN BRANDS WHITELIST (auto-built from MANUFACTURER_CONFIG)
+# ==========================================
+KNOWN_BRANDS = set()
+for _cfg in MANUFACTURER_CONFIG.values():
+    for _b in _cfg["brands"]:
+        KNOWN_BRANDS.add(_b)
+
 # --- 👤 FACE SHAPE RECOMMENDATION DICTIONARY ---
 FACE_SHAPE_MAP = {
     "Extravagant": "Round face|Oval face|Heart-shaped face|Square face",

@@ -9,6 +9,7 @@ from dictionaries import (
     FACE_SHAPE_MAP,
     BRAND_USABLE_MAP,
     PREMIUM_KERING_BRANDS,
+    KNOWN_BRANDS,
 )
 
 # ==========================================
@@ -270,6 +271,28 @@ def load_single_catalog(mfg_name, config_settings, file_path):
     new_df["Manufacturer"] = new_df["Manufacturer"].astype(str).str.replace(r"(?i)\bkids\b", "", regex=True).str.replace(r"\s+", " ", regex=True).str.strip()
     new_df["Manufacturer"] = new_df["Manufacturer"].apply(lambda x: str(x).title() if x and x.lower() != "nan" else "")
 
+    # ==========================================
+    # 🏷️ WHITELIST BRAND CLEANING
+    # ==========================================
+    # Match raw brand to closest known brand from MANUFACTURER_CONFIG.
+    # Handles cases like "Polaroid Kids" → "Polaroid", "Ray-Ban Vista" → "Ray-Ban"
+    # by checking if the raw value starts with a known brand name.
+    _brand_lookup = sorted(KNOWN_BRANDS, key=len, reverse=True)  # longest first
+
+    def _clean_brand_to_whitelist(raw):
+        raw = str(raw).strip()
+        if not raw or raw.lower() == "nan":
+            return raw
+        raw_lower = raw.lower()
+        for known in _brand_lookup:
+            if raw_lower == known.lower():
+                return known  # exact match
+            if raw_lower.startswith(known.lower() + " "):
+                return known  # e.g. "Polaroid Kids" → "Polaroid"
+        return raw  # no match — keep original
+
+    new_df["Brand"] = new_df["Brand"].apply(_clean_brand_to_whitelist)
+    new_df["Manufacturer"] = new_df["Manufacturer"].apply(_clean_brand_to_whitelist)
 
     # ==========================================
     # 🏗️ ASSEMBLE MODEL AND NAMES
