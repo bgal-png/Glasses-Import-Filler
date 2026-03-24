@@ -498,8 +498,15 @@ if uploaded_file:
             if image_dict and has_api_key:
                 shape_col = "Glasses shape ID: 25"
                 face_col = "Glasses for your face shape ID:94"
+                source_col = "Shape source"
                 if shape_col not in target_df.columns: target_df[shape_col] = ""
                 if face_col not in target_df.columns: target_df[face_col] = ""
+                target_df[source_col] = ""
+
+                # Mark existing shapes from database
+                for idx, row in target_df.iterrows():
+                    if str(row.get(shape_col, "")).strip() not in ["", "nan"]:
+                        target_df.at[idx, source_col] = "Database"
 
                 name_col = "Glasses name"
                 if name_col not in target_df.columns:
@@ -518,6 +525,7 @@ if uploaded_file:
                         shape_result = classify_shape(image_dict[glasses_name], ANTHROPIC_API_KEY)
                         if shape_result:
                             target_df.at[idx, shape_col] = shape_result
+                            target_df.at[idx, source_col] = "AI"
                             shape_count += 1
 
                             # Update face shape recommendation
