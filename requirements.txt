@@ -4,3 +4,4 @@ openpyxl
 xlsxwriter
 SQLAlchemy
 psycopg2-binary
+anthropic
