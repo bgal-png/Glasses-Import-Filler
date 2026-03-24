@@ -467,8 +467,10 @@ with st.expander("🔍 Quick Barcode Lookup", expanded=False):
                 match = result_df[result_df['join_key'] == clean_search]
                 if not match.empty:
                     st.success(f"✅ Barcode '{search_ean}' found!")
-                    display_cols = [c for c in ["Producing_company", "Brand", "Glasses_type", "Glasses_shape", "Assembled_Name"] if c in match.columns]
-                    st.dataframe(match[display_cols], use_container_width=True)
+                    # Show all non-empty columns for this row
+                    row_data = match.iloc[0].dropna()
+                    row_data = row_data[row_data.astype(str).str.strip() != ""]
+                    st.dataframe(row_data.to_frame("Value"), use_container_width=True)
                 else:
                     st.error(f"❌ Barcode '{search_ean}' (cleaned: {clean_search}) not found.")
         except Exception as e:
