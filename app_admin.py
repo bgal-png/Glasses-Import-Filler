@@ -438,6 +438,42 @@ def perform_upsert(new_data_df):
 # ==========================================
 # 🖥️ USER INTERFACE
 # ==========================================
+
+# --- 📊 DATABASE STATUS ---
+st.divider()
+try:
+    db_count_df = pd.read_sql("SELECT COUNT(*) as total FROM master_catalog", con=engine)
+    total_items = db_count_df["total"].iloc[0]
+    st.metric("📦 Total Items in Database", f"{total_items:,}")
+except:
+    st.info("📦 Database is empty or not yet created.")
+
+# --- 🔍 BARCODE SEARCH ---
+with st.expander("🔍 Quick Barcode Lookup", expanded=False):
+    search_col1, search_col2 = st.columns([3, 1])
+    with search_col1:
+        search_ean = st.text_input("Enter EAN / Barcode to search:", placeholder="e.g. 8056597123456")
+    with search_col2:
+        st.write("")
+        st.write("")
+        search_btn = st.button("Search", use_container_width=True)
+
+    if search_btn and search_ean:
+        clean_search = re.sub(r"\.0$", "", str(search_ean).strip()).lstrip("0")
+        try:
+            result_df = pd.read_sql_table('master_catalog', con=engine)
+            if 'join_key' in result_df.columns:
+                result_df['join_key'] = result_df['join_key'].astype(str).str.strip()
+                match = result_df[result_df['join_key'] == clean_search]
+                if not match.empty:
+                    st.success(f"✅ Barcode '{search_ean}' found!")
+                    display_cols = [c for c in ["Producing_company", "Brand", "Glasses_type", "Glasses_shape", "Assembled_Name"] if c in match.columns]
+                    st.dataframe(match[display_cols], use_container_width=True)
+                else:
+                    st.error(f"❌ Barcode '{search_ean}' (cleaned: {clean_search}) not found.")
+        except Exception as e:
+            st.error(f"Search failed: {e}")
+
 st.divider()
 
 col1, col2 = st.columns(2)
