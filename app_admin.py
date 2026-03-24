@@ -39,7 +39,8 @@ engine = get_engine()
 def load_single_catalog(mfg_name, config_settings, file_path):
     """Runs the massive custom rules engine on a single manufacturer file."""
     unmapped_values = set()
-    
+    skipped_not_mapped = set()
+
     try:
         if file_path.endswith(".csv"):
             try:
@@ -175,7 +176,6 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                         if p.lower() in l_dict:
                             if l_dict[p.lower()]: final_values.add(l_dict[p.lower()])
                         else: unmapped_values.add(f"{mfg.title()} -> {col_name}: '{p}'")
-            return "|".join(sorted(list(final_values)))
 
         elif col_name == "SunGlasses_RX_lenses":
             raw_rx = str(row.get(col_name, "")).strip().upper()
@@ -183,7 +183,6 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                 if raw_rx == "X": final_values.add("Yes")
             elif mfg == "luxottica":
                 if raw_rx == "YES": final_values.add("Yes")
-            return "|".join(sorted(list(final_values)))
 
         elif col_name == "Glasses_shape" and mfg in ["kering", "marcolin"]:
             raw_shape = str(row.get(col_name, "")).strip()
@@ -197,7 +196,6 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                         if lower_dict[shape_lower]: final_values.add(lower_dict[shape_lower])
                     else: unmapped_values.add(f"{mfg.title()} -> {col_name}: '{first_shape}'")
                 else: final_values.add(first_shape)
-            return "|".join(sorted(list(final_values)))
 
         elif col_name == "Sunglasses_filter" and mfg == "safilo":
             raw_val = str(row.get(col_name, "")).strip()
@@ -223,7 +221,6 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                                 if lower_dict[part_lower]: final_values.add(lower_dict[part_lower])
                             else: unmapped_values.add(f"Safilo -> {col_name}: '{part}'")
                     else: final_values.add(raw_val)
-            return "|".join(sorted(list(final_values)))
 
         elif col_name == "Glasses_lens_Colour" and mfg == "luxottica":
             if raw_val and raw_val.lower() != "nan":
@@ -235,7 +232,6 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                             if mapped_val: final_values.add(mapped_val)
                             matched = True
                 if not matched: unmapped_values.add(f"{mfg.title()} -> {col_name} (Keyword Search): '{raw_val}'")
-            return "|".join(sorted(list(final_values)))
 
         elif raw_val and raw_val.lower() != "nan":
             if col_name in VALUE_TRANSLATOR:
@@ -248,7 +244,12 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                         if lower_dict[part_lower]: final_values.add(lower_dict[part_lower])
                     else: unmapped_values.add(f"{mfg.title()} -> {col_name}: '{part}'")
             else: final_values.add(raw_val)
-        return "|".join(sorted(list(final_values)))
+
+        # Filter out "NOT MAPPED" values — keep cell clean, track for summary
+        if "NOT MAPPED" in final_values:
+            skipped_not_mapped.add(f"{mfg.title()} -> {col_name}")
+            final_values.discard("NOT MAPPED")
+        return "|".join(sorted(final_values))
 
     for target_col in new_df.columns:
         if target_col in VALUE_TRANSLATOR or target_col in ["Glasses_other_info", "Glasses_lens_effect", "SunGlasses_RX_lenses", "Glasses_type", "Glasses_shape", "Sunglasses_filter"]:
@@ -385,9 +386,13 @@ def load_single_catalog(mfg_name, config_settings, file_path):
         brand_df = new_df.copy()
         all_brands_dfs.append(brand_df)
 
-    if unmapped_values:
-        with st.expander(f"⚠️ Unmapped Values Found in {mfg_name.title()} File"):
-            for val in sorted(unmapped_values): st.write(f"- {val}")
+    if unmapped_values or skipped_not_mapped:
+        if unmapped_values:
+            with st.expander(f"⚠️ Unmapped Values Found in {mfg_name.title()} File"):
+                for val in sorted(unmapped_values): st.write(f"- {val}")
+        if skipped_not_mapped:
+            with st.expander(f"ℹ️ Skipped 'NOT MAPPED' Values in {mfg_name.title()} File ({len(skipped_not_mapped)} unique)"):
+                for val in sorted(skipped_not_mapped): st.write(f"- {val}")
 
     if all_brands_dfs:
         combined_df = pd.concat(all_brands_dfs, ignore_index=True)
