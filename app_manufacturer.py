@@ -135,7 +135,7 @@ st.markdown("""
 
 st.markdown("""
 <div class="main-header">
-    <h1>🕶️ Glasses Import Filler</h1>
+    <h1>Glasses Import Filler</h1>
     <p>Cloud Edition &bull; {}</p>
 </div>
 """.format(APP_VERSION), unsafe_allow_html=True)
@@ -220,33 +220,6 @@ priv_eye = st.sidebar.text_input("Eyeglasses (Frames)", placeholder="e.g. 2001")
 priv_pc = st.sidebar.text_input("PC Glasses", placeholder="e.g. 3001")
 priv_sport = st.sidebar.text_input("Sport Glasses", placeholder="e.g. 4001")
 priv_drive = st.sidebar.text_input("Driving Glasses", placeholder="e.g. 5001")
-
-# ==========================================
-# 🔍 QUICK EAN LOOKUP UTILITY
-# ==========================================
-st.divider()
-with st.expander("🔍 Quick EAN / Barcode Lookup", expanded=False):
-    col1, col2 = st.columns([3, 1])
-
-    with col1:
-        search_ean = st.text_input(
-            "Enter EAN to search in vault:", placeholder="e.g. 8056597123456"
-        )
-    with col2:
-        st.write("") 
-        st.write("")
-        search_btn = st.button("Search Database", use_container_width=True)
-
-    if search_btn and search_ean:
-        clean_search = re.sub(r"\.0$", "", str(search_ean).strip()).lstrip("0")
-
-        if clean_search in master_db.index:
-            st.success(f"✅ EAN '{search_ean}' found in the database!")
-            found_data = master_db.loc[[clean_search]]
-            display_cols = [c for c in ["Producing_company", "Brand", "Glasses_type", "Glasses_shape"] if c in found_data.columns]
-            st.dataframe(found_data[display_cols], use_container_width=True)
-        else:
-            st.error(f"❌ EAN '{search_ean}' (Cleaned: {clean_search}) was NOT found.")
 
 # ==========================================
 # 📥 THE AUTO-FILLER ENGINE
