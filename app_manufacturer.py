@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 import re
+import base64
+import zipfile
+import os
 from io import BytesIO
 from sqlalchemy import create_engine
 from dictionaries import (
@@ -9,6 +12,59 @@ from dictionaries import (
     BRAND_USABLE_MAP,
     PREMIUM_KERING_BRANDS,
 )
+
+# ==========================================
+# 👓 SHAPE RECOGNITION VIA CLAUDE VISION
+# ==========================================
+SHAPE_CATEGORIES = [
+    "Panthos / Tea cup", "Browline", "Cat Eye", "Oval / Elipse",
+    "Butterfly", "Extravagant", "Single lens", "Square",
+    "Oversize", "Hexagonal", "Pilot", "Rectangular", "Round",
+]
+
+def classify_shape(image_bytes: bytes, api_key: str) -> str:
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+
+        img_b64 = base64.b64encode(image_bytes).decode("utf-8")
+        ext_check = image_bytes[:8]
+        media_type = "image/png" if ext_check[:4] == b'\x89PNG' else "image/jpeg"
+
+        response = client.messages.create(
+            model="claude-haiku-4-20250414",
+            max_tokens=50,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": img_b64}},
+                    {"type": "text", "text": (
+                        "Classify this glasses frame into exactly ONE of these shape categories:\n"
+                        + ", ".join(SHAPE_CATEGORIES) + "\n\n"
+                        "Respond with ONLY the category name, nothing else."
+                    )},
+                ],
+            }],
+        )
+        result = response.content[0].text.strip()
+        # Validate against known categories (case-insensitive match)
+        for cat in SHAPE_CATEGORIES:
+            if cat.lower() == result.lower():
+                return cat
+        return result  # return as-is if no exact match
+    except Exception:
+        return ""
+
+def extract_images_from_zip(zip_file) -> dict:
+    images = {}
+    with zipfile.ZipFile(zip_file, "r") as z:
+        for name in z.namelist():
+            lower = name.lower()
+            if lower.endswith((".jpg", ".jpeg", ".png")) and not name.startswith("__MACOSX"):
+                basename = os.path.splitext(os.path.basename(name))[0]
+                if basename:
+                    images[basename] = z.read(name)
+    return images
 
 # ==========================================
 # 🛑 VERSION CHECK & CONFIG
@@ -182,6 +238,30 @@ if uploaded_file:
         st.stop()
 
     st.success(f"File uploaded! Contains {len(target_df)} rows. Click below to start matching.")
+
+    # ==========================================
+    # 👓 STEP 2: OPTIONAL IMAGE UPLOAD FOR SHAPES
+    # ==========================================
+    image_dict = {}
+    has_api_key = False
+    try:
+        ANTHROPIC_API_KEY = st.secrets["ANTHROPIC_API_KEY"]
+        has_api_key = True
+    except KeyError:
+        pass
+
+    if has_api_key:
+        st.divider()
+        st.subheader("👓 Step 2: Upload Product Images for Shape Recognition (Optional)")
+        st.caption("Upload a ZIP file with product images. Filenames must match the 'Glasses name' column exactly (e.g. `Ray-Ban RB3025 001/58 62.zip` containing `Ray-Ban RB3025 001/58 62.jpg`).")
+
+        uploaded_zip = st.file_uploader("Upload ZIP with product images", type=["zip"], key="shape_images")
+        if uploaded_zip:
+            try:
+                image_dict = extract_images_from_zip(uploaded_zip)
+                st.success(f"📸 Extracted {len(image_dict)} images from ZIP.")
+            except Exception as e:
+                st.error(f"Failed to read ZIP file: {e}")
 
     if st.button("🚀 Run Auto-Filler", type="primary"):
         with st.spinner("Matching barcodes and pouring data from the Cloud..."):
@@ -413,6 +493,47 @@ if uploaded_file:
                         target_df.at[index, "Glasses lenses no-orders ID:103"] = "|".join(sorted(no_orders))
 
             st.success(f"✅ Match Complete! Successfully filled {match_count} out of {len(target_df)} products.")
+
+            # --- 👓 SHAPE RECOGNITION ENGINE ---
+            if image_dict and has_api_key:
+                shape_col = "Glasses shape ID: 25"
+                face_col = "Glasses for your face shape ID:94"
+                if shape_col not in target_df.columns: target_df[shape_col] = ""
+                if face_col not in target_df.columns: target_df[face_col] = ""
+
+                name_col = "Glasses name"
+                if name_col not in target_df.columns:
+                    for c in target_df.columns:
+                        if "name" in c.lower() and "private" not in c.lower():
+                            name_col = c
+                            break
+
+                shape_count = 0
+                shape_bar = st.progress(0, text="🔍 Classifying shapes with AI vision...")
+                total_rows = len(target_df)
+
+                for idx, row in target_df.iterrows():
+                    glasses_name = str(row.get(name_col, "")).strip()
+                    if glasses_name and glasses_name in image_dict:
+                        shape_result = classify_shape(image_dict[glasses_name], ANTHROPIC_API_KEY)
+                        if shape_result:
+                            target_df.at[idx, shape_col] = shape_result
+                            shape_count += 1
+
+                            # Update face shape recommendation
+                            recommended_faces = set()
+                            for shape_key, face_val in FACE_SHAPE_MAP.items():
+                                if shape_key.lower() == shape_result.lower():
+                                    for face in face_val.split("|"):
+                                        recommended_faces.add(face)
+                            if recommended_faces:
+                                target_df.at[idx, face_col] = "|".join(sorted(recommended_faces))
+
+                    progress = (list(target_df.index).index(idx) + 1) / total_rows
+                    shape_bar.progress(progress, text=f"🔍 Classifying shapes... ({list(target_df.index).index(idx) + 1}/{total_rows})")
+
+                shape_bar.empty()
+                st.success(f"👓 Shape Recognition Complete! Classified {shape_count} out of {len(image_dict)} uploaded images.")
 
             if found_sport_glasses:
                 st.warning("⚠️ **Heads Up:** We found 'Sport glasses' in this batch and labeled them as 'Ski goggles' in the Meta Description. Double check them!")
