@@ -274,9 +274,13 @@ if uploaded_file:
                     if target_col not in target_df.columns: target_df[target_col] = ""
 
             match_count = 0
-            found_sport_glasses = False  
+            found_sport_glasses = False
             found_polarized_clip_on = False
-            
+
+            # --- VALIDATION TRACKING ---
+            unmapped_tracker = {}   # col -> set of unmapped source values
+            missing_tracker = {}    # col -> count of rows with no source data
+
             # --- CACHES FOR MAJORITY ENGINES ---
             brand_majority_cache = {}
             brand_contain_cache = {}
@@ -328,18 +332,31 @@ if uploaded_file:
 
                         if global_col in master_db.columns:
                             val = master_row[global_col]
+                            t_col_name = target_col[0] if isinstance(target_col, list) else target_col
                             if pd.notna(val) and str(val).strip() != "":
                                 val_str = str(val).strip()
                                 # Filter out NOT MAPPED values (handles pipe-separated)
+                                unmapped_parts = []
                                 if "|" in val_str:
-                                    parts = [p.strip() for p in val_str.split("|") if p.strip() and p.strip() != "NOT MAPPED"]
-                                    val_str = "|".join(parts)
+                                    all_parts = [p.strip() for p in val_str.split("|") if p.strip()]
+                                    clean_parts = [p for p in all_parts if p != "NOT MAPPED"]
+                                    unmapped_parts = [p for p in all_parts if p == "NOT MAPPED"]
+                                    val_str = "|".join(clean_parts)
                                 elif val_str == "NOT MAPPED":
+                                    unmapped_parts = [val_str]
                                     val_str = ""
+                                if unmapped_parts:
+                                    if t_col_name not in unmapped_tracker: unmapped_tracker[t_col_name] = set()
+                                    raw_val = str(val).strip()
+                                    unmapped_tracker[t_col_name].add(raw_val)
                                 if val_str:
                                     if isinstance(target_col, list):
                                         for tc in target_col: target_df.at[index, tc] = val_str
                                     else: target_df.at[index, target_col] = val_str
+                                elif not val_str:
+                                    missing_tracker[t_col_name] = missing_tracker.get(t_col_name, 0) + 1
+                            else:
+                                missing_tracker[t_col_name] = missing_tracker.get(t_col_name, 0) + 1
 
                     g_shape_raw = str(master_row.get("Glasses_shape", "")).strip()
                     if g_shape_raw and g_shape_raw.lower() not in ["nan", ""]:
@@ -550,6 +567,21 @@ if uploaded_file:
 
                 shape_bar.empty()
                 st.success(f"👓 Shape Recognition Complete! Classified {shape_count} out of {len(image_dict)} uploaded images.")
+
+            # --- VALIDATION REPORT ---
+            if unmapped_tracker or missing_tracker:
+                total_issues = sum(missing_tracker.values()) + sum(len(v) for v in unmapped_tracker.values())
+                st.warning(f"⚠️ **Validation Report:** {total_issues} potential issues found")
+                if unmapped_tracker:
+                    with st.expander(f"🔴 Unmapped values ({len(unmapped_tracker)} columns)"):
+                        for col, vals in sorted(unmapped_tracker.items()):
+                            st.write(f"**{col}:** {len(vals)} unmapped value(s)")
+                            for v in sorted(vals):
+                                st.caption(f"  → `{v}`")
+                if missing_tracker:
+                    with st.expander(f"🟡 Missing from source ({len(missing_tracker)} columns)"):
+                        for col, count in sorted(missing_tracker.items(), key=lambda x: -x[1]):
+                            st.write(f"**{col}:** {count} row(s) with no data")
 
             if found_sport_glasses:
                 st.warning("⚠️ **Heads Up:** We found 'Sport glasses' in this batch and labeled them as 'Ski goggles' in the Meta Description. Double check them!")
