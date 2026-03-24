@@ -329,9 +329,17 @@ if uploaded_file:
                         if global_col in master_db.columns:
                             val = master_row[global_col]
                             if pd.notna(val) and str(val).strip() != "":
-                                if isinstance(target_col, list):
-                                    for tc in target_col: target_df.at[index, tc] = val
-                                else: target_df.at[index, target_col] = val
+                                val_str = str(val).strip()
+                                # Filter out NOT MAPPED values (handles pipe-separated)
+                                if "|" in val_str:
+                                    parts = [p.strip() for p in val_str.split("|") if p.strip() and p.strip() != "NOT MAPPED"]
+                                    val_str = "|".join(parts)
+                                elif val_str == "NOT MAPPED":
+                                    val_str = ""
+                                if val_str:
+                                    if isinstance(target_col, list):
+                                        for tc in target_col: target_df.at[index, tc] = val_str
+                                    else: target_df.at[index, target_col] = val_str
 
                     g_shape_raw = str(master_row.get("Glasses_shape", "")).strip()
                     if g_shape_raw and g_shape_raw.lower() not in ["nan", ""]:
