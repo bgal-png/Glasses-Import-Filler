@@ -69,11 +69,76 @@ def extract_images_from_zip(zip_file) -> dict:
 # ==========================================
 # 🛑 VERSION CHECK & CONFIG
 # ==========================================
-st.set_page_config(page_title="Manufacturer Data Linker", layout="wide")
+st.set_page_config(page_title="Glasses Import Filler", layout="wide", page_icon="🕶️")
 APP_VERSION = "v.Cloud.1.0"
 
-st.title(f"🏭 Manufacturer Data Filler (Cloud Edition)")
-st.caption(f"🚀 Running Code Version: **{APP_VERSION}**")
+st.markdown("""
+<style>
+    /* Header styling */
+    .main-header {
+        background: linear-gradient(135deg, #1A1F2E 0%, #0E1117 100%);
+        padding: 1.5rem 2rem;
+        border-radius: 12px;
+        border: 1px solid #2A3040;
+        margin-bottom: 1rem;
+    }
+    .main-header h1 {
+        color: #4A9EFF;
+        font-size: 1.8rem;
+        margin: 0;
+    }
+    .main-header p {
+        color: #8892A0;
+        font-size: 0.85rem;
+        margin: 0.3rem 0 0 0;
+    }
+    /* Card styling for sections */
+    .stExpander {
+        border: 1px solid #2A3040 !important;
+        border-radius: 8px !important;
+    }
+    /* Button styling */
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #4A9EFF, #2563EB);
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+    /* Sidebar styling */
+    section[data-testid="stSidebar"] {
+        border-right: 1px solid #2A3040;
+    }
+    /* Divider */
+    hr {
+        border-color: #2A3040 !important;
+    }
+    /* Metric cards */
+    [data-testid="stMetric"] {
+        background: #1A1F2E;
+        padding: 1rem;
+        border-radius: 8px;
+        border: 1px solid #2A3040;
+    }
+    /* Download button */
+    .stDownloadButton > button {
+        background: linear-gradient(135deg, #10B981, #059669) !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+    }
+    /* Tabs */
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px 8px 0 0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<div class="main-header">
+    <h1>🕶️ Glasses Import Filler</h1>
+    <p>Cloud Edition &bull; {}</p>
+</div>
+""".format(APP_VERSION), unsafe_allow_html=True)
 
 # ==========================================
 # 🔐 SECURE CLOUD CONNECTION
@@ -128,29 +193,28 @@ if master_db.empty:
     st.warning("⚠️ Database is empty. Please run your 'admin_updater.py' script first.")
     st.stop()
 
-# --- 📦 COMPACT BACKGROUND DATA STATUS ---
+# --- 📊 DATA STATUS METRICS ---
 st.divider()
-pkg_status = f"✅ **Package Data:** Loaded ({len(package_df)} items)" if not package_df.empty else "⚠️ **Package Data:** Not found in cloud."
-mc_status = f"✅ **Historical Data:** Loaded ({len(master_clean_df)} glasses)" if not master_clean_df.empty else "⚠️ **Historical Data:** Not found in cloud."
 
-st.markdown("### 📂 Cloud Data Status")
-col_a, col_b = st.columns(2)
+col_a, col_b, col_c = st.columns(3)
 with col_a:
-    st.markdown(pkg_status)
+    st.metric("📦 Package Data", f"{len(package_df)} items" if not package_df.empty else "Not loaded")
 with col_b:
-    st.markdown(mc_status)
+    st.metric("📜 Historical Data", f"{len(master_clean_df)} glasses" if not master_clean_df.empty else "Not loaded")
+with col_c:
+    st.metric("🗄️ Master Catalog", f"{len(master_db)} products")
 
 # ==========================================
 # 🚀 APP UI & CONTROL PANEL
 # ==========================================
-st.sidebar.header("Control Panel")
+st.sidebar.markdown("### ⚙️ Control Panel")
 
-if st.sidebar.button("🗑️ Sync Fresh Data from Cloud", type="primary"):
+if st.sidebar.button("🔄 Sync Fresh Data", type="primary", use_container_width=True):
     st.cache_data.clear()
     st.rerun()
 
 st.sidebar.divider()
-st.sidebar.subheader("🏷️ Private Name Numbers")
+st.sidebar.markdown("### 🏷️ Private Name Numbers")
 priv_sun = st.sidebar.text_input("Sunglasses", placeholder="e.g. 1001")
 priv_eye = st.sidebar.text_input("Eyeglasses (Frames)", placeholder="e.g. 2001")
 priv_pc = st.sidebar.text_input("PC Glasses", placeholder="e.g. 3001")
@@ -188,7 +252,7 @@ with st.expander("🔍 Quick EAN / Barcode Lookup", expanded=False):
 # 📥 THE AUTO-FILLER ENGINE
 # ==========================================
 st.divider()
-st.subheader("📥 Step 1: Upload Your Target File")
+st.markdown("### 📥 Step 1: Upload Your Target File")
 
 uploaded_file = st.file_uploader("Upload your Target Excel or CSV file", type=["xlsx", "csv"])
 
@@ -206,27 +270,8 @@ if uploaded_file:
             .str.strip()
         )
 
-        mapped_targets = set()
-        for val in TARGET_MAPPING.values():
-            if isinstance(val, list):
-                for item in val: mapped_targets.add(item)
-            else:
-                mapped_targets.add(val)
-
-        custom_targets = {
-            "Items type ID: 20", "Items packing ID: 21", "Name private", "Meta description",
-            "Glasses for your face shape ID:94", "UV filter ID: 60", "Glasses usable ID: 51",
-            "Glasses collection ID: 33", "HS Code", "Item description", "Glasses other features ID:99",
-            "Case length (mm)", "Case height (mm)", "Case width (mm)", "Case weight (g)", "Glasses contain ID: 84"
-        }
-
-        all_completed_targets = mapped_targets.union(custom_targets)
-
-        status_list = [f"✅ {col}" if col in all_completed_targets else f"⏳ {col}" for col in target_df.columns]
-
-        with st.expander("🔍 PROGRESS TRACKER: Exact Bucket Names"):
-            st.markdown("**✅ = Rule Applied | ⏳ = Still Needs Logic/Mapping**")
-            st.write(status_list)
+        # Save a copy of the original data for before/after comparison
+        original_df = target_df.copy()
 
     except Exception as e:
         st.error(f"Could not read your uploaded file: {e}")
@@ -589,8 +634,28 @@ if uploaded_file:
             if found_polarized_clip_on:
                 st.warning("⚠️ **Polarized Clip-On Alert:** We found a Marcolin/Kering clip-on that is marked as polarized, but it was assigned standard 'Sun clip-on' or 'Magnetic sun clip-on'. Verify if it needs the ' p' suffix!")
 
-            st.write("### Preview of Filled Data:")
-            st.dataframe(target_df.head(20), use_container_width=True)
+            st.write("### 📊 Before / After Comparison")
+            preview_tab1, preview_tab2, preview_tab3 = st.tabs(["🔄 Changes Only", "📥 Original", "📤 Filled"])
+            with preview_tab1:
+                # Show only columns that changed
+                changed_cols = []
+                for col in target_df.columns:
+                    if col in original_df.columns:
+                        if not target_df[col].equals(original_df[col]):
+                            changed_cols.append(col)
+                    else:
+                        changed_cols.append(col)
+                if changed_cols:
+                    id_col = "Glasses name" if "Glasses name" in target_df.columns else target_df.columns[0]
+                    display_cols = [id_col] + [c for c in changed_cols if c != id_col]
+                    st.caption(f"**{len(changed_cols)} columns** were modified by the filler")
+                    st.dataframe(target_df[display_cols].head(20), use_container_width=True)
+                else:
+                    st.info("No changes were made.")
+            with preview_tab2:
+                st.dataframe(original_df.head(20), use_container_width=True)
+            with preview_tab3:
+                st.dataframe(target_df.head(20), use_container_width=True)
 
             output = BytesIO()
             with pd.ExcelWriter(output, engine="openpyxl") as writer:
