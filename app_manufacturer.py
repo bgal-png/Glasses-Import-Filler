@@ -252,16 +252,16 @@ if uploaded_file:
 
     if has_api_key:
         st.divider()
-        st.subheader("👓 Step 2: Upload Product Images for Shape Recognition (Optional)")
-        st.caption("Upload a ZIP file with product images. Filenames must match the 'Glasses name' column exactly (e.g. `Ray-Ban RB3025 001/58 62.zip` containing `Ray-Ban RB3025 001/58 62.jpg`).")
+        with st.expander("👓 Step 2: Upload Product Images for Shape Recognition (Optional)", expanded=False):
+            st.caption("Upload a ZIP file with product images. Filenames must match the 'Glasses name' column exactly (e.g. `Ray-Ban RB3025 001/58 62.zip` containing `Ray-Ban RB3025 001/58 62.jpg`).")
 
-        uploaded_zip = st.file_uploader("Upload ZIP with product images", type=["zip"], key="shape_images")
-        if uploaded_zip:
-            try:
-                image_dict = extract_images_from_zip(uploaded_zip)
-                st.success(f"📸 Extracted {len(image_dict)} images from ZIP.")
-            except Exception as e:
-                st.error(f"Failed to read ZIP file: {e}")
+            uploaded_zip = st.file_uploader("Upload ZIP with product images", type=["zip"], key="shape_images")
+            if uploaded_zip:
+                try:
+                    image_dict = extract_images_from_zip(uploaded_zip)
+                    st.success(f"📸 Extracted {len(image_dict)} images from ZIP.")
+                except Exception as e:
+                    st.error(f"Failed to read ZIP file: {e}")
 
     if st.button("🚀 Run Auto-Filler", type="primary"):
         with st.spinner("Matching barcodes and pouring data from the Cloud..."):
