@@ -2585,3 +2585,110 @@ VALUE_TRANSLATOR = {
         "KID": "Child",
     },
 }
+
+# ==========================================
+# COLOR KEYWORD CLASSIFIER
+# ==========================================
+# Replaces dictionary-based color mapping for Frame_Colour, Temple_Colour, Glasses_lens_Colour
+# Keywords are checked in order; first match per system color wins
+
+_FRAME_TEMPLE_KEYWORDS = [
+    # Must be before generic matches (more specific first)
+    ('rose gold', 'Rose Gold'), ('růžové zlato', 'Rose Gold'), ('růžov zlat', 'Rose Gold'),
+    ('ruthenium', 'Ruthenium'), ('rutenium', 'Ruthenium'),
+    ('turquoise', 'Turquoise'), ('tyrkysov', 'Turquoise'),
+    ('havana', 'Havana'), ('tortoise', 'Havana'), ('tartaruga', 'Havana'), ('želvovin', 'Havana'),
+    ('ivory', 'Ivory'), ('slonovin', 'Ivory'), ('béžov', 'Ivory'), ('beige', 'Ivory'),
+    ('white', 'White'), ('bíl', 'White'),
+    # Czech
+    ('burgundsk', 'Burgundy'), ('bordov', 'Burgundy'), ('bordó', 'Burgundy'), ('vínov', 'Burgundy'),
+    ('čern', 'Black'),
+    ('červen', 'Red'), ('rubínov', 'Red'),
+    ('modr', 'Blue'), ('azurov', 'Blue'), ('safírov', 'Blue'),
+    ('zelen', 'Green'), ('olivov', 'Green'), ('petrolejov', 'Green'), ('nefritov', 'Green'), ('khaki', 'Green'),
+    ('zlat', 'Gold'), ('24k', 'Gold'), ('24 kar', 'Gold'),
+    ('stříbrn', 'Silver'), ('stříbr', 'Silver'), ('platinov', 'Silver'),
+    ('šed', 'Grey'), ('kouř', 'Grey'), ('wolfram', 'Grey'), ('grafit', 'Grey'),
+    ('oranžov', 'Orange'), ('bronzov', 'Orange'), ('jantarov', 'Orange'), ('měděn', 'Orange'),
+    ('žlut', 'Yellow'),
+    ('fialov', 'Purple'), ('purpurov', 'Purple'), ('lila', 'Purple'),
+    ('hněd', 'Brown'), ('leopard', 'Brown'),
+    ('růžov', 'Pink'), ('růže', 'Pink'),
+    ('průhled', 'Transparent'), ('čir', 'Transparent'), ('transparentn', 'Transparent'), ('cristallo', 'Transparent'),
+    # English
+    ('burgundy', 'Burgundy'),
+    ('black', 'Black'),
+    ('red', 'Red'),
+    ('blue', 'Blue'), ('azure', 'Blue'),
+    ('green', 'Green'), ('olive', 'Green'), ('petrol', 'Green'), ('jade', 'Green'),
+    ('gold', 'Gold'),
+    ('silver', 'Silver'), ('argento', 'Silver'), ('gunmetal', 'Silver'),
+    ('grey', 'Grey'), ('gray', 'Grey'), ('smoke', 'Grey'), ('graphite', 'Grey'),
+    ('orange', 'Orange'), ('bronze', 'Orange'), ('amber', 'Orange'), ('copper', 'Orange'),
+    ('yellow', 'Yellow'),
+    ('purple', 'Purple'), ('violet', 'Purple'), ('lilac', 'Purple'), ('plum', 'Purple'),
+    ('brown', 'Brown'), ('marrone', 'Brown'), ('cognac', 'Brown'), ('caffe', 'Brown'), ('chocolate', 'Brown'),
+    ('pink', 'Pink'), ('rose', 'Pink'), ('rosa', 'Pink'), ('fucsia', 'Pink'),
+    ('transparent', 'Transparent'), ('clear', 'Transparent'), ('crystal', 'Transparent'),
+    ('multicolor', 'Multicolor'), ('vícebarev', 'Multicolor'),
+]
+
+_LENS_KEYWORDS = [
+    # Czech
+    ('burgundsk', 'Burgundy'), ('bordov', 'Burgundy'), ('bordó', 'Burgundy'), ('vínov', 'Burgundy'),
+    ('čern', 'Black'),
+    ('červen', 'Red'), ('rubínov', 'Red'),
+    ('modr', 'Blue'), ('azurov', 'Blue'), ('safírov', 'Blue'), ('blu', 'Blue'),
+    ('zelen', 'Green'), ('olivov', 'Green'), ('petrolejov', 'Green'), ('nefritov', 'Green'), ('smaragd', 'Green'),
+    ('zlat', 'Gold'), ('24k', 'Gold'), ('24 kar', 'Gold'),
+    ('stříbrn', 'Silver'), ('stříbr', 'Silver'), ('platinov', 'Silver'),
+    ('šed', 'Grey'), ('kouř', 'Grey'), ('wolfram', 'Grey'), ('grafit', 'Grey'), ('břidlicov', 'Grey'),
+    ('oranžov', 'Orange'), ('bronzov', 'Orange'), ('jantarov', 'Orange'), ('měděn', 'Orange'), ('ohniv', 'Orange'),
+    ('žlut', 'Yellow'), ('okr', 'Yellow'), ('heřmánkov', 'Yellow'),
+    ('fialov', 'Purple'), ('purpurov', 'Purple'), ('lila', 'Purple'), ('ametyst', 'Purple'),
+    ('hněd', 'Brown'), ('havana', 'Brown'), ('leopard', 'Brown'), ('medov', 'Brown'), ('velbloud', 'Brown'),
+    ('růžov', 'Pink'), ('růže', 'Pink'), ('broskvov', 'Pink'), ('mora', 'Pink'), ('morušov', 'Pink'), ('hroznov', 'Pink'), ('třešňov', 'Pink'),
+    ('průhled', 'Transparent'), ('čir', 'Transparent'), ('transparentn', 'Transparent'), ('bíl', 'Transparent'),
+    # English
+    ('burgundy', 'Burgundy'),
+    ('black', 'Black'),
+    ('red', 'Red'), ('ruby', 'Red'),
+    ('blue', 'Blue'), ('azure', 'Blue'), ('sapphire', 'Blue'), ('cobalt', 'Blue'), ('avio', 'Blue'), ('lago', 'Blue'), ('water', 'Blue'),
+    ('green', 'Green'), ('olive', 'Green'), ('petrol', 'Green'), ('jade', 'Green'), ('emerald', 'Green'), ('verde', 'Green'),
+    ('gold', 'Gold'),
+    ('silver', 'Silver'), ('argento', 'Silver'),
+    ('grey', 'Grey'), ('gray', 'Grey'), ('smoke', 'Grey'), ('graphite', 'Grey'), ('gunmetal', 'Grey'), ('slate', 'Grey'),
+    ('grigio', 'Grey'), ('ardesia', 'Grey'), ('graffite', 'Grey'), ('ash', 'Grey'), ('dark gery', 'Grey'),
+    ('iridium', 'Grey'), ('chromov', 'Grey'), ('chromovan', 'Grey'),
+    ('orange', 'Orange'), ('bronze', 'Orange'), ('amber', 'Orange'), ('copper', 'Orange'), ('torch', 'Orange'),
+    ('yellow', 'Yellow'),
+    ('purple', 'Purple'), ('violet', 'Purple'), ('lilac', 'Purple'), ('plum', 'Purple'), ('iris', 'Purple'), ('wisteria', 'Purple'),
+    ('brown', 'Brown'), ('ivory', 'Brown'), ('marrone', 'Brown'), ('cognac', 'Brown'), ('caffe', 'Brown'),
+    ('chocolate', 'Brown'), ('cotto', 'Brown'), ('bruciato', 'Brown'), ('terra', 'Brown'), ('etruscan', 'Brown'),
+    ('husk', 'Brown'), ('champagne', 'Brown'), ('camomilla', 'Yellow'), ('ember', 'Brown'), ('vr28', 'Brown'),
+    ('pink', 'Pink'), ('rose', 'Pink'), ('rosa', 'Pink'), ('fucsia', 'Pink'), ('cyclamen', 'Pink'), ('berry', 'Pink'),
+    ('transparent', 'Transparent'), ('clear', 'Transparent'), ('cristallo', 'Transparent'), ('demo', 'Transparent'),
+    ('fotochromatick', 'Transparent'), ('zkušební', 'Transparent'),
+    # Prizm special (Oakley)
+    ('prizm road', 'Orange'), ('prizm trail', 'Orange'), ('prizm field', 'Orange'),
+    ('prizm cricket', 'Orange'), ('prizm golf', 'Orange'), ('prizm gaming', 'Grey'),
+    ('prizm deep water', 'Blue'), ('prizm shallow water', 'Green'),
+    ('prizm low', 'Yellow'), ('prizm denn', 'Brown'), ('prizm daily', 'Brown'),
+    ('prizm tr22', 'Brown'), ('prizm tr45', 'Brown'),
+]
+
+
+def classify_color(value, color_type="lens"):
+    """Classify a raw color string into system color(s) using keyword matching.
+    color_type: 'lens' for Glasses_lens_Colour, 'frame' for Frame_Colour/Temple_Colour
+    Returns e.g. 'Grey|Blue' or '' if no match.
+    """
+    if not value or str(value).strip().lower() in ["nan", "", "0"]:
+        return ""
+    val_lower = str(value).strip().lower()
+    keywords = _LENS_KEYWORDS if color_type == "lens" else _FRAME_TEMPLE_KEYWORDS
+    found = []
+    for keyword, system_color in keywords:
+        if keyword in val_lower and system_color not in found:
+            found.append(system_color)
+    return "|".join(found) if found else ""

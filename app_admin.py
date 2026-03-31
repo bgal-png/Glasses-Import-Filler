@@ -10,6 +10,7 @@ from dictionaries import (
     BRAND_USABLE_MAP,
     PREMIUM_KERING_BRANDS,
     KNOWN_BRANDS,
+    classify_color,
 )
 
 # ==========================================
@@ -258,16 +259,15 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                             else: unmapped_values.add(f"Safilo -> {col_name}: '{part}'")
                     else: final_values.add(raw_val)
 
-        elif col_name == "Glasses_lens_Colour" and mfg == "luxottica":
+        elif col_name in ("Glasses_lens_Colour", "Frame_Colour", "Temple_Colour"):
             if raw_val and raw_val.lower() != "nan":
-                matched = False
-                if col_name in VALUE_TRANSLATOR:
-                    translation_dict = VALUE_TRANSLATOR[col_name]
-                    for keyword, mapped_val in translation_dict.items():
-                        if keyword and keyword.lower() in raw_val.lower():
-                            if mapped_val: final_values.add(mapped_val)
-                            matched = True
-                if not matched: unmapped_values.add(f"{mfg.title()} -> {col_name} (Keyword Search): '{raw_val}'")
+                color_type = "lens" if col_name == "Glasses_lens_Colour" else "frame"
+                result = classify_color(raw_val, color_type)
+                if result:
+                    for c in result.split("|"):
+                        final_values.add(c)
+                else:
+                    unmapped_values.add(f"{mfg.title()} -> {col_name}: '{raw_val}'")
 
         elif raw_val and raw_val.lower() != "nan":
             if col_name in VALUE_TRANSLATOR:
@@ -288,7 +288,7 @@ def load_single_catalog(mfg_name, config_settings, file_path):
         return "|".join(sorted(final_values))
 
     for target_col in new_df.columns:
-        if target_col in VALUE_TRANSLATOR or target_col in ["Glasses_other_info", "Glasses_lens_effect", "SunGlasses_RX_lenses", "Glasses_type", "Glasses_shape", "Sunglasses_filter"]:
+        if target_col in VALUE_TRANSLATOR or target_col in ["Glasses_other_info", "Glasses_lens_effect", "SunGlasses_RX_lenses", "Glasses_type", "Glasses_shape", "Sunglasses_filter", "Glasses_lens_Colour", "Frame_Colour", "Temple_Colour"]:
             new_df[target_col] = new_df.apply(lambda row: process_cell_strict(row, target_col, mfg_name), axis=1)
 
     # ==========================================
