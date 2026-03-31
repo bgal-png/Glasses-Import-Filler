@@ -103,7 +103,23 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                 elif pol == "X": clip_val = "Magnetic sun clip-on p"
 
         elif mfg_name == "luxottica":
-            pass  
+            # Find description column dynamically (encoding-safe)
+            desc = ""
+            for col_name in raw_row.index:
+                if "popis" in col_name.lower() and "model" in col_name.lower():
+                    desc = str(raw_row[col_name]).strip().upper()
+                    break
+            if desc == "CLIP ON":
+                # Find polarized column dynamically
+                pol = ""
+                for col_name in raw_row.index:
+                    if "polariz" in col_name.lower():
+                        pol = str(raw_row[col_name]).strip().upper()
+                        break
+                if pol == "X":
+                    clip_val = "Sun clip-on p"
+                else:
+                    clip_val = "Sun clip-on"
 
         elif mfg_name in ["kering", "marcolin"]:
             acc_type = str(raw_row.get("Accessory type", "")).strip().title()
@@ -124,6 +140,26 @@ def load_single_catalog(mfg_name, config_settings, file_path):
 
     new_df["Extracted_Clip_on"] = extracted_clip_ons
     new_df["Clip_on_Alert"] = clip_on_alerts
+
+    # 2b. Luxottica Clip-On → Base Model Matching
+    # Clip-ons are separate rows; attach their clip value to the base model (model without trailing "C")
+    if mfg_name == "luxottica" and "Glasses_model" in new_df.columns:
+        clip_mask = new_df["Extracted_Clip_on"].astype(str).str.strip().ne("") & new_df["Extracted_Clip_on"].notna()
+        clip_rows = new_df[clip_mask]
+        for idx, clip_row in clip_rows.iterrows():
+            clip_model = str(clip_row.get("Glasses_model", "")).strip().lstrip("0")
+            if clip_model.endswith("C"):
+                base_model = clip_model[:-1]
+                base_mask = new_df["Glasses_model"].astype(str).str.strip().str.lstrip("0") == base_model
+                base_indices = new_df[base_mask & ~clip_mask].index
+                for base_idx in base_indices:
+                    if str(new_df.at[base_idx, "Extracted_Clip_on"]).strip() in ["", "nan"]:
+                        new_df.at[base_idx, "Extracted_Clip_on"] = clip_row["Extracted_Clip_on"]
+                        new_df.at[base_idx, "Clip_on_Alert"] = clip_row["Clip_on_Alert"]
+                        # Copy clip-on lens colour to base model
+                        clip_lens_colour = str(clip_row.get("Glasses_lens_Colour", "")).strip()
+                        if clip_lens_colour and clip_lens_colour.lower() != "nan":
+                            new_df.at[base_idx, "Clip_on_lens_colour"] = clip_lens_colour
 
     # 3. Custom Rules Strict Engine
     def process_cell_strict(row, col_name, mfg):
@@ -538,6 +574,9 @@ with col2:
             if "Items type" in df_hist.columns:
                 df_glasses = df_hist[df_hist["Items type"].astype(str).str.strip().str.lower() == "glasses"]
                 df_glasses.columns = df_glasses.columns.astype(str).str.strip()
+                # Only keep columns we actually use to save storage
+                keep_cols = [c for c in ["Brand", "Glasses contain"] if c in df_glasses.columns]
+                df_glasses = df_glasses[keep_cols]
                 df_glasses.to_sql('historical_data', engine, if_exists='replace', index=False)
                 st.success(f"✅ Historical Data updated! ({len(df_glasses)} glasses mapped)")
             else:

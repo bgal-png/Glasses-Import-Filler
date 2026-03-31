@@ -470,8 +470,15 @@ if uploaded_file:
                         
                         clip_on_val = str(master_row.get("Extracted_Clip_on", "")).strip()
                         needs_alert = master_row.get("Clip_on_Alert", False)
-                        
-                        if needs_alert: found_polarized_clip_on = True 
+
+                        if needs_alert: found_polarized_clip_on = True
+
+                        # Clip-on lens colour
+                        clip_lens_col = "Glasses clip-on lens colour ID:112"
+                        if clip_lens_col in target_df.columns:
+                            clip_lens_val = str(master_row.get("Clip_on_lens_colour", "")).strip()
+                            if clip_lens_val and clip_lens_val.lower() not in ["nan", ""]:
+                                target_df.at[index, clip_lens_col] = clip_lens_val
                             
                         final_contain = []
                         if cached_contain: final_contain.extend(cached_contain.split("|"))
