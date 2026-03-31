@@ -157,10 +157,11 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                     if str(new_df.at[base_idx, "Extracted_Clip_on"]).strip() in ["", "nan"]:
                         new_df.at[base_idx, "Extracted_Clip_on"] = clip_row["Extracted_Clip_on"]
                         new_df.at[base_idx, "Clip_on_Alert"] = clip_row["Clip_on_Alert"]
-                        # Copy clip-on lens colour to base model
+                        # Copy clip-on lens colour to base model (classify raw value)
                         clip_lens_colour = str(clip_row.get("Glasses_lens_Colour", "")).strip()
                         if clip_lens_colour and clip_lens_colour.lower() != "nan":
-                            new_df.at[base_idx, "Clip_on_lens_colour"] = clip_lens_colour
+                            classified = classify_color(clip_lens_colour, "lens")
+                            new_df.at[base_idx, "Clip_on_lens_colour"] = classified if classified else clip_lens_colour
 
     # 3. Custom Rules Strict Engine
     def process_cell_strict(row, col_name, mfg):
