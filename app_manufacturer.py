@@ -11,6 +11,7 @@ from dictionaries import (
     FACE_SHAPE_MAP,
     BRAND_USABLE_MAP,
     PREMIUM_KERING_BRANDS,
+    estimate_filter_category,
 )
 
 # ==========================================
@@ -395,6 +396,16 @@ if uploaded_file:
                             target_df.at[index, "Glasses for your face shape ID:94"] = "|".join(sorted(list(recommended_faces)))
 
                     if "Sunglasses" in g_type: target_df.at[index, "UV filter ID: 60"] = "400"
+
+                    # --- 🕶️ SUNGLASSES FILTER ESTIMATION (from lens color) ---
+                    filter_col = "Sunglasses filter ID: 77"
+                    if filter_col in target_df.columns and "Sunglasses" in g_type:
+                        current_filter = str(target_df.at[index, filter_col]).strip()
+                        if not current_filter or current_filter.lower() in ["nan", ""]:
+                            raw_lens = str(master_row.get("Glasses_lens_Colour", "")).strip()
+                            estimated = estimate_filter_category(raw_lens)
+                            if estimated:
+                                target_df.at[index, filter_col] = estimated
 
                     usable_tags = set()
                     raw_brand = str(master_row.get("Brand", "")).strip().lower()

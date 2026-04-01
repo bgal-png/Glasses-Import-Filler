@@ -1423,3 +1423,44 @@ def classify_color(value, color_type="lens"):
         if keyword in val_lower and system_color not in found:
             found.append(system_color)
     return "|".join(found) if found else ""
+
+
+def estimate_filter_category(raw_lens_color):
+    """Estimate sunglasses filter category from raw lens color description.
+    Returns 'Category 0' through 'Category 4' or '' if can't determine.
+    Based on lens darkness implied by color description keywords.
+    """
+    if not raw_lens_color or str(raw_lens_color).strip().lower() in ["nan", "", "0"]:
+        return ""
+    val = str(raw_lens_color).strip().lower()
+
+    # Category 0: clear / transparent / demo lenses
+    cat0 = ["clear", "čir", "demo", "transparentn", "průhled", "blue filter", "filtr modr",
+            "blue light", "zkušební"]
+    if any(k in val for k in cat0) and not any(k in val for k in ["gradient", "grad"]):
+        return "Category 0"
+
+    # Category 4: very dark / glacier / extra dark
+    cat4 = ["extra dark", "glacier", "very dark", "ultra"]
+    if any(k in val for k in cat4):
+        return "Category 4"
+
+    # Category 3: dark solid colors
+    cat3_dark = ["dark grey", "dark brown", "dark green", "dark blue",
+                 "tmavě šed", "tmavá šed", "tmav šed", "tmavě hněd", "tmavá hněd",
+                 "tmavě zelen", "tmavá zelen", "tmavě modr", "tmavá modr",
+                 "tmavě fialov", "tmavá fialov",
+                 "g-15", "g15", "g 15", "jednobarevn",
+                 "solid", "polariz", "polar", "classic"]
+    if any(k in val for k in cat3_dark):
+        return "Category 3"
+
+    # Category 1: light tints
+    cat1_light = ["light", "světl", "sv. ", "leskl",
+                  "light blue", "light pink", "light grey", "light brown",
+                  "soft", "flash"]
+    if any(k in val for k in cat1_light):
+        return "Category 1"
+
+    # Category 2: medium tints (gradient, mirror, standard colors)
+    return "Category 2"
