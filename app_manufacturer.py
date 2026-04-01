@@ -309,7 +309,6 @@ if uploaded_file:
             brand_majority_cache = {}
             brand_contain_cache = {}
             brand_origin_cache = {}
-            weight_cache = {}
             
             for c in ["Case length (mm)", "Case height (mm)", "Case width (mm)", "Case weight (g)", "Glasses contain ID: 84"]:
                 if c not in target_df.columns: target_df[c] = ""
@@ -444,7 +443,8 @@ if uploaded_file:
                                     "Case length (mm)": get_mode("case_length"),
                                     "Case height (mm)": get_mode("case_height"),
                                     "Case width (mm)": get_mode("case_width"),
-                                    "Case weight (g)": get_mode("case_weight")
+                                    "Case weight (g)": get_mode("case_weight"),
+                                    "Glasses weight (g)": get_mode("item_weight"),
                                 }
                             else: brand_majority_cache[raw_brand] = None
                                 
@@ -454,6 +454,8 @@ if uploaded_file:
                             target_df.at[index, "Case height (mm)"] = cached_data["Case height (mm)"]
                             target_df.at[index, "Case width (mm)"] = cached_data["Case width (mm)"]
                             target_df.at[index, "Case weight (g)"] = cached_data["Case weight (g)"]
+                            if cached_data.get("Glasses weight (g)"):
+                                target_df.at[index, "Glasses weight (g)"] = cached_data["Glasses weight (g)"]
 
                     # --- 🌍 ORIGIN COUNTRY MAJORITY ENGINE ---
                     if not origin_df.empty and raw_brand and raw_brand != "nan":
@@ -472,33 +474,6 @@ if uploaded_file:
                         cached_origin = brand_origin_cache.get(raw_brand, "")
                         if cached_origin and "Item origin country" in target_df.columns:
                             target_df.at[index, "Item origin country"] = cached_origin
-
-                    # --- ⚖️ GLASSES WEIGHT MAJORITY ENGINE (BRAND + MATERIAL) ---
-                    raw_material = str(master_row.get("Glasses_main_material", "")).strip().lower() if pd.notna(master_row.get("Glasses_main_material")) else ""
-                    weight_val = str(target_df.at[index, "Glasses weight (g)"]).strip() if "Glasses weight (g)" in target_df.columns else ""
-                    if (not weight_val or weight_val.lower() in ["nan", ""]) and raw_brand and raw_brand != "nan":
-                        cache_key = f"{raw_brand}|{raw_material}" if raw_material else raw_brand
-                        if cache_key not in weight_cache:
-                            if "Brand" in master_db.columns and "Glasses_weight_g" in master_db.columns:
-                                brand_mask = master_db['Brand'].astype(str).str.strip().str.lower() == raw_brand
-                                if raw_material and "Glasses_main_material" in master_db.columns:
-                                    mat_mask = master_db['Glasses_main_material'].astype(str).str.strip().str.lower() == raw_material
-                                    matches = master_db[brand_mask & mat_mask]
-                                else:
-                                    matches = master_db[brand_mask]
-                                weight_vals = matches["Glasses_weight_g"].dropna()
-                                weight_vals = weight_vals[weight_vals.astype(str).str.strip().ne("") & weight_vals.astype(str).str.strip().str.lower().ne("nan")]
-                                if not weight_vals.empty:
-                                    modes = weight_vals.mode()
-                                    weight_cache[cache_key] = re.sub(r'\.0$', '', str(modes.iloc[0]).strip()) if not modes.empty else ""
-                                else:
-                                    weight_cache[cache_key] = ""
-                            else:
-                                weight_cache[cache_key] = ""
-
-                        cached_weight = weight_cache.get(cache_key, "")
-                        if cached_weight and "Glasses weight (g)" in target_df.columns:
-                            target_df.at[index, "Glasses weight (g)"] = cached_weight
 
                     # --- 🎁 GLASSES CONTAIN MAJORITY ENGINE (WITH RAW CLIP-ONS) ---
                     if not master_clean_df.empty and raw_brand and raw_brand != "nan":
