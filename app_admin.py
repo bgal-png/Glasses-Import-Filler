@@ -582,3 +582,20 @@ with col2:
                 st.success(f"✅ Historical Data updated! ({len(df_glasses)} glasses mapped)")
             else:
                 st.error("⚠️ 'Items type' column missing. Could not filter/upload historical data.")
+
+    st.divider()
+
+    # Origin Country Data
+    origin_file = st.file_uploader("Upload new `origins.xlsx`", type=["xlsx"])
+    if origin_file and st.button("⬆️ Replace Origin Data in Cloud"):
+        with st.spinner("Uploading Origin Data..."):
+            df_origin = pd.read_excel(origin_file, dtype=str, engine="openpyxl")
+            df_origin.columns = df_origin.columns.astype(str).str.strip()
+            keep_cols = [c for c in ["item_name", "country_master"] if c in df_origin.columns]
+            if len(keep_cols) == 2:
+                df_origin = df_origin[keep_cols]
+                df_origin = df_origin.dropna(subset=["item_name", "country_master"])
+                df_origin.to_sql('origin_data', engine, if_exists='replace', index=False)
+                st.success(f"✅ Origin Data updated! ({len(df_origin)} items)")
+            else:
+                st.error("⚠️ 'item_name' or 'country_master' column missing.")

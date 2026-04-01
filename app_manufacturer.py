@@ -157,37 +157,41 @@ def load_cloud_data():
     master_db = pd.DataFrame()
     package_df = pd.DataFrame()
     historical_df = pd.DataFrame()
-    
+    origin_df = pd.DataFrame()
+
     try:
-        # 🔥 THE BULLETPROOF ENGINE 🔥
-        # pool_pre_ping=True checks if the database is awake before pulling data!
         engine = create_engine(DB_URL, pool_pre_ping=True, pool_recycle=300)
-        
-        
+
         # 1. Fetch Master Catalog
         master_db = pd.read_sql_table('master_catalog', con=engine)
         if 'join_key' in master_db.columns:
             master_db.set_index('join_key', inplace=True)
-            
+
         # 2. Fetch Package Data
         try:
             package_df = pd.read_sql_table('package_data', con=engine)
         except:
-            pass # Table might not exist if they skipped it
-            
+            pass
+
         # 3. Fetch Historical Data (master_clean)
         try:
             historical_df = pd.read_sql_table('historical_data', con=engine)
         except:
             pass
 
-        return master_db, package_df, historical_df
+        # 4. Fetch Origin Data
+        try:
+            origin_df = pd.read_sql_table('origin_data', con=engine)
+        except:
+            pass
+
+        return master_db, package_df, historical_df, origin_df
     except Exception as e:
         st.error(f"❌ Failed to connect to Cloud Database: {e}")
-        return master_db, package_df, historical_df
+        return master_db, package_df, historical_df, origin_df
 
 with st.spinner("☁️ Fetching live data from Supabase Vault..."):
-    master_db, package_df, master_clean_df = load_cloud_data()
+    master_db, package_df, master_clean_df, origin_df = load_cloud_data()
 
 if master_db.empty:
     st.warning("⚠️ Database is empty. Please run your 'admin_updater.py' script first.")
@@ -196,13 +200,15 @@ if master_db.empty:
 # --- 📊 DATA STATUS METRICS ---
 st.divider()
 
-col_a, col_b, col_c = st.columns(3)
+col_a, col_b, col_c, col_d = st.columns(4)
 with col_a:
     st.metric("📦 Package Data", f"{len(package_df)} items" if not package_df.empty else "Not loaded")
 with col_b:
     st.metric("📜 Historical Data", f"{len(master_clean_df)} glasses" if not master_clean_df.empty else "Not loaded")
 with col_c:
     st.metric("🗄️ Master Catalog", f"{len(master_db)} products")
+with col_d:
+    st.metric("🌍 Origin Data", f"{len(origin_df)} items" if not origin_df.empty else "Not loaded")
 
 # ==========================================
 # 🚀 APP UI & CONTROL PANEL
@@ -302,6 +308,7 @@ if uploaded_file:
             # --- CACHES FOR MAJORITY ENGINES ---
             brand_majority_cache = {}
             brand_contain_cache = {}
+            brand_origin_cache = {}
             
             for c in ["Case length (mm)", "Case height (mm)", "Case width (mm)", "Case weight (g)", "Glasses contain ID: 84"]:
                 if c not in target_df.columns: target_df[c] = ""
@@ -446,6 +453,24 @@ if uploaded_file:
                             target_df.at[index, "Case height (mm)"] = cached_data["Case height (mm)"]
                             target_df.at[index, "Case width (mm)"] = cached_data["Case width (mm)"]
                             target_df.at[index, "Case weight (g)"] = cached_data["Case weight (g)"]
+
+                    # --- 🌍 ORIGIN COUNTRY MAJORITY ENGINE ---
+                    if not origin_df.empty and raw_brand and raw_brand != "nan":
+                        if raw_brand not in brand_origin_cache:
+                            if "item_name" in origin_df.columns and "country_master" in origin_df.columns:
+                                mask = origin_df['item_name'].astype(str).str.contains(rf'\b{re.escape(raw_brand)}\b', case=False, na=False)
+                                brand_matches = origin_df[mask]
+                                if not brand_matches.empty:
+                                    modes = brand_matches["country_master"].dropna().mode()
+                                    brand_origin_cache[raw_brand] = str(modes.iloc[0]).strip() if not modes.empty else ""
+                                else:
+                                    brand_origin_cache[raw_brand] = ""
+                            else:
+                                brand_origin_cache[raw_brand] = ""
+
+                        cached_origin = brand_origin_cache.get(raw_brand, "")
+                        if cached_origin and "Item origin country" in target_df.columns:
+                            target_df.at[index, "Item origin country"] = cached_origin
 
                     # --- 🎁 GLASSES CONTAIN MAJORITY ENGINE (WITH RAW CLIP-ONS) ---
                     if not master_clean_df.empty and raw_brand and raw_brand != "nan":
