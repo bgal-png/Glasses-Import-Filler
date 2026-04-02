@@ -567,8 +567,8 @@ with col2:
             
     st.divider()
     
-    # Historical Master Clean
-    hist_file = st.file_uploader("Upload new `master_clean.xlsx`", type=["xlsx"])
+    # Global Categories
+    hist_file = st.file_uploader("Upload new `global_categories.xlsx`", type=["xlsx"])
     if hist_file and st.button("⬆️ Replace Global Categories in Cloud"):
         with st.spinner("Uploading Global Categories..."):
             df_hist = pd.read_excel(hist_file, dtype=str, engine="openpyxl")
@@ -585,8 +585,8 @@ with col2:
 
     st.divider()
 
-    # Origin Country Data
-    origin_file = st.file_uploader("Upload new `origins.xlsx`", type=["xlsx"])
+    # Item Origin
+    origin_file = st.file_uploader("Upload new `item_origin.xlsx`", type=["xlsx"])
     if origin_file and st.button("⬆️ Replace Item Origin in Cloud"):
         with st.spinner("Uploading Item Origin..."):
             df_origin = pd.read_excel(origin_file, dtype=str, engine="openpyxl")
