@@ -23,7 +23,8 @@ SHAPE_CATEGORIES = [
     "Oversize", "Hexagonal", "Pilot", "Rectangular", "Round",
 ]
 
-def classify_shape(image_bytes: bytes, api_key: str) -> str:
+def classify_glasses(image_bytes: bytes, api_key: str) -> dict:
+    """Classify shape and sport type from a single image. Returns dict with 'shape' and 'is_sport'."""
     try:
         import anthropic
         client = anthropic.Anthropic(api_key=api_key)
@@ -34,27 +35,42 @@ def classify_shape(image_bytes: bytes, api_key: str) -> str:
 
         response = client.messages.create(
             model="claude-haiku-4-20250414",
-            max_tokens=50,
+            max_tokens=80,
             messages=[{
                 "role": "user",
                 "content": [
                     {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": img_b64}},
                     {"type": "text", "text": (
-                        "Classify this glasses frame into exactly ONE of these shape categories:\n"
+                        "Analyze this eyewear image and answer TWO questions:\n\n"
+                        "1. SHAPE: Classify into exactly ONE of these categories:\n"
                         + ", ".join(SHAPE_CATEGORIES) + "\n\n"
-                        "Respond with ONLY the category name, nothing else."
+                        "2. SPORT: Are these sport/performance glasses (wrap-around, shield lens, "
+                        "rubber grips, aerodynamic design, cycling/running/ski goggles)? Answer YES or NO.\n\n"
+                        "Respond in exactly this format:\nSHAPE: <category>\nSPORT: <YES or NO>"
                     )},
                 ],
             }],
         )
         result = response.content[0].text.strip()
-        # Validate against known categories (case-insensitive match)
-        for cat in SHAPE_CATEGORIES:
-            if cat.lower() == result.lower():
-                return cat
-        return result  # return as-is if no exact match
+
+        shape = ""
+        is_sport = False
+        for line in result.split("\n"):
+            line = line.strip()
+            if line.upper().startswith("SHAPE:"):
+                raw_shape = line.split(":", 1)[1].strip()
+                for cat in SHAPE_CATEGORIES:
+                    if cat.lower() == raw_shape.lower():
+                        shape = cat
+                        break
+                if not shape:
+                    shape = raw_shape
+            elif line.upper().startswith("SPORT:"):
+                is_sport = "yes" in line.lower()
+
+        return {"shape": shape, "is_sport": is_sport}
     except Exception:
-        return ""
+        return {"shape": "", "is_sport": False}
 
 def extract_images_from_zip(zip_file) -> dict:
     images = {}
@@ -583,13 +599,15 @@ if uploaded_file:
 
             st.success(f"✅ Match Complete! Successfully filled {match_count} out of {len(target_df)} products.")
 
-            # --- 👓 SHAPE RECOGNITION ENGINE ---
+            # --- 👓 AI VISION ENGINE (Shape + Sport Detection) ---
             if image_dict and has_api_key:
                 shape_col = "Glasses shape ID: 25"
                 face_col = "Glasses for your face shape ID:94"
+                sport_col = "Sports Glasses ID: 89"
                 source_col = "Shape source"
                 if shape_col not in target_df.columns: target_df[shape_col] = ""
                 if face_col not in target_df.columns: target_df[face_col] = ""
+                if sport_col not in target_df.columns: target_df[sport_col] = ""
                 target_df[source_col] = ""
 
                 # Mark existing shapes from database
@@ -605,32 +623,38 @@ if uploaded_file:
                             break
 
                 shape_count = 0
-                shape_bar = st.progress(0, text="🔍 Classifying shapes with AI vision...")
+                sport_count = 0
+                shape_bar = st.progress(0, text="🔍 Classifying with AI vision...")
                 total_rows = len(target_df)
 
                 for idx, row in target_df.iterrows():
                     glasses_name = str(row.get(name_col, "")).strip()
                     if glasses_name and glasses_name in image_dict:
-                        shape_result = classify_shape(image_dict[glasses_name], ANTHROPIC_API_KEY)
-                        if shape_result:
-                            target_df.at[idx, shape_col] = shape_result
+                        result = classify_glasses(image_dict[glasses_name], ANTHROPIC_API_KEY)
+
+                        if result["shape"]:
+                            target_df.at[idx, shape_col] = result["shape"]
                             target_df.at[idx, source_col] = "AI"
                             shape_count += 1
 
                             # Update face shape recommendation
                             recommended_faces = set()
                             for shape_key, face_val in FACE_SHAPE_MAP.items():
-                                if shape_key.lower() == shape_result.lower():
+                                if shape_key.lower() == result["shape"].lower():
                                     for face in face_val.split("|"):
                                         recommended_faces.add(face)
                             if recommended_faces:
                                 target_df.at[idx, face_col] = "|".join(sorted(recommended_faces))
 
+                        if result["is_sport"]:
+                            target_df.at[idx, sport_col] = "Yes"
+                            sport_count += 1
+
                     progress = (list(target_df.index).index(idx) + 1) / total_rows
-                    shape_bar.progress(progress, text=f"🔍 Classifying shapes... ({list(target_df.index).index(idx) + 1}/{total_rows})")
+                    shape_bar.progress(progress, text=f"🔍 Classifying... ({list(target_df.index).index(idx) + 1}/{total_rows})")
 
                 shape_bar.empty()
-                st.success(f"👓 Shape Recognition Complete! Classified {shape_count} out of {len(image_dict)} uploaded images.")
+                st.success(f"👓 AI Vision Complete! Shapes: {shape_count}, Sport glasses: {sport_count} (out of {len(image_dict)} images)")
 
             # --- VALIDATION REPORT ---
             if unmapped_tracker or missing_tracker:
