@@ -569,8 +569,8 @@ with col2:
     
     # Historical Master Clean
     hist_file = st.file_uploader("Upload new `master_clean.xlsx`", type=["xlsx"])
-    if hist_file and st.button("⬆️ Replace Historical Data in Cloud"):
-        with st.spinner("Uploading Historical Data..."):
+    if hist_file and st.button("⬆️ Replace Global Categories in Cloud"):
+        with st.spinner("Uploading Global Categories..."):
             df_hist = pd.read_excel(hist_file, dtype=str, engine="openpyxl")
             if "Items type" in df_hist.columns:
                 df_glasses = df_hist[df_hist["Items type"].astype(str).str.strip().str.lower() == "glasses"]
@@ -579,7 +579,7 @@ with col2:
                 keep_cols = [c for c in ["Brand", "Glasses contain"] if c in df_glasses.columns]
                 df_glasses = df_glasses[keep_cols]
                 df_glasses.to_sql('historical_data', engine, if_exists='replace', index=False)
-                st.success(f"✅ Historical Data updated! ({len(df_glasses)} glasses mapped)")
+                st.success(f"✅ Global Categories updated! ({len(df_glasses)} glasses mapped)")
             else:
                 st.error("⚠️ 'Items type' column missing. Could not filter/upload historical data.")
 
@@ -587,8 +587,8 @@ with col2:
 
     # Origin Country Data
     origin_file = st.file_uploader("Upload new `origins.xlsx`", type=["xlsx"])
-    if origin_file and st.button("⬆️ Replace Origin Data in Cloud"):
-        with st.spinner("Uploading Origin Data..."):
+    if origin_file and st.button("⬆️ Replace Item Origin in Cloud"):
+        with st.spinner("Uploading Item Origin..."):
             df_origin = pd.read_excel(origin_file, dtype=str, engine="openpyxl")
             df_origin.columns = df_origin.columns.astype(str).str.strip()
             keep_cols = [c for c in ["item_name", "country_master"] if c in df_origin.columns]
@@ -596,6 +596,6 @@ with col2:
                 df_origin = df_origin[keep_cols]
                 df_origin = df_origin.dropna(subset=["item_name", "country_master"])
                 df_origin.to_sql('origin_data', engine, if_exists='replace', index=False)
-                st.success(f"✅ Origin Data updated! ({len(df_origin)} items)")
+                st.success(f"✅ Item Origin updated! ({len(df_origin)} items)")
             else:
                 st.error("⚠️ 'item_name' or 'country_master' column missing.")

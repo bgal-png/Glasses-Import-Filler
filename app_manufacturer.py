@@ -174,13 +174,13 @@ def load_cloud_data():
         except:
             pass
 
-        # 3. Fetch Historical Data (master_clean)
+        # 3. Fetch Global Categories (master_clean)
         try:
             historical_df = pd.read_sql_table('historical_data', con=engine)
         except:
             pass
 
-        # 4. Fetch Origin Data
+        # 4. Fetch Item Origin
         try:
             origin_df = pd.read_sql_table('origin_data', con=engine)
         except:
@@ -205,11 +205,11 @@ col_a, col_b, col_c, col_d = st.columns(4)
 with col_a:
     st.metric("📦 Package Data", f"{len(package_df)} items" if not package_df.empty else "Not loaded")
 with col_b:
-    st.metric("📜 Historical Data", f"{len(master_clean_df)} glasses" if not master_clean_df.empty else "Not loaded")
+    st.metric("📜 Global Categories", f"{len(master_clean_df)} glasses" if not master_clean_df.empty else "Not loaded")
 with col_c:
     st.metric("🗄️ Master Catalog", f"{len(master_db)} products")
 with col_d:
-    st.metric("🌍 Origin Data", f"{len(origin_df)} items" if not origin_df.empty else "Not loaded")
+    st.metric("🌍 Item Origin", f"{len(origin_df)} items" if not origin_df.empty else "Not loaded")
 
 # ==========================================
 # 🚀 APP UI & CONTROL PANEL
