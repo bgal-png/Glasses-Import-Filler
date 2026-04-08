@@ -597,6 +597,13 @@ if uploaded_file:
                     if no_orders and "Glasses lenses no-orders ID:103" in target_df.columns:
                         target_df.at[index, "Glasses lenses no-orders ID:103"] = "|".join(sorted(no_orders))
 
+                    # --- Fill "None" for empty lens effect ---
+                    effect_col = "Glasses lens effect ID: 37"
+                    if effect_col in target_df.columns and not is_frames:
+                        current_effect = str(target_df.at[index, effect_col]).strip()
+                        if not current_effect or current_effect.lower() in ["nan", ""]:
+                            target_df.at[index, effect_col] = "None"
+
             st.success(f"✅ Match Complete! Successfully filled {match_count} out of {len(target_df)} products.")
 
             # --- 👓 AI VISION ENGINE (Shape + Sport Detection) ---
