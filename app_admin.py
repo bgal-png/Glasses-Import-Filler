@@ -485,8 +485,8 @@ try:
 except:
     st.info("📦 Database is empty or not yet created.")
 
-# --- 🔍 BARCODE SEARCH ---
-with st.expander("🔍 Quick Barcode Lookup", expanded=False):
+# --- 🔍 BARCODE SEARCH & EDIT ---
+with st.expander("🔍 Barcode Lookup & Editor", expanded=False):
     search_col1, search_col2 = st.columns([3, 1])
     with search_col1:
         search_ean = st.text_input("Enter EAN / Barcode to search:", placeholder="e.g. 8056597123456")
@@ -496,19 +496,68 @@ with st.expander("🔍 Quick Barcode Lookup", expanded=False):
         search_btn = st.button("Search", use_container_width=True)
 
     if search_btn and search_ean:
-        clean_search = re.sub(r"\.0$", "", str(search_ean).strip()).lstrip("0")
+        st.session_state["lookup_ean"] = search_ean
+
+    if "lookup_ean" in st.session_state and st.session_state["lookup_ean"]:
+        clean_search = re.sub(r"\.0$", "", str(st.session_state["lookup_ean"]).strip()).lstrip("0")
         try:
             result_df = pd.read_sql_table('master_catalog', con=engine)
             if 'join_key' in result_df.columns:
                 result_df['join_key'] = result_df['join_key'].astype(str).str.strip()
                 match = result_df[result_df['join_key'] == clean_search]
                 if not match.empty:
-                    st.success(f"✅ Barcode '{search_ean}' found!")
+                    st.success(f"✅ Barcode '{st.session_state['lookup_ean']}' found!")
+
                     row_data = match.iloc[0].fillna("")
                     row_data = row_data.apply(lambda x: str(x).strip() if str(x).strip().lower() != "nan" else "")
-                    st.dataframe(row_data.to_frame("Value"), use_container_width=True)
+
+                    # Editable fields
+                    view_tab, edit_tab = st.tabs(["📋 View", "✏️ Edit"])
+
+                    with view_tab:
+                        st.dataframe(row_data.to_frame("Value"), use_container_width=True)
+
+                    with edit_tab:
+                        st.caption("Edit any field below and click Save to update the database.")
+                        edited_values = {}
+                        cols_to_edit = [c for c in match.columns if c != "join_key"]
+
+                        for col in cols_to_edit:
+                            current_val = str(row_data.get(col, "")).strip()
+                            if current_val.lower() == "nan":
+                                current_val = ""
+                            edited_values[col] = st.text_input(
+                                col,
+                                value=current_val,
+                                key=f"edit_{col}_{clean_search}"
+                            )
+
+                        if st.button("💾 Save Changes", type="primary"):
+                            try:
+                                # Build update only for changed values
+                                changes = {}
+                                for col in cols_to_edit:
+                                    old_val = str(row_data.get(col, "")).strip()
+                                    if old_val.lower() == "nan":
+                                        old_val = ""
+                                    new_val = edited_values[col].strip()
+                                    if new_val != old_val:
+                                        changes[col] = new_val
+
+                                if changes:
+                                    # Update in database
+                                    idx_pos = result_df.index[result_df['join_key'] == clean_search]
+                                    for col, val in changes.items():
+                                        result_df.loc[idx_pos, col] = val
+                                    result_df.to_sql('master_catalog', con=engine, if_exists='replace', index=False)
+                                    st.success(f"✅ Updated {len(changes)} field(s): {', '.join(changes.keys())}")
+                                    st.rerun()
+                                else:
+                                    st.info("No changes detected.")
+                            except Exception as e:
+                                st.error(f"Failed to save: {e}")
                 else:
-                    st.error(f"❌ Barcode '{search_ean}' (cleaned: {clean_search}) not found.")
+                    st.error(f"❌ Barcode '{st.session_state['lookup_ean']}' (cleaned: {clean_search}) not found.")
         except Exception as e:
             st.error(f"Search failed: {e}")
 
