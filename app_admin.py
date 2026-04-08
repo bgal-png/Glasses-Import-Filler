@@ -504,9 +504,8 @@ with st.expander("🔍 Quick Barcode Lookup", expanded=False):
                 match = result_df[result_df['join_key'] == clean_search]
                 if not match.empty:
                     st.success(f"✅ Barcode '{search_ean}' found!")
-                    # Show all non-empty columns for this row
-                    row_data = match.iloc[0].dropna()
-                    row_data = row_data[row_data.astype(str).str.strip() != ""]
+                    row_data = match.iloc[0].fillna("")
+                    row_data = row_data.apply(lambda x: str(x).strip() if str(x).strip().lower() != "nan" else "")
                     st.dataframe(row_data.to_frame("Value"), use_container_width=True)
                 else:
                     st.error(f"❌ Barcode '{search_ean}' (cleaned: {clean_search}) not found.")
