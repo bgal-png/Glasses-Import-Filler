@@ -263,7 +263,7 @@ FACE_SHAPE_MAP = {
     "Round": "Oval face|Square face",
     "Pilot": "Round face|Oval face|Heart-shaped face|Square face",
     "Cat Eye": "Oval face|Heart-shaped face",
-    "Square": "Round face|Oval face|Heart-shaped face",
+    "Square": "Round face|Oval face|Heart-shaped face|Square face",
     "Oversize": "Round face|Oval face|Heart-shaped face|Square face",
     "Rectangular": "Round face|Oval face|Heart-shaped face",
     "Panthos / Tea cup": "Round face|Oval face|Heart-shaped face|Square face",
