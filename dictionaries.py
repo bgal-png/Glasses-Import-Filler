@@ -1343,7 +1343,7 @@ _FRAME_TEMPLE_KEYWORDS = [
     ('bronzov', 'Ruthenium'), ('měděn', 'Ruthenium'),
     ('žlut', 'Yellow'),
     ('fialov', 'Purple'), ('purpurov', 'Purple'), ('lila', 'Purple'),
-    ('hněd', 'Brown'), ('leopard', 'Brown'),
+    ('hněd', 'Brown'), ('leopard', 'Brown'), ('hliněn', 'Brown'),
     ('růžov', 'Pink'), ('růže', 'Pink'),
     ('průhled', 'Transparent'), ('čir', 'Transparent'), ('transparentn', 'Transparent'), ('cristallo', 'Transparent'),
     # English
@@ -1378,7 +1378,7 @@ _LENS_KEYWORDS = [
     ('oranžov', 'Orange'), ('bronzov', 'Orange'), ('jantarov', 'Orange'), ('měděn', 'Orange'), ('ohniv', 'Orange'),
     ('žlut', 'Yellow'), ('okr', 'Yellow'), ('heřmánkov', 'Yellow'),
     ('fialov', 'Purple'), ('purpurov', 'Purple'), ('lila', 'Purple'), ('ametyst', 'Purple'),
-    ('hněd', 'Brown'), ('havana', 'Brown'), ('leopard', 'Brown'), ('medov', 'Brown'), ('velbloud', 'Brown'),
+    ('hněd', 'Brown'), ('havana', 'Brown'), ('leopard', 'Brown'), ('medov', 'Brown'), ('velbloud', 'Brown'), ('hliněn', 'Brown'),
     ('růžov', 'Pink'), ('růže', 'Pink'), ('broskvov', 'Pink'), ('mora', 'Pink'), ('morušov', 'Pink'), ('hroznov', 'Pink'), ('třešňov', 'Pink'),
     ('průhled', 'Transparent'), ('čir', 'Transparent'), ('transparentn', 'Transparent'), ('bíl', 'Transparent'),
     # English
