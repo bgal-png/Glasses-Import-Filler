@@ -161,10 +161,9 @@ st.markdown("""
 # 🔐 SECURE CLOUD CONNECTION
 # ==========================================
 try:
-    TURSO_DATABASE_URL = st.secrets["TURSO_DATABASE_URL"]
-    TURSO_AUTH_TOKEN = st.secrets["TURSO_AUTH_TOKEN"]
+    DB_URL = st.secrets["DB_URL"]
 except KeyError:
-    st.error("❌ CRITICAL: 'TURSO_DATABASE_URL' or 'TURSO_AUTH_TOKEN' secret is missing. Please add them to your Streamlit Cloud secrets.")
+    st.error("❌ CRITICAL: 'DB_URL' secret is missing. Please add it to your Streamlit Cloud secrets or local .streamlit/secrets.toml file.")
     st.stop()
 
 # ==========================================
@@ -178,10 +177,7 @@ def load_cloud_data():
     origin_df = pd.DataFrame()
 
     try:
-        engine = create_engine(
-            f"sqlite+{TURSO_DATABASE_URL}?secure=true",
-            connect_args={"auth_token": TURSO_AUTH_TOKEN},
-        )
+        engine = create_engine(DB_URL, pool_pre_ping=True, pool_recycle=300)
 
         # 1. Fetch Master Catalog
         master_db = pd.read_sql_table('master_catalog', con=engine)

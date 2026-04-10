@@ -20,16 +20,12 @@ st.set_page_config(page_title="Database Admin Panel", layout="wide")
 st.title("⚙️ Cloud Database Admin Panel")
 st.caption("Upload individual files here to process and merge them into the Supabase Vault.")
 
-# Fetch Turso credentials from Streamlit Cloud secrets
-TURSO_DATABASE_URL = st.secrets["TURSO_DATABASE_URL"]
-TURSO_AUTH_TOKEN = st.secrets["TURSO_AUTH_TOKEN"]
+# Fetch the secret securely from Streamlit Cloud!
+DB_URL = st.secrets["DB_URL"]
 
 @st.cache_resource
 def get_engine():
-    return create_engine(
-        f"sqlite+{TURSO_DATABASE_URL}?secure=true",
-        connect_args={"auth_token": TURSO_AUTH_TOKEN},
-    )
+    return create_engine(DB_URL, pool_pre_ping=True, pool_recycle=300)
 
 engine = get_engine()
 
@@ -468,7 +464,7 @@ def perform_upsert(new_data_df):
         upsert_msg = f"✨ Created database from scratch with {len(new_data_df)} products!"
 
     # Push back to Supabase
-    final_df.reset_index().to_sql('master_catalog', con=engine, if_exists='replace', index=False, chunksize=100)
+    final_df.reset_index().to_sql('master_catalog', con=engine, if_exists='replace', index=False, )
     return upsert_msg
 
 # ==========================================
@@ -548,7 +544,7 @@ with st.expander("🔍 Barcode Lookup & Editor", expanded=False):
                                     idx_pos = result_df.index[result_df['join_key'] == clean_search]
                                     for col, val in changes.items():
                                         result_df.loc[idx_pos, col] = val
-                                    result_df.to_sql('master_catalog', con=engine, if_exists='replace', index=False, chunksize=100)
+                                    result_df.to_sql('master_catalog', con=engine, if_exists='replace', index=False, )
                                     st.success(f"✅ Updated {len(changes)} field(s): {', '.join(changes.keys())}")
                                     st.rerun()
                                 else:
@@ -609,7 +605,7 @@ with col2:
         with st.spinner("Uploading Package Data..."):
             df_pkg = pd.read_excel(pkg_file)
             df_pkg.columns = df_pkg.columns.astype(str).str.strip()
-            df_pkg.to_sql('package_data', engine, if_exists='replace', index=False, chunksize=100)
+            df_pkg.to_sql('package_data', engine, if_exists='replace', index=False, )
             st.success(f"✅ Package Data updated! ({len(df_pkg)} items)")
             
     st.divider()
@@ -625,7 +621,7 @@ with col2:
                 # Only keep columns we actually use to save storage
                 keep_cols = [c for c in ["Brand", "Glasses contain"] if c in df_glasses.columns]
                 df_glasses = df_glasses[keep_cols]
-                df_glasses.to_sql('historical_data', engine, if_exists='replace', index=False, chunksize=100)
+                df_glasses.to_sql('historical_data', engine, if_exists='replace', index=False, )
                 st.success(f"✅ Global Categories updated! ({len(df_glasses)} glasses mapped)")
             else:
                 st.error("⚠️ 'Items type' column missing. Could not filter/upload historical data.")
@@ -642,7 +638,7 @@ with col2:
             if len(keep_cols) == 2:
                 df_origin = df_origin[keep_cols]
                 df_origin = df_origin.dropna(subset=["item_name", "country_master"])
-                df_origin.to_sql('origin_data', engine, if_exists='replace', index=False, chunksize=100)
+                df_origin.to_sql('origin_data', engine, if_exists='replace', index=False, )
                 st.success(f"✅ Item Origin updated! ({len(df_origin)} items)")
             else:
                 st.error("⚠️ 'item_name' or 'country_master' column missing.")
