@@ -3,5 +3,5 @@ pandas
 openpyxl
 xlsxwriter
 SQLAlchemy
-psycopg2-binary
+sqlalchemy-libsql
 anthropic

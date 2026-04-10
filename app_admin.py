@@ -20,17 +20,16 @@ st.set_page_config(page_title="Database Admin Panel", layout="wide")
 st.title("⚙️ Cloud Database Admin Panel")
 st.caption("Upload individual files here to process and merge them into the Supabase Vault.")
 
-# Fetch the secret securely from Streamlit Cloud!
-DB_URL = st.secrets["DB_URL"]
+# Fetch Turso credentials from Streamlit Cloud secrets
+TURSO_DATABASE_URL = st.secrets["TURSO_DATABASE_URL"]
+TURSO_AUTH_TOKEN = st.secrets["TURSO_AUTH_TOKEN"]
 
 @st.cache_resource
 def get_engine():
-    return create_engine(DB_URL)
-
-@st.cache_resource
-def get_engine():
-    # pool_pre_ping checks if the connection is alive before sending data!
-    return create_engine(DB_URL, pool_pre_ping=True, pool_recycle=300)
+    return create_engine(
+        f"sqlite+{TURSO_DATABASE_URL}?secure=true",
+        connect_args={"auth_token": TURSO_AUTH_TOKEN},
+    )
 
 engine = get_engine()
 
