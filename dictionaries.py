@@ -48,6 +48,7 @@ MANUFACTURER_CONFIG = {
             "Fossil",
             "Pierre Cardin",
             "Marc Jacobs",
+            "Levi's",
         ],
         "columns": {
             "Combination": "Size",
