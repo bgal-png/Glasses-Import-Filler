@@ -49,6 +49,7 @@ MANUFACTURER_CONFIG = {
             "Pierre Cardin",
             "Marc Jacobs",
             "Levi's",
+            "Love Moschino",
         ],
         "columns": {
             "Combination": "Size",

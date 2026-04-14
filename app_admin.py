@@ -327,6 +327,19 @@ def load_single_catalog(mfg_name, config_settings, file_path):
     new_df["Brand"] = new_df["Brand"].apply(_clean_brand_to_whitelist)
     new_df["Manufacturer"] = new_df["Manufacturer"].apply(_clean_brand_to_whitelist)
 
+    # Brand name corrections (word swaps, special cases)
+    BRAND_CORRECTIONS = {
+        "moschino love": "Love Moschino",
+    }
+    def _correct_brand(raw):
+        raw = str(raw).strip()
+        if raw.lower() in BRAND_CORRECTIONS:
+            return BRAND_CORRECTIONS[raw.lower()]
+        return raw
+
+    new_df["Brand"] = new_df["Brand"].apply(_correct_brand)
+    new_df["Manufacturer"] = new_df["Manufacturer"].apply(_correct_brand)
+
     # ==========================================
     # 🏗️ ASSEMBLE MODEL AND NAMES
     # ==========================================
