@@ -294,17 +294,22 @@ function pollGmailAndFetchLuxotticaZip() {
       updated.add(msgId);
 
       const body = message.getBody();
-      // Match the Azure Blob URL — anything containing blob.core.windows.net.
-      // Stop at quotes, whitespace, or HTML tag delimiters.
-      const match = body.match(/https:\/\/[^"'\s<>]+blob\.core\.windows\.net[^"'\s<>]+/);
-      if (!match) {
-        console.log(`  msg ${msgId}: no Azure URL found in body — skipping`);
+      // Match all Azure Blob URLs in the body, then pick the one that's actually
+      // the ZIP download (path ends in .zip and has a SAS signature). The email
+      // also embeds the company logo from an Azure URL — must not match that.
+      const allMatches = body.match(/https:\/\/[^"'\s<>]+blob\.core\.windows\.net[^"'\s<>]+/g) || [];
+      const candidates = allMatches
+        .map(u => u.replace(/&amp;/g, "&"))
+        .filter(u => /\.zip(\?|$)/i.test(u) && /[?&]sig=/i.test(u));
+      if (candidates.length === 0) {
+        console.log(`  msg ${msgId}: no ZIP download URL found among ${allMatches.length} Azure URL(s) — skipping`);
         return;
       }
-
-      // Un-escape HTML entities that may appear in href attributes.
-      const url = match[0].replace(/&amp;/g, "&");
-      console.log(`  msg ${msgId}: found URL (length ${url.length})`);
+      // If multiple, pick the longest (most-qualified — usually the one with
+      // the full SAS token).
+      candidates.sort((a, b) => b.length - a.length);
+      const url = candidates[0];
+      console.log(`  msg ${msgId}: found ZIP URL (length ${url.length}) among ${allMatches.length} blob URL(s)`);
 
       // Filename = last path segment of URL, before query string, URL-decoded.
       let filename;
