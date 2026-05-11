@@ -261,10 +261,21 @@ if uploaded_file:
 
         target_df.columns = (
             target_df.columns.astype(str)
-            .str.replace("\n", " ", regex=False)
+            .str.replace(r"[\r\n\t ​]", " ", regex=True)  # \r, \n, tabs, NBSP, ZWSP
             .str.replace(r"\s+", " ", regex=True)
             .str.strip()
         )
+
+        # Drop duplicate columns that normalization may have collapsed (e.g. a
+        # template with two "Glasses contain ID:84" cells — one with a trailing
+        # newline — both end up named the same after stripping whitespace).
+        # Keep the first occurrence; the duplicate at the right would otherwise
+        # mirror the filled value at the end of the output.
+        dup_mask = target_df.columns.duplicated()
+        if dup_mask.any():
+            dropped = sorted(set(target_df.columns[dup_mask].tolist()))
+            st.info(f"ℹ️ Removed {dup_mask.sum()} duplicate column(s) from template: {', '.join(dropped)}")
+            target_df = target_df.loc[:, ~dup_mask]
 
         # Save a copy of the original data for before/after comparison
         original_df = target_df.copy()
