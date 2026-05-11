@@ -39,9 +39,9 @@ def load_single_catalog(mfg_name, config_settings, file_path):
 
     try:
         if file_path.endswith(".csv"):
-            try:
-                df = pd.read_csv(file_path, dtype=str, on_bad_lines="skip", sep=",")
-            except:
+            df = pd.read_csv(file_path, dtype=str, on_bad_lines="skip", sep=",")
+            if len(df.columns) <= 1:
+                # Single-column result means commas weren't the separator — retry with semicolons
                 df = pd.read_csv(file_path, dtype=str, on_bad_lines="skip", sep=";")
         else:
             df = pd.read_excel(file_path, dtype=str, engine="openpyxl")
@@ -83,6 +83,23 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                     return "|".join(vals) if vals else ""
                 new_df[global_name] = df.apply(merge_row, axis=1)
 
+    # 1b. Safilo: construct Combination from separate size fields (new CSV format)
+    if mfg_name == "safilo" and all(c in df.columns for c in ["ItemSize", "ItemBridgeLength", "TempleLength"]):
+        def _build_safilo_combination(row):
+            parts = []
+            for col in ["ItemSize", "ItemBridgeLength", "TempleLength"]:
+                val = str(row.get(col, "")).strip()
+                if val and val.lower() not in ("nan", ""):
+                    try:
+                        clean = re.sub(r"[^\d,.-]", "", val).replace(",", ".")
+                        if clean:
+                            val = str(int(round(float(clean))))
+                    except Exception:
+                        pass
+                    parts.append(val)
+            return "-".join(parts) if parts else ""
+        new_df["Combination"] = df.apply(_build_safilo_combination, axis=1)
+
     # 2. Raw Clip-On Engine
     extracted_clip_ons = []
     clip_on_alerts = []
@@ -92,11 +109,11 @@ def load_single_catalog(mfg_name, config_settings, file_path):
         alert = False
 
         if mfg_name == "safilo":
-            prod_type = re.sub(r"\s+", " ", str(raw_row.get("Product Type Desc.", "")).strip().upper())
-            pol = str(raw_row.get("Polarized", "")).strip().upper()
-            if "+ CLIP-ON" in prod_type:
-                if pol == "0": clip_val = "Magnetic sun clip-on"
-                elif pol == "X": clip_val = "Magnetic sun clip-on p"
+            prod_type = re.sub(r"\s+", " ", str(raw_row.get("TypeD", "")).strip().upper())
+            pol = str(raw_row.get("LenPolarized", "")).strip().upper()
+            if "CLIP-ON" in prod_type or "CLIP ON" in prod_type:
+                if pol in ("0", "N"): clip_val = "Magnetic sun clip-on"
+                elif pol in ("X", "Y"): clip_val = "Magnetic sun clip-on p"
 
         elif mfg_name == "luxottica":
             # Find description column dynamically (encoding-safe)
@@ -165,7 +182,17 @@ def load_single_catalog(mfg_name, config_settings, file_path):
 
         if col_name == "Glasses_other_info":
             if mfg == "safilo":
-                if pd.notna(row.get("Glasses_model")) and "FLEX" in str(row["Glasses_model"]).upper(): final_values.add("Flex")
+                # Flex: prefer Hinge_raw column (new CSV format), fall back to model name (old format)
+                hinge = str(row.get("Hinge_raw", "")).strip().upper()
+                if hinge and hinge not in ("NAN", "NO FLEX", ""):
+                    if "FLEX" in hinge:
+                        final_values.add("Flex")
+                elif pd.notna(row.get("Glasses_model")) and "FLEX" in str(row["Glasses_model"]).upper():
+                    final_values.add("Flex")
+                # Double bridge from Shape value
+                shape_raw = str(raw_val).strip().upper()
+                if "DOUBLE BRIDGE" in shape_raw:
+                    final_values.add("Double bridge")
             elif mfg == "luxottica":
                 raw_info = str(row.get("Glasses_other_info", "")).strip().upper()
                 if raw_info == "X": final_values.add("Flex")
@@ -176,16 +203,12 @@ def load_single_catalog(mfg_name, config_settings, file_path):
 
         elif col_name == "Glasses_lens_effect":
             if mfg == "safilo":
-                if str(row.get("Polarized_raw", "")).strip().upper() == "X": final_values.add("Polarized")
-                if str(row.get("Photochromic_raw", "")).strip().upper() == "X": final_values.add("Photochromic")
-                raw_eff = str(row.get("Treatement_Description_raw", "")).strip()
-                if raw_eff and raw_eff.lower() != "nan":
-                    t_dict = VALUE_TRANSLATOR.get(col_name, {})
-                    l_dict = {str(k).lower(): v for k, v in t_dict.items() if k}
-                    for p in [x.strip() for x in raw_eff.split(",") if x.strip()]:
-                        if p.lower() in l_dict:
-                            if l_dict[p.lower()]: final_values.add(l_dict[p.lower()])
-                        else: unmapped_values.add(f"Safilo -> {col_name}: '{p}'")
+                # New format uses Y/N; old format used X/0 — handle both
+                pol = str(row.get("Polarized_raw", "")).strip().upper()
+                if pol in ("X", "Y"): final_values.add("Polarized")
+                phot = str(row.get("Photochromic_raw", "")).strip().upper()
+                if phot in ("X", "Y"): final_values.add("Photochromic")
+                # Treatement Description column removed in new CSV format
             elif mfg == "luxottica":
                 if str(row.get("Polarizovane_raw", "")).strip().upper() == "X": final_values.add("Polarized")
                 if str(row.get("Fotochromaticke_raw", "")).strip().upper() == "X": final_values.add("Photochromic")
@@ -213,7 +236,7 @@ def load_single_catalog(mfg_name, config_settings, file_path):
         elif col_name == "SunGlasses_RX_lenses":
             raw_rx = str(row.get(col_name, "")).strip().upper()
             if mfg in ["safilo", "kering", "marcolin"]:
-                if raw_rx == "X": final_values.add("Yes")
+                if raw_rx in ("X", "Y"): final_values.add("Yes")
             elif mfg == "luxottica":
                 if raw_rx == "YES": final_values.add("Yes")
 
@@ -324,12 +347,11 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                 return known  # e.g. "Polaroid Kids" → "Polaroid"
         return raw  # no match — keep original
 
-    new_df["Brand"] = new_df["Brand"].apply(_clean_brand_to_whitelist)
-    new_df["Manufacturer"] = new_df["Manufacturer"].apply(_clean_brand_to_whitelist)
-
-    # Brand name corrections (word swaps, special cases)
+    # Brand name corrections (word swaps, special cases) — run BEFORE whitelist
+    # so "Moschino Love" → "Love Moschino" before the whitelist can collapse it to "Moschino"
     BRAND_CORRECTIONS = {
         "moschino love": "Love Moschino",
+        "prive' revaux": "Prive Revaux",
     }
     def _correct_brand(raw):
         raw = str(raw).strip()
@@ -339,6 +361,9 @@ def load_single_catalog(mfg_name, config_settings, file_path):
 
     new_df["Brand"] = new_df["Brand"].apply(_correct_brand)
     new_df["Manufacturer"] = new_df["Manufacturer"].apply(_correct_brand)
+
+    new_df["Brand"] = new_df["Brand"].apply(_clean_brand_to_whitelist)
+    new_df["Manufacturer"] = new_df["Manufacturer"].apply(_clean_brand_to_whitelist)
 
     # ==========================================
     # 🏗️ ASSEMBLE MODEL AND NAMES
@@ -606,6 +631,41 @@ with col1:
                 st.success(msg)
             else:
                 st.error("Failed to extract any data. Please check the file format.")
+
+    st.divider()
+    st.markdown("**⚠️ Danger zone — delete all rows for a manufacturer**")
+    st.caption("Use this before re-uploading after a structure change (e.g. Safilo CSV migration). Rows are matched by `Producing_company`.")
+    del_mfg = st.selectbox(
+        "Manufacturer to wipe:",
+        ["safilo", "luxottica", "marcolin", "kering"],
+        key="del_mfg_choice",
+    )
+    confirm_text = st.text_input(
+        f"Type **DELETE {del_mfg.upper()}** to confirm:",
+        key="del_confirm_input",
+        placeholder=f"DELETE {del_mfg.upper()}",
+    )
+    if st.button(f"🗑️ Delete all {del_mfg.title()} rows", type="secondary"):
+        if confirm_text.strip() != f"DELETE {del_mfg.upper()}":
+            st.error("Confirmation text doesn't match. Nothing deleted.")
+        else:
+            with st.spinner(f"Loading master_catalog to filter out {del_mfg.title()}..."):
+                try:
+                    full_df = pd.read_sql_table("master_catalog", con=engine)
+                    before_count = len(full_df)
+                    if "Producing_company" not in full_df.columns:
+                        st.error("⚠️ master_catalog has no `Producing_company` column — cannot filter.")
+                    else:
+                        target = del_mfg.title()
+                        keep_df = full_df[full_df["Producing_company"].astype(str).str.strip().str.lower() != target.lower()]
+                        deleted = before_count - len(keep_df)
+                        if deleted == 0:
+                            st.info(f"No rows found with Producing_company = '{target}'. Nothing to delete.")
+                        else:
+                            keep_df.to_sql("master_catalog", con=engine, if_exists="replace", index=False)
+                            st.success(f"✅ Deleted {deleted:,} {target} rows. {len(keep_df):,} rows remain.")
+                except Exception as e:
+                    st.error(f"Delete failed: {e}")
 
 # --- 📦 COLUMN 2: REFERENCE DATA ---
 with col2:
