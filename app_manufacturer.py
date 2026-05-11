@@ -259,36 +259,22 @@ if uploaded_file:
         else:
             target_df = pd.read_excel(uploaded_file, dtype=str, engine="openpyxl")
 
-        # Aggressive column-name normalization: strip ALL non-printable-ASCII
-        # characters (catches BOM, NBSP, ZWSP, ZWNJ, ZWJ, line/paragraph
-        # separators, etc.), then collapse remaining whitespace and trim.
-        # This is the only way to safely match against canonical names like
-        # "Glasses contain ID:84" when Excel templates carry invisible junk.
-        _raw_cols = list(target_df.columns.astype(str))
-        def _strict_normalize(s):
-            s = "".join(ch for ch in s if 32 <= ord(ch) < 127)
-            s = re.sub(r"\s+", " ", s).strip()
-            return s
-        _normalized_cols = [_strict_normalize(c) for c in _raw_cols]
-        target_df.columns = _normalized_cols
+        target_df.columns = (
+            target_df.columns.astype(str)
+            .str.replace(r"[\r\n\t ​]", " ", regex=True)  # \r, \n, tabs, NBSP, ZWSP
+            .str.replace(r"\s+", " ", regex=True)
+            .str.strip()
+        )
 
-        # Report any column whose name was actually changed by normalization
-        # (lets us see what invisible character was hiding in the header).
-        _changed = [
-            (raw, norm) for raw, norm in zip(_raw_cols, _normalized_cols)
-            if raw != norm and raw.strip() != norm  # ignore pure trailing-space cases
-        ]
-        if _changed:
-            with st.expander(f"\U0001F527 Normalized {len(_changed)} column header(s) (invisible chars stripped)"):
-                for raw, norm in _changed:
-                    odd = " ".join(f"U+{ord(ch):04X}" for ch in raw if ord(ch) >= 127 or ord(ch) < 32)
-                    st.caption(f"`{repr(raw)}` -> `{norm}`  (non-ASCII: {odd or '-'})")
-
-        # Drop duplicate columns that normalization may have collapsed.
+        # Drop duplicate columns that normalization may have collapsed (e.g. a
+        # template with two "Glasses contain ID:84" cells — one with a trailing
+        # newline — both end up named the same after stripping whitespace).
+        # Keep the first occurrence; the duplicate at the right would otherwise
+        # mirror the filled value at the end of the output.
         dup_mask = target_df.columns.duplicated()
         if dup_mask.any():
             dropped = sorted(set(target_df.columns[dup_mask].tolist()))
-            st.info(f"\u2139\ufe0f Removed {dup_mask.sum()} duplicate column(s) from template: {', '.join(dropped)}")
+            st.info(f"ℹ️ Removed {dup_mask.sum()} duplicate column(s) from template: {', '.join(dropped)}")
             target_df = target_df.loc[:, ~dup_mask]
 
         # Save a copy of the original data for before/after comparison
