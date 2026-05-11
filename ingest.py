@@ -86,21 +86,20 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                     return "|".join(vals) if vals else ""
                 new_df[global_name] = df.apply(merge_row, axis=1)
 
-    # 1b. Safilo: construct Combination from separate size fields (new CSV format)
-    if mfg_name == "safilo" and all(c in df.columns for c in ["ItemSize", "ItemBridgeLength", "TempleLength"]):
+    # 1b. Safilo: Combination is just the lens width (e.g. "56"), not the full
+    # lens-bridge-temple string. ItemSize already holds the rounded width.
+    if mfg_name == "safilo" and "ItemSize" in df.columns:
         def _build_safilo_combination(row):
-            parts = []
-            for col in ["ItemSize", "ItemBridgeLength", "TempleLength"]:
-                val = str(row.get(col, "")).strip()
-                if val and val.lower() not in ("nan", ""):
-                    try:
-                        clean = re.sub(r"[^\d,.-]", "", val).replace(",", ".")
-                        if clean:
-                            val = str(int(round(float(clean))))
-                    except Exception:
-                        pass
-                    parts.append(val)
-            return "-".join(parts) if parts else ""
+            val = str(row.get("ItemSize", "")).strip()
+            if not val or val.lower() in ("nan", ""):
+                return ""
+            try:
+                clean = re.sub(r"[^\d,.-]", "", val).replace(",", ".")
+                if clean:
+                    return str(int(round(float(clean))))
+            except Exception:
+                pass
+            return val
         new_df["Combination"] = df.apply(_build_safilo_combination, axis=1)
 
     # 2. Raw Clip-On Engine
