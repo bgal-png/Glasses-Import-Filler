@@ -1,0 +1,47 @@
+name: Luxottica Drive ingest
+
+# Triggered by:
+#   - Google Apps Script POSTing repository_dispatch with event_type=luxottica-ingest
+#     when a new ZIP lands in the Drive Luxottica/inbox folder.
+#   - Manual via the Actions tab ("Run workflow") for debugging.
+#   - Daily cron at 06:15 UTC as a safety net (offset 15 min from Safilo so
+#     they don't compete for runners and the DB upsert is sequential).
+on:
+  repository_dispatch:
+    types: [luxottica-ingest]
+  workflow_dispatch:
+  schedule:
+    - cron: "15 6 * * *"
+
+concurrency:
+  group: luxottica-ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements-ingest.txt
+
+      - name: Run ingest
+        env:
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          GDRIVE_INBOX_FOLDER_ID: ${{ secrets.GDRIVE_LUXOTTICA_INBOX_FOLDER_ID }}
+          GDRIVE_ARCHIVE_FOLDER_ID: ${{ secrets.GDRIVE_LUXOTTICA_ARCHIVE_FOLDER_ID }}
+          DB_URL: ${{ secrets.DB_URL }}
+        run: python scripts/auto_ingest.py --mfg luxottica

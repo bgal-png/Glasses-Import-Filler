@@ -1,32 +1,38 @@
 # -*- coding: utf-8 -*-
 """
-Headless Safilo CSV ingest — runs as a GitHub Action triggered by Apps Script
-when a new file lands in the Drive `inbox` folder.
+Generic headless ingest — runs as a GitHub Action triggered by Apps Script
+when a new file lands in a manufacturer's Drive `inbox` folder.
+
+Supports any manufacturer in MANUFACTURER_CONFIG (currently safilo, luxottica,
+marcolin, kering). Selects manufacturer from --mfg CLI arg or MFG_KEY env var.
 
 Behavior:
   1. Reads service-account credentials from GDRIVE_SERVICE_ACCOUNT_JSON env var.
-  2. Lists every file in the `inbox` folder (env: GDRIVE_INBOX_FOLDER_ID).
-  3. For each file: downloads, runs the same `ingest.load_single_catalog` +
-     `ingest.perform_upsert` used by the admin app, then moves the file to the
-     `archive` folder (env: GDRIVE_ARCHIVE_FOLDER_ID).
+  2. Lists every file in the inbox folder (env: GDRIVE_INBOX_FOLDER_ID).
+  3. For each file:
+     - downloads it
+     - if .zip: extracts and finds the .xlsx/.csv inside
+     - runs `ingest.load_single_catalog` and `ingest.perform_upsert`
+     - moves the ORIGINAL Drive file to the archive folder
   4. Logs everything to stdout (visible in GitHub Action logs).
   5. Exits non-zero if any file fails — but processes the rest of the batch first.
 
 Environment variables expected:
     GDRIVE_SERVICE_ACCOUNT_JSON   Full JSON contents of the service account key.
-    GDRIVE_INBOX_FOLDER_ID        Drive folder ID where Safilo files land.
+    GDRIVE_INBOX_FOLDER_ID        Drive folder ID where files land.
     GDRIVE_ARCHIVE_FOLDER_ID      Drive folder ID where processed files are moved.
     DB_URL                        SQLAlchemy DSN for Supabase.
-    SAFILO_MFG_KEY (optional)     Defaults to "safilo".
+    MFG_KEY (optional)            Manufacturer key — overridable via --mfg arg.
 """
 from __future__ import annotations
 
-import io
+import argparse
 import json
 import os
 import sys
 import tempfile
 import traceback
+import zipfile
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -37,10 +43,10 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
 # Local imports
-import sys as _sys
-_sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from dictionaries import MANUFACTURER_CONFIG
-from ingest import load_single_catalog, perform_upsert
+_sys_path_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _sys_path_root)
+from dictionaries import MANUFACTURER_CONFIG  # noqa: E402
+from ingest import load_single_catalog, perform_upsert  # noqa: E402
 
 
 def _log(msg: str) -> None:
@@ -94,18 +100,34 @@ def _move_to_archive(drive, file_id: str, inbox_folder_id: str, archive_folder_i
     ).execute()
 
 
-def main() -> int:
+def _extract_payload_from_zip(zip_path: str, dest_dir: str) -> str:
+    """Open a ZIP, find the first .xlsx or .csv inside, extract it, return its path.
+    Raises if there's no eligible payload."""
+    with zipfile.ZipFile(zip_path) as zf:
+        names = [n for n in zf.namelist() if not n.endswith("/")]
+        eligible = [n for n in names if n.lower().endswith((".xlsx", ".csv"))]
+        if not eligible:
+            raise ValueError(
+                f"ZIP contains no .xlsx/.csv files. Members: {names}"
+            )
+        # Pick the largest (in case of multiple — usually the real data file)
+        eligible.sort(key=lambda n: zf.getinfo(n).file_size, reverse=True)
+        target = eligible[0]
+        zf.extract(target, dest_dir)
+        return os.path.join(dest_dir, target)
+
+
+def main(mfg: str) -> int:
     inbox_id = os.environ["GDRIVE_INBOX_FOLDER_ID"]
     archive_id = os.environ["GDRIVE_ARCHIVE_FOLDER_ID"]
     db_url = os.environ["DB_URL"]
-    mfg = os.environ.get("SAFILO_MFG_KEY", "safilo")
 
     if mfg not in MANUFACTURER_CONFIG:
-        _log(f"FATAL: unknown manufacturer key '{mfg}'")
+        _log(f"FATAL: unknown manufacturer key '{mfg}'. Known: {list(MANUFACTURER_CONFIG.keys())}")
         return 2
 
     _log(f"Starting ingest for mfg={mfg}")
-    _log(f"Inbox folder: {inbox_id}")
+    _log(f"Inbox folder:   {inbox_id}")
     _log(f"Archive folder: {archive_id}")
 
     drive = _drive_client()
@@ -131,22 +153,33 @@ def main() -> int:
         _log("")
         _log(f"==== Processing: {name} ====")
 
-        # CSVs only (defensive — Apps Script trigger may fire on other types)
-        if not name.lower().endswith(".csv"):
-            _log(f"  SKIPPED (not a .csv file)")
+        lower_name = name.lower()
+        if not lower_name.endswith((".csv", ".xlsx", ".zip")):
+            _log(f"  SKIPPED (unsupported file type)")
             continue
 
         with tempfile.TemporaryDirectory() as tmp:
             local_path = os.path.join(tmp, name)
             try:
-                _log(f"  Downloading…")
+                _log(f"  Downloading from Drive…")
                 _download_file(drive, file_id, local_path)
                 size_kb = os.path.getsize(local_path) / 1024
                 _log(f"  Downloaded {size_kb:.1f} KB")
 
-                _log(f"  Processing through rules engine…")
-                df, unmapped, skipped = load_single_catalog(mfg, config, local_path)
-                _log(f"  Engine output: {len(df):,} rows, {len(unmapped)} unmapped values, {len(skipped)} skipped 'NOT MAPPED'")
+                # If ZIP, extract the data file inside
+                if lower_name.endswith(".zip"):
+                    _log(f"  Extracting ZIP…")
+                    process_path = _extract_payload_from_zip(local_path, tmp)
+                    _log(f"  Extracted: {os.path.basename(process_path)}")
+                else:
+                    process_path = local_path
+
+                _log(f"  Running rules engine…")
+                df, unmapped, skipped = load_single_catalog(mfg, config, process_path)
+                _log(
+                    f"  Engine output: {len(df):,} rows, "
+                    f"{len(unmapped)} unmapped values, {len(skipped)} skipped 'NOT MAPPED'"
+                )
 
                 if df.empty:
                     _log(f"  WARN: engine returned empty DataFrame — moving file to archive anyway")
@@ -158,7 +191,7 @@ def main() -> int:
                     msg = perform_upsert(expanded, engine)
                     _log(f"  Upsert: {msg}")
 
-                _log(f"  Moving to archive…")
+                _log(f"  Moving original Drive file to archive…")
                 _move_to_archive(drive, file_id, inbox_id, archive_id)
                 _log(f"  Done.")
                 successes.append(name)
@@ -183,8 +216,16 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Headless manufacturer-catalog ingest.")
+    parser.add_argument(
+        "--mfg",
+        default=os.environ.get("MFG_KEY", "safilo"),
+        help="Manufacturer key (safilo, luxottica, kering, marcolin). "
+             "Defaults to MFG_KEY env var or 'safilo'.",
+    )
+    args = parser.parse_args()
     try:
-        sys.exit(main())
+        sys.exit(main(args.mfg))
     except KeyError as e:
         _log(f"FATAL: required environment variable not set: {e}")
         sys.exit(2)

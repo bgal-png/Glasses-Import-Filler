@@ -49,4 +49,4 @@ jobs:
           GDRIVE_INBOX_FOLDER_ID: ${{ secrets.GDRIVE_INBOX_FOLDER_ID }}
           GDRIVE_ARCHIVE_FOLDER_ID: ${{ secrets.GDRIVE_ARCHIVE_FOLDER_ID }}
           DB_URL: ${{ secrets.DB_URL }}
-        run: python scripts/auto_ingest_safilo.py
+        run: python scripts/auto_ingest.py --mfg safilo
