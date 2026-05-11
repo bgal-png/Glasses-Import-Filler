@@ -27,7 +27,7 @@ import os
 import sys
 import tempfile
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 from sqlalchemy import create_engine
@@ -45,7 +45,7 @@ from ingest import load_single_catalog, perform_upsert
 
 def _log(msg: str) -> None:
     """Stamped log line for GitHub Actions output."""
-    print(f"[{datetime.utcnow().isoformat(timespec='seconds')}Z] {msg}", flush=True)
+    print(f"[{datetime.now(timezone.utc).isoformat(timespec='seconds')}] {msg}", flush=True)
 
 
 def _drive_client():
