@@ -283,40 +283,6 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                 else:
                     final_values.add(first_shape)
 
-        elif col_name == "Sunglasses_filter" and mfg == "safilo":
-            raw_val_local = str(row.get(col_name, "")).strip()
-            if raw_val_local and raw_val_local.lower() != "nan":
-                clean_numbers = re.findall(r"\d+\.?\d*", raw_val_local)
-                matched_by_math = False
-                if clean_numbers:
-                    vlt = float(clean_numbers[0])
-                    if 80 <= vlt <= 100:
-                        final_values.add("Category 0"); matched_by_math = True
-                    elif 43 <= vlt < 80:
-                        final_values.add("Category 1"); matched_by_math = True
-                    elif 18 <= vlt < 43:
-                        final_values.add("Category 2"); matched_by_math = True
-                    elif 8 <= vlt < 18:
-                        final_values.add("Category 3"); matched_by_math = True
-                    elif 0 < vlt < 8:
-                        final_values.add("Category 4"); matched_by_math = True
-                    # vlt == 0 is treated as "no filter data" (optical frame) — no category assigned
-
-                if not matched_by_math:
-                    if col_name in VALUE_TRANSLATOR:
-                        translation_dict = VALUE_TRANSLATOR[col_name]
-                        lower_dict = {str(k).lower(): v for k, v in translation_dict.items() if k}
-                        parts = [p.strip() for p in raw_val_local.split(",") if p.strip()]
-                        for part in parts:
-                            part_lower = part.lower()
-                            if part_lower in lower_dict:
-                                if lower_dict[part_lower]:
-                                    final_values.add(lower_dict[part_lower])
-                            else:
-                                unmapped_values.add(f"Safilo -> {col_name}: '{part}'")
-                    else:
-                        final_values.add(raw_val_local)
-
         elif col_name in ("Glasses_lens_Colour", "Frame_Colour", "Temple_Colour"):
             if raw_val and raw_val.lower() != "nan":
                 color_type = "lens" if col_name == "Glasses_lens_Colour" else "frame"

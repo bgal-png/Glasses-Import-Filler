@@ -86,7 +86,7 @@ MANUFACTURER_CONFIG = {
             "Glasses_lens_effect": ["LenPolarized", "LenPhotochromic"],
             "Polarized_raw": "LenPolarized",
             "Photochromic_raw": "LenPhotochromic",
-            "Sunglasses_filter": "UV_TransparencyPerc",
+            "Sunglasses_filter": "LenFilterCategory",
             "Glasses_gendre": "Gender",
             "Glasses_model": "StyleD",
             "Glasses_color_code": "ItemColor",
