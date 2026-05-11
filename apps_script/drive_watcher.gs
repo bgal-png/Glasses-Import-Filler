@@ -99,23 +99,31 @@ function pollInboxAndDispatch() {
 }
 
 /**
- * Install a time-driven trigger that polls every 5 minutes.
- * Idempotent — removes any existing pollInboxAndDispatch trigger first.
+ * Install time-driven triggers for both pollers (every 5 minutes).
+ * Idempotent — removes any existing matching triggers first.
  */
 function setupTrigger() {
-  // Clear any existing triggers for this function
+  const managed = new Set(["pollInboxAndDispatch", "pollGmailAndSaveAttachments"]);
+
+  // Clear any existing triggers we manage
   ScriptApp.getProjectTriggers().forEach(t => {
-    if (t.getHandlerFunction() === "pollInboxAndDispatch") {
+    if (managed.has(t.getHandlerFunction())) {
       ScriptApp.deleteTrigger(t);
     }
   });
+
+  ScriptApp.newTrigger("pollGmailAndSaveAttachments")
+    .timeBased()
+    .everyMinutes(5)
+    .create();
 
   ScriptApp.newTrigger("pollInboxAndDispatch")
     .timeBased()
     .everyMinutes(5)
     .create();
 
-  console.log("Installed time-driven trigger (every 5 min). " +
+  console.log("Installed 2 time-driven triggers (every 5 min): " +
+    "pollGmailAndSaveAttachments, pollInboxAndDispatch. " +
     "Verify in Apps Script editor → Triggers (clock icon).");
 }
 
@@ -125,4 +133,87 @@ function setupTrigger() {
  */
 function testDispatchNow() {
   pollInboxAndDispatch();
+}
+
+
+// ============================================================
+// GMAIL → DRIVE BRIDGE
+// ============================================================
+
+const GMAIL_CONFIG = {
+  // Subject must contain this string (case-insensitive in Gmail search).
+  SUBJECT_CONTAINS: "Availability Safilo File",
+
+  // How far back to look on each poll. 7 days is plenty for a daily file
+  // and lets us recover if the trigger is paused for a day or two.
+  LOOKBACK: "7d",
+};
+
+/**
+ * Scan Gmail for matching messages and save CSV attachments to the inbox folder.
+ * Tracks processed message IDs in Script Properties so we never save the same
+ * attachment twice — without modifying the email itself.
+ *
+ * If any files are saved, immediately fires pollInboxAndDispatch so the
+ * GitHub Action runs without waiting for the next 5-min tick.
+ */
+function pollGmailAndSaveAttachments() {
+  const PROP_NAME = "PROCESSED_MESSAGE_IDS";
+  const props = PropertiesService.getScriptProperties();
+  const processedRaw = props.getProperty(PROP_NAME) || "";
+  const processed = new Set(processedRaw.split(",").filter(x => x));
+
+  const query = `subject:"${GMAIL_CONFIG.SUBJECT_CONTAINS}" has:attachment newer_than:${GMAIL_CONFIG.LOOKBACK}`;
+  const threads = GmailApp.search(query, 0, 50);
+
+  if (threads.length === 0) {
+    console.log(`No emails match query: ${query}`);
+    return;
+  }
+
+  console.log(`Found ${threads.length} matching thread(s) in last ${GMAIL_CONFIG.LOOKBACK}.`);
+
+  const inbox = DriveApp.getFolderById(CONFIG.INBOX_FOLDER_ID);
+  let saved = 0;
+  const updatedProcessed = new Set(processed);
+
+  threads.forEach(thread => {
+    thread.getMessages().forEach(message => {
+      const msgId = message.getId();
+      if (processed.has(msgId)) {
+        return; // already handled in a previous run
+      }
+      updatedProcessed.add(msgId);
+
+      message.getAttachments().forEach(att => {
+        const name = att.getName();
+        if (name.toLowerCase().endsWith(".csv")) {
+          inbox.createFile(att);
+          console.log(`Saved attachment '${name}' (msg ${msgId})`);
+          saved++;
+        } else {
+          console.log(`Skipped non-CSV attachment '${name}' (msg ${msgId})`);
+        }
+      });
+    });
+  });
+
+  // Trim memory to last 500 message IDs so Script Properties don't grow forever
+  let arr = Array.from(updatedProcessed);
+  if (arr.length > 500) arr = arr.slice(-500);
+  props.setProperty(PROP_NAME, arr.join(","));
+
+  console.log(`Done. Saved ${saved} new CSV attachment(s).`);
+
+  if (saved > 0) {
+    console.log("Triggering inbox dispatch immediately…");
+    pollInboxAndDispatch();
+  }
+}
+
+/**
+ * Convenience: run manually to test the Gmail polling without waiting for the trigger.
+ */
+function testGmailPollNow() {
+  pollGmailAndSaveAttachments();
 }
