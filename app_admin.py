@@ -12,6 +12,10 @@ from dictionaries import (
     KNOWN_BRANDS,
     classify_color,
 )
+from ingest import (
+    load_single_catalog as _pure_load_single_catalog,
+    perform_upsert as _pure_perform_upsert,
+)
 
 # ==========================================
 # 🛑 CONFIG & DATABASE
@@ -32,8 +36,46 @@ engine = get_engine()
 # ==========================================
 # 🧠 THE ENGINE (ADAPTED FOR UI)
 # ==========================================
+# All real processing logic lives in ingest.py so the headless GitHub Action
+# (scripts/auto_ingest_safilo.py) uses the exact same code paths. These wrappers
+# only add Streamlit UI calls (error toasts, unmapped-value expanders, brand-expansion).
+
 def load_single_catalog(mfg_name, config_settings, file_path):
-    """Runs the massive custom rules engine on a single manufacturer file."""
+    """Streamlit wrapper around ingest.load_single_catalog."""
+    try:
+        processed_df, unmapped_values, skipped_not_mapped = _pure_load_single_catalog(
+            mfg_name, config_settings, file_path
+        )
+    except ValueError as e:
+        st.error(f"❌ {e}")
+        return pd.DataFrame()
+
+    # Surface diagnostic info via expandable UI sections
+    if unmapped_values:
+        with st.expander(f"⚠️ Unmapped Values Found in {mfg_name.title()} File"):
+            for val in sorted(unmapped_values):
+                st.write(f"- {val}")
+    if skipped_not_mapped:
+        with st.expander(f"ℹ️ Skipped 'NOT MAPPED' Values in {mfg_name.title()} File ({len(skipped_not_mapped)} unique)"):
+            for val in sorted(skipped_not_mapped):
+                st.write(f"- {val}")
+
+    # Expand by brands defined in config (preserves prior behavior)
+    if not processed_df.empty:
+        all_brands_dfs = [processed_df.copy() for _ in config_settings["brands"]]
+        return pd.concat(all_brands_dfs, ignore_index=True)
+    return pd.DataFrame()
+
+
+def perform_upsert(new_data_df):
+    """Streamlit wrapper around ingest.perform_upsert."""
+    msg = _pure_perform_upsert(new_data_df, engine)
+    return msg
+
+
+# --- Old inline implementation below kept as `_legacy_*` until removed in a follow-up commit ---
+def _legacy_load_single_catalog(mfg_name, config_settings, file_path):
+    """[DEAD CODE — replaced by ingest.load_single_catalog. Kept temporarily for safety.]"""
     unmapped_values = set()
     skipped_not_mapped = set()
 
@@ -486,8 +528,8 @@ def load_single_catalog(mfg_name, config_settings, file_path):
 # ==========================================
 # 🔄 UPSERT ENGINE (WITH DETAILED TRACKING)
 # ==========================================
-def perform_upsert(new_data_df):
-    """Takes freshly processed data and intelligently merges it with the Cloud Vault."""
+def _legacy_perform_upsert(new_data_df):
+    """[DEAD CODE — replaced by ingest.perform_upsert. Kept temporarily for safety.]"""
     new_data_df.drop_duplicates(subset=["join_key"], keep="last", inplace=True)
     new_data_df.set_index("join_key", inplace=True)
     

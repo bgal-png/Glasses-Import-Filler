@@ -1,0 +1,48 @@
+name: Safilo Drive ingest
+
+# Triggered by:
+#   - Google Apps Script POSTing repository_dispatch with event_type=safilo-ingest
+#     when a new file lands in the Drive inbox folder.
+#   - Manual via the Actions tab ("Run workflow") for debugging.
+#   - Daily cron at 06:00 UTC as a safety net in case Apps Script misses something.
+on:
+  repository_dispatch:
+    types: [safilo-ingest]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * *"
+
+# Prevent overlapping runs from corrupting the master_catalog table.
+# If a new dispatch arrives while one is running, the new one queues; we don't
+# cancel-in-progress because the running one is mid-write and aborting it
+# could leave the DB in a half-written state.
+concurrency:
+  group: safilo-ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements-ingest.txt
+
+      - name: Run ingest
+        env:
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          GDRIVE_INBOX_FOLDER_ID: ${{ secrets.GDRIVE_INBOX_FOLDER_ID }}
+          GDRIVE_ARCHIVE_FOLDER_ID: ${{ secrets.GDRIVE_ARCHIVE_FOLDER_ID }}
+          DB_URL: ${{ secrets.DB_URL }}
+        run: python scripts/auto_ingest_safilo.py
