@@ -109,11 +109,24 @@ def load_single_catalog(mfg_name, config_settings, file_path):
         alert = False
 
         if mfg_name == "safilo":
-            prod_type = re.sub(r"\s+", " ", str(raw_row.get("TypeD", "")).strip().upper())
+            # New format: StyleD ending in "/C" marks the optical frame as bundled
+            # with a magnetic clip-on. LenPolarized tells us if the clip is polarized.
+            style_d = str(raw_row.get("StyleD", "")).strip().upper()
             pol = str(raw_row.get("LenPolarized", "")).strip().upper()
-            if "CLIP-ON" in prod_type or "CLIP ON" in prod_type:
-                if pol in ("0", "N"): clip_val = "Magnetic sun clip-on"
-                elif pol in ("X", "Y"): clip_val = "Magnetic sun clip-on p"
+            prod_type = re.sub(r"\s+", " ", str(raw_row.get("TypeD", "")).strip().upper())
+
+            is_clipon = (
+                style_d.endswith("/C")
+                or "CLIP-IN" in style_d
+                or "CLIP-ON" in style_d
+                or "CLIP ON" in style_d
+                # Legacy format fallback (old Product Type Desc. column had "+ CLIP-ON")
+                or "CLIP-ON" in prod_type
+                or "CLIP ON" in prod_type
+            )
+            if is_clipon:
+                if pol in ("X", "Y"): clip_val = "Magnetic sun clip-on p"
+                else: clip_val = "Magnetic sun clip-on"
 
         elif mfg_name == "luxottica":
             # Find description column dynamically (encoding-safe)
@@ -264,7 +277,8 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                     elif 43 <= vlt < 80: final_values.add("Category 1"); matched_by_math = True
                     elif 18 <= vlt < 43: final_values.add("Category 2"); matched_by_math = True
                     elif 8 <= vlt < 18: final_values.add("Category 3"); matched_by_math = True
-                    elif 3 <= vlt < 8: final_values.add("Category 4"); matched_by_math = True
+                    elif 0 < vlt < 8: final_values.add("Category 4"); matched_by_math = True
+                    # vlt == 0 is treated as "no filter data" (optical frame) — no category assigned
 
                 if not matched_by_math:
                     if col_name in VALUE_TRANSLATOR:
