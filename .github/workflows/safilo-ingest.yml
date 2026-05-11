@@ -24,6 +24,10 @@ jobs:
   ingest:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # Opt into Node.js 24 for JS-based actions now (default June 2026).
+      # Silences the deprecation warning emitted by checkout@v4 / setup-python@v5.
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
     steps:
       - name: Checkout repo
