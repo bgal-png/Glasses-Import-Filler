@@ -326,8 +326,18 @@ if uploaded_file:
             brand_majority_cache = {}
             brand_contain_cache = {}
             brand_origin_cache = {}
-            
-            for c in ["Case length (mm)", "Case height (mm)", "Case width (mm)", "Case weight (g)", "Glasses contain ID:84"]:
+
+            # Accept both "Glasses contain ID:84" (no space) and "Glasses contain ID: 84"
+            # (with space) in templates — older templates used the space form, newer ones
+            # don't. Whichever exists in the user's template is what we write to.
+            if "Glasses contain ID:84" in target_df.columns:
+                CONTAIN_COL = "Glasses contain ID:84"
+            elif "Glasses contain ID: 84" in target_df.columns:
+                CONTAIN_COL = "Glasses contain ID: 84"
+            else:
+                CONTAIN_COL = "Glasses contain ID:84"  # default for brand-new templates
+
+            for c in ["Case length (mm)", "Case height (mm)", "Case width (mm)", "Case weight (g)", CONTAIN_COL]:
                 if c not in target_df.columns: target_df[c] = ""
 
             for index, row in target_df.iterrows():
@@ -551,7 +561,7 @@ if uploaded_file:
                             
                             remaining_items = sorted(list(unique_contain_dict.values()))
                             ordered_items.extend(remaining_items)
-                            target_df.at[index, "Glasses contain ID:84"] = "|".join(ordered_items)
+                            target_df.at[index, CONTAIN_COL] = "|".join(ordered_items)
 
                     # --- 🌟 OTHER FEATURES ENGINE ---
                     other_features = set()
@@ -564,8 +574,8 @@ if uploaded_file:
                         if str(target_df.at[index, "SunGlasses RX lenses ID:108"]).strip().lower() == "yes":
                             other_features.add("Prescription sunglasses")
 
-                    if "Glasses contain ID:84" in target_df.columns:
-                        contain_val = str(target_df.at[index, "Glasses contain ID:84"]).strip().lower()
+                    if CONTAIN_COL in target_df.columns:
+                        contain_val = str(target_df.at[index, CONTAIN_COL]).strip().lower()
                         contain_items = [item.strip() for item in re.split(r"[,|]", contain_val) if item.strip()]
 
                         clip_on_found = False
