@@ -180,6 +180,12 @@ def main(mfg: str) -> int:
                     f"  Engine output: {len(df):,} rows, "
                     f"{len(unmapped)} unmapped values, {len(skipped)} skipped 'NOT MAPPED'"
                 )
+                if unmapped:
+                    _log(f"  Unmapped values (review and consider adding to VALUE_TRANSLATOR / classify_color):")
+                    for u in sorted(unmapped)[:100]:
+                        _log(f"    - {u}")
+                    if len(unmapped) > 100:
+                        _log(f"    … and {len(unmapped) - 100} more")
 
                 if df.empty:
                     _log(f"  WARN: engine returned empty DataFrame — moving file to archive anyway")
