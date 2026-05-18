@@ -460,6 +460,28 @@ def load_single_catalog(mfg_name, config_settings, file_path):
         new_df["Extracted_Model"] = temp_col.apply(lambda x: x[1] if isinstance(x, (list, tuple)) else "")
         new_df["Extracted_Color"] = temp_col.apply(lambda x: x[2] if isinstance(x, (list, tuple)) else "")
 
+    # Hugo Boss sub-brand resolution — Safilo (and any other mfg) lists the
+    # group's two sub-lines under different BrandD values. We want customer-
+    # facing Brand/Manufacturer to follow the "<line> by Hugo Boss" convention:
+    #   Brand "Hugo Boss" + model "BOSS …"  →  "Boss by Hugo Boss"
+    #   Brand "Hugo Boss" + model "HG …"    →  "Hugo by Hugo Boss"  (rare edge case)
+    #   Brand "Hugo" (standalone)           →  "Hugo by Hugo Boss"
+    # Runs AFTER assemble_name_and_parts so the Glasses name keeps the shorter
+    # form ("Hugo Boss BOSS 1594 001/9O") while Brand/Manufacturer get long form.
+    if not new_df.empty and "Brand" in new_df.columns:
+        def _resolve_hugo_boss(row, col):
+            val = str(row.get(col, "")).strip()
+            model = str(row.get("Glasses_model", "")).strip().upper()
+            if val == "Hugo Boss":
+                if model.startswith("HG"):
+                    return "Hugo by Hugo Boss"
+                return "Boss by Hugo Boss"
+            if val == "Hugo":
+                return "Hugo by Hugo Boss"
+            return val
+        new_df["Brand"] = new_df.apply(lambda r: _resolve_hugo_boss(r, "Brand"), axis=1)
+        new_df["Manufacturer"] = new_df.apply(lambda r: _resolve_hugo_boss(r, "Manufacturer"), axis=1)
+
     if "Is_Kids" in new_df.columns:
         new_df.drop(columns=["Is_Kids"], inplace=True)
 
