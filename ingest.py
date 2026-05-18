@@ -102,6 +102,20 @@ def load_single_catalog(mfg_name, config_settings, file_path):
             return val
         new_df["Combination"] = df.apply(_build_safilo_combination, axis=1)
 
+    # 1c. Safilo: color code is "<ItemColor>/<LenColor>" — frame color code
+    # over lens color code (e.g. "HBN/9K"). If only one is present, emit just
+    # that one (no trailing slash). Overrides the simple ItemColor mapping.
+    if mfg_name == "safilo" and ("ItemColor" in df.columns or "LenColor" in df.columns):
+        def _build_safilo_color_code(row):
+            frame = str(row.get("ItemColor", "")).strip()
+            lens = str(row.get("LenColor", "")).strip()
+            if frame.lower() in ("nan", ""): frame = ""
+            if lens.lower() in ("nan", ""): lens = ""
+            if frame and lens:
+                return f"{frame}/{lens}"
+            return frame or lens
+        new_df["Glasses_color_code"] = df.apply(_build_safilo_color_code, axis=1)
+
     # 2. Raw Clip-On Engine
     extracted_clip_ons = []
     clip_on_alerts = []
