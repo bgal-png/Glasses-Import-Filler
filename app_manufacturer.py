@@ -439,16 +439,21 @@ if uploaded_file:
 
                     usable_tags = set()
                     raw_brand = str(master_row.get("Brand", "")).strip().lower()
-                    # Reference tables (package, origin, historical, brand maps) were
-                    # built with the legacy short names. Map the new customer-facing
-                    # "X by Hugo Boss" forms back to the lookup-friendly short forms
-                    # so word-boundary searches still hit. The output `Brand` column
-                    # itself keeps the long form — this only affects internal lookups.
+                    # Lookup candidates: each row's brand may have entries under the
+                    # new customer-facing long form ("Boss by Hugo Boss") OR the
+                    # legacy short form ("Hugo Boss") in any given reference table.
+                    # Different tables (origin_data, package_data, historical_data,
+                    # BRAND_USABLE_MAP) were built at different times so they may
+                    # disagree. We try the long form first, fall back to short.
+                    brand_lookup_candidates = [raw_brand]
                     if raw_brand == "boss by hugo boss":
-                        raw_brand = "hugo boss"
+                        brand_lookup_candidates.append("hugo boss")
                     elif raw_brand == "hugo by hugo boss":
-                        raw_brand = "hugo"
-                    if raw_brand in BRAND_USABLE_MAP: usable_tags.add(BRAND_USABLE_MAP[raw_brand])
+                        brand_lookup_candidates.append("hugo")
+                    for _cand in brand_lookup_candidates:
+                        if _cand in BRAND_USABLE_MAP:
+                            usable_tags.add(BRAND_USABLE_MAP[_cand])
+                            break
                     lens_effect = str(master_row.get("Glasses_lens_effect", "")).strip()
 
                     if "Sunglasses" in g_type:
@@ -457,7 +462,8 @@ if uploaded_file:
 
                     if usable_tags: target_df.at[index, "Glasses usable ID: 51"] = "|".join(sorted(list(usable_tags)))
 
-                    if raw_brand in PREMIUM_KERING_BRANDS: target_df.at[index, "Glasses collection ID: 33"] = "Prémiové brýle - Kering"
+                    if any(c in PREMIUM_KERING_BRANDS for c in brand_lookup_candidates):
+                        target_df.at[index, "Glasses collection ID: 33"] = "Prémiové brýle - Kering"
 
                     raw_material = str(master_row.get("Glasses_main_material", "")).strip().lower()
                     if "Sunglasses" in g_type: target_df.at[index, "HS Code"] = "90041091"
@@ -479,9 +485,13 @@ if uploaded_file:
                     # --- 🧳 CASE DIMENSIONS MAJORITY ENGINE ---
                     if not package_df.empty and raw_brand and raw_brand != "nan":
                         if raw_brand not in brand_majority_cache:
-                            mask = package_df['item_name'].astype(str).str.contains(rf'\b{re.escape(raw_brand)}\b', case=False, na=False)
-                            brand_matches = package_df[mask]
-                            
+                            brand_matches = pd.DataFrame()
+                            for _cand in brand_lookup_candidates:
+                                mask = package_df['item_name'].astype(str).str.contains(rf'\b{re.escape(_cand)}\b', case=False, na=False)
+                                if mask.any():
+                                    brand_matches = package_df[mask]
+                                    break
+
                             if not brand_matches.empty:
                                 def get_mode(col_name):
                                     if col_name in brand_matches.columns:
@@ -511,8 +521,12 @@ if uploaded_file:
                     if not origin_df.empty and raw_brand and raw_brand != "nan":
                         if raw_brand not in brand_origin_cache:
                             if "item_name" in origin_df.columns and "country_master" in origin_df.columns:
-                                mask = origin_df['item_name'].astype(str).str.contains(rf'\b{re.escape(raw_brand)}\b', case=False, na=False)
-                                brand_matches = origin_df[mask]
+                                brand_matches = pd.DataFrame()
+                                for _cand in brand_lookup_candidates:
+                                    mask = origin_df['item_name'].astype(str).str.contains(rf'\b{re.escape(_cand)}\b', case=False, na=False)
+                                    if mask.any():
+                                        brand_matches = origin_df[mask]
+                                        break
                                 if not brand_matches.empty:
                                     modes = brand_matches["country_master"].dropna().mode()
                                     brand_origin_cache[raw_brand] = str(modes.iloc[0]).strip() if not modes.empty else ""
@@ -529,8 +543,13 @@ if uploaded_file:
                     if not master_clean_df.empty and raw_brand and raw_brand != "nan":
                         if raw_brand not in brand_contain_cache:
                             if "Brand" in master_clean_df.columns and "Glasses contain" in master_clean_df.columns:
-                                brand_mask = master_clean_df['Brand'].astype(str).str.strip().str.lower() == raw_brand
-                                brand_matches = master_clean_df[brand_mask]
+                                brand_matches = pd.DataFrame()
+                                clean_brands = master_clean_df['Brand'].astype(str).str.strip().str.lower()
+                                for _cand in brand_lookup_candidates:
+                                    brand_mask = clean_brands == _cand
+                                    if brand_mask.any():
+                                        brand_matches = master_clean_df[brand_mask]
+                                        break
                                 
                                 if not brand_matches.empty:
                                     modes = brand_matches["Glasses contain"].dropna().mode()
