@@ -570,7 +570,10 @@ if uploaded_file:
                         if existing_features and existing_features.lower() not in ["nan", ""]:
                             for e in existing_features.split("|"): other_features.add(e.strip())
 
-                    if "SunGlasses RX lenses ID:108" in target_df.columns:
+                    # "Prescription sunglasses" only makes sense for actual sunglasses —
+                    # Safilo flags RXable=Y on optical frames too (any frame can be glazed),
+                    # so without this check the feature gets added to every row.
+                    if "Sunglasses" in g_type and "SunGlasses RX lenses ID:108" in target_df.columns:
                         if str(target_df.at[index, "SunGlasses RX lenses ID:108"]).strip().lower() == "yes":
                             other_features.add("Prescription sunglasses")
 
