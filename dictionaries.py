@@ -374,6 +374,127 @@ BRAND_USABLE_MAP = {
     "ralph lauren": "Luxury glasses",
     "victoria beckham": "Luxury glasses",
 }
+# --- 🎁 GLASSES CONTAIN PER-BRAND TABLE ---
+# Static lookup replacing the historical_data table. Per brand × glasses type
+# (Frames vs Sunglasses), tells the filler what to put in the
+# "Glasses contain ID:84" column — typically "Original glasses case" with or
+# without "|Cleaning cloth", or empty for brands shipped without a case.
+#
+# Sourced from the "Glasses accessories - cleaning cloth, cases.xlsx" master
+# table. Keys are lowercase. Slash-separated source rows like "Christian Dior
+# / Dior / Dior Homme" are expanded into individual entries below.
+#
+# Use BRAND_GLASSES_CONTAIN.get(brand_lower, {}).get(type_key) — both layers
+# may be missing, so always use .get with default.
+
+_BOTH = "Original glasses case|Cleaning cloth"
+_CASE_ONLY = "Original glasses case"
+_NONE = ""
+
+BRAND_GLASSES_CONTAIN = {
+    # brand_lowercase: {"Frames": "...", "Sunglasses": "..."}
+    "adidas":             {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "alexander mcqueen":  {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "armani exchange":    {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "arnette":            {"Frames": _NONE, "Sunglasses": _BOTH},
+    "blizzard":           {"Frames": _NONE, "Sunglasses": _NONE},  # source says "without case"
+    "bolle":              {"Frames": _BOTH, "Sunglasses": _NONE},  # source typo "ll" — treat as empty
+    "burberry":           {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "calvin klein":       {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "carrera":            {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "celine":             {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "christian dior":     {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "dior":               {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "dior homme":         {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "crullé":             {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "crulle":             {"Frames": _BOTH, "Sunglasses": _BOTH},  # ascii fallback
+    "dolce&gabbana":      {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "dolce & gabbana":    {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "emporio armani":     {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "fendi":              {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "fossil":             {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "givenchy":           {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "gucci":              {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "guess":              {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "havaianas":          {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "hawkers":            {"Frames": _NONE, "Sunglasses": _CASE_ONLY},
+    "boss by hugo boss":  {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "hugo by hugo boss":  {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "hugo boss":          {"Frames": _BOTH, "Sunglasses": _BOTH},  # legacy short form
+    "boss":               {"Frames": _BOTH, "Sunglasses": _BOTH},  # legacy short form
+    "hugo":               {"Frames": _BOTH, "Sunglasses": _BOTH},  # legacy short form
+    "jimmy choo":         {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "julbo":              {"Frames": _NONE, "Sunglasses": _CASE_ONLY},
+    "kid rider":          {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "kimikado":           {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "lacoste":            {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "liu jo":             {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "love moschino":      {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "marc jacobs":        {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "marisio":            {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "max mara":           {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "max&co.":            {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "max&co":             {"Frames": _BOTH, "Sunglasses": _BOTH},  # without dot
+    "meller":             {"Frames": _NONE, "Sunglasses": _BOTH},
+    "michael kors":       {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "moschino":           {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "myth greece":        {"Frames": _NONE, "Sunglasses": _BOTH},
+    "oakley":             {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "persol":             {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "pierre cardin":      {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "polaroid":           {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "polo ralph lauren":  {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "prada":              {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "puma":               {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "ray-ban":            {"Frames": _CASE_ONLY, "Sunglasses": _BOTH},
+    "ray ban":            {"Frames": _CASE_ONLY, "Sunglasses": _BOTH},
+    "relax":              {"Frames": _NONE, "Sunglasses": _NONE},  # source: without case
+    "seventh street":     {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "steroflex":          {"Frames": _NONE, "Sunglasses": _NONE},
+    "silhouette":         {"Frames": _NONE, "Sunglasses": _NONE},
+    "smith":              {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "stella mccartney":   {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "swarovski":          {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "tom ford":           {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "tommy hilfiger":     {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "versace":            {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "vogue":              {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "superdry":           {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "o'neill":            {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "caterpillar":        {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "radley":             {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "just cavalli":       {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "dsquared2":          {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "coco song":          {"Frames": _BOTH, "Sunglasses": _NONE},
+    "ccs by coco song":   {"Frames": _BOTH, "Sunglasses": _NONE},
+    "oliviero contini":   {"Frames": _BOTH, "Sunglasses": _NONE},
+    "superkaos":          {"Frames": _BOTH, "Sunglasses": _NONE},
+    "genesis":            {"Frames": _BOTH, "Sunglasses": _NONE},
+    "kaos":               {"Frames": _BOTH, "Sunglasses": _NONE},
+    "saint laurent":      {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "chloe":              {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "chloé":              {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "nike":               {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "vans":               {"Frames": _NONE, "Sunglasses": _NONE},
+    "lewish":             {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "david beckham":      {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "carolina herrera":   {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "levi's":             {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "levis":              {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "under armour":       {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "kate spade":         {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "balenciaga":         {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "police":             {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "chiara ferragni":    {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "missoni":            {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "montblanc":          {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "serengeti":          {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "maui jim":           {"Frames": _NONE, "Sunglasses": _BOTH},
+    "beron":              {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "alpina":             {"Frames": _NONE, "Sunglasses": _CASE_ONLY},
+    "victoria beckham":   {"Frames": _BOTH, "Sunglasses": _BOTH},
+}
+
 # --- 💎 PREMIUM KERING BRANDS ---
 PREMIUM_KERING_BRANDS = {
     "alexander mcqueen",

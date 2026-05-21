@@ -11,6 +11,7 @@ from dictionaries import (
     FACE_SHAPE_MAP,
     BRAND_USABLE_MAP,
     PREMIUM_KERING_BRANDS,
+    BRAND_GLASSES_CONTAIN,
     estimate_filter_category,
 )
 
@@ -539,31 +540,27 @@ if uploaded_file:
                         if cached_origin and "Item origin country" in target_df.columns:
                             target_df.at[index, "Item origin country"] = cached_origin
 
-                    # --- 🎁 GLASSES CONTAIN MAJORITY ENGINE (WITH RAW CLIP-ONS) ---
-                    if not master_clean_df.empty and raw_brand and raw_brand != "nan":
-                        if raw_brand not in brand_contain_cache:
-                            if "Brand" in master_clean_df.columns and "Glasses contain" in master_clean_df.columns:
-                                brand_matches = pd.DataFrame()
-                                clean_brands = master_clean_df['Brand'].astype(str).str.strip().str.lower()
-                                for _cand in brand_lookup_candidates:
-                                    brand_mask = clean_brands == _cand
-                                    if brand_mask.any():
-                                        brand_matches = master_clean_df[brand_mask]
-                                        break
-                                
-                                if not brand_matches.empty:
-                                    modes = brand_matches["Glasses contain"].dropna().mode()
-                                    if not modes.empty:
-                                        raw_contain = str(modes.iloc[0]).strip()
-                                        parts = [p.strip() for p in raw_contain.split(',') if p.strip() and p.strip().lower() != 'nan']
-                                        allowed_historical = {"original glasses case", "cleaning cloth"}
-                                        filtered_parts = [p for p in parts if p.lower() in allowed_historical]
-                                        brand_contain_cache[raw_brand] = "|".join(filtered_parts)
-                                    else: brand_contain_cache[raw_brand] = ""
-                                else: brand_contain_cache[raw_brand] = ""
-                            else: brand_contain_cache[raw_brand] = ""
-                                
-                        cached_contain = brand_contain_cache.get(raw_brand, "")
+                    # --- 🎁 GLASSES CONTAIN — STATIC BRAND × TYPE LOOKUP ---
+                    # Uses the BRAND_GLASSES_CONTAIN table in dictionaries.py
+                    # (sourced from the master "Glasses accessories" sheet).
+                    # Picks "Frames" or "Sunglasses" sub-entry based on g_type;
+                    # sport/driving glasses count as Sunglasses for case purposes.
+                    if raw_brand and raw_brand != "nan":
+                        if any(kw in g_type for kw in ("Sunglasses", "Sport glasses", "Driving glasses")):
+                            type_key = "Sunglasses"
+                        else:
+                            type_key = "Frames"
+                        contain_cache_key = (raw_brand, type_key)
+                        if contain_cache_key not in brand_contain_cache:
+                            resolved = ""
+                            for _cand in brand_lookup_candidates:
+                                entry = BRAND_GLASSES_CONTAIN.get(_cand)
+                                if entry and entry.get(type_key):
+                                    resolved = entry[type_key]
+                                    break
+                            brand_contain_cache[contain_cache_key] = resolved
+
+                        cached_contain = brand_contain_cache.get(contain_cache_key, "")
                         
                         clip_on_val = str(master_row.get("Extracted_Clip_on", "")).strip()
                         needs_alert = master_row.get("Clip_on_Alert", False)
