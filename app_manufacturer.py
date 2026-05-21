@@ -439,6 +439,15 @@ if uploaded_file:
 
                     usable_tags = set()
                     raw_brand = str(master_row.get("Brand", "")).strip().lower()
+                    # Reference tables (package, origin, historical, brand maps) were
+                    # built with the legacy short names. Map the new customer-facing
+                    # "X by Hugo Boss" forms back to the lookup-friendly short forms
+                    # so word-boundary searches still hit. The output `Brand` column
+                    # itself keeps the long form — this only affects internal lookups.
+                    if raw_brand == "boss by hugo boss":
+                        raw_brand = "hugo boss"
+                    elif raw_brand == "hugo by hugo boss":
+                        raw_brand = "hugo"
                     if raw_brand in BRAND_USABLE_MAP: usable_tags.add(BRAND_USABLE_MAP[raw_brand])
                     lens_effect = str(master_row.get("Glasses_lens_effect", "")).strip()
 
