@@ -349,7 +349,11 @@ if uploaded_file:
                     master_row = master_db.loc[clean_barcode]
 
                     is_frames = str(master_row.get("Glasses_type", "")).strip() == "Frames"
-                    lens_cols_to_skip = ["Glasses_lens_Colour", "Glasses_lens_material", "Sunglasses_filter", "Glasses_lens_effect"]
+                    lens_cols_to_skip = [
+                        "Glasses_lens_Colour", "Glasses_lens_material",
+                        "Sunglasses_filter", "Glasses_lens_effect",
+                        "SunGlasses_RX_lenses",  # not applicable to optical frames
+                    ]
                     
                     target_df.at[index, "Items type ID: 20"] = "Glasses"
                     target_df.at[index, "Items packing ID: 21"] = "Basic"
