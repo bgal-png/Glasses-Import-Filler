@@ -181,8 +181,20 @@ def translate_source_row(src_row: pd.Series) -> tuple[str, dict] | None:
         if lens_color_part:
             out["Glasses_lens_Colour"] = classify_color(lens_color_part, "lens")
 
-    # ---- Lens material (not in source — leave empty) ----
-    out["Glasses_lens_material"] = ""
+    # ---- Lens material (inferred from LENSES DESCRIPTION since source has no
+    # explicit lens-material column). Common Tom Ford / Max Mara / Moncler
+    # defaults. Frames have no lens material — leave empty for those.
+    if "Sunglasses" in out["Glasses_type"]:
+        if "POLAR" in lens_desc:
+            out["Glasses_lens_material"] = "Polar CR 39"
+        elif "PHOTO" in lens_desc:
+            out["Glasses_lens_material"] = "Plastic"
+        elif lens_desc == "DEMO":
+            out["Glasses_lens_material"] = ""
+        else:  # NORMAL or blank
+            out["Glasses_lens_material"] = "CR 39"
+    else:
+        out["Glasses_lens_material"] = ""
 
     # ---- Clip-on ----
     clipon = str(src_row.get("CLIPON", "")).strip()
