@@ -38,7 +38,7 @@ from dictionaries import (  # noqa: E402
 BRAND_CODE_MAP = {
     "FT": "Tom Ford",
     "MM": "Max Mara",
-    "MO": "Moncler",
+    "MO": "Max&Co.",
 }
 
 SHAPE_MAP = {
