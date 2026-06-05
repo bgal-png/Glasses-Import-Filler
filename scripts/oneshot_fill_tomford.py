@@ -213,12 +213,19 @@ def translate_source_row(src_row: pd.Series) -> tuple[str, dict] | None:
     out["Producing_company"] = "Marcolin"  # all 3 brands are Marcolin-distributed
 
     # ---- Model, color code, assembled name ----
+    # In this format the SKU has the size baked in as a prefix
+    # (e.g. SIZE=52, SKU=5201D -> real color code is "01D"). Strip the
+    # size prefix when present to get the actual color code.
     model = str(src_row.get("MODEL", "")).strip()
     sku = str(src_row.get("SKU", "")).strip()
+    size_str = str(src_row.get("SIZE", "")).strip()
+    color_code = sku
+    if size_str and sku.startswith(size_str):
+        color_code = sku[len(size_str):]
     out["Extracted_Model"] = model
-    out["Extracted_Color"] = sku
-    out["Glasses_color_code"] = sku
-    name_parts = [p for p in (brand, model, sku) if p and p.lower() != "nan"]
+    out["Extracted_Color"] = color_code
+    out["Glasses_color_code"] = color_code
+    name_parts = [p for p in (brand, model, color_code) if p and p.lower() != "nan"]
     out["Assembled_Name"] = " ".join(name_parts)
 
     out["Barcode"] = barcode
