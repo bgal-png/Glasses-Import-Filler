@@ -1531,9 +1531,11 @@ _FRAME_TEMPLE_KEYWORDS = [
     ('brick', 'Brown'), ('mud', 'Brown'),
     ('brown', 'Brown'), ('marrone', 'Brown'), ('cognac', 'Brown'), ('caffe', 'Brown'), ('chocolate', 'Brown'),
     ('coral', 'Pink'), ('peach', 'Pink'),
-    ('pink', 'Pink'), ('rose', 'Pink'), ('rosa', 'Pink'), ('fucsia', 'Pink'), ('fuchsia', 'Pink'),
+    ('pink', 'Pink'), ('rose', 'Pink'), ('rosa', 'Pink'), ('fucsia', 'Pink'), ('fuchsia', 'Pink'), ('fuxia', 'Pink'),
     ('nude', 'Transparent'),
     ('transparent', 'Transparent'), ('clear', 'Transparent'),
+    ('mastic', 'Ivory'), ('nickel', 'Silver'), ('roviex', 'Brown'), ('animal', 'Brown'), ('avana', 'Havana'),
+    ('liliac', 'Purple'),
     ('multicolor', 'Multicolor'), ('multilayer', 'Multicolor'), ('stripe', 'Multicolor'), ('vícebarev', 'Multicolor'),
 ]
 
@@ -1579,6 +1581,7 @@ _LENS_KEYWORDS = [
     ('coral', 'Pink'), ('peach', 'Pink'),
     ('pink', 'Pink'), ('rose', 'Pink'), ('rosa', 'Pink'), ('fucsia', 'Pink'), ('cyclamen', 'Pink'), ('berry', 'Pink'),
     ('nude', 'Transparent'),
+    ('roviex', 'Brown'), ('fuxia', 'Pink'), ('avana', 'Brown'),
     ('transparent', 'Transparent'), ('clear', 'Transparent'), ('cristallo', 'Transparent'), ('demo', 'Transparent'),
     ('fotochromatick', 'Transparent'), ('zkušební', 'Transparent'),
     ('multicolor', 'Multicolor'), ('multilayer', 'Multicolor'),
