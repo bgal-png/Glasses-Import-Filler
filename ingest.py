@@ -92,13 +92,19 @@ _MARCOLIN_ORIGIN_MAP = {
     "FR": "France",
 }
 
-# F/M/U are certain. The rest (X/G/Z/B/Y/K) are Marcolin/Guess fashion-attribute
-# codes whose legend we don't have yet — left empty and flagged so they surface
-# in the validator rather than being guessed wrong.
+# Marcolin/Guess gender codes (legend confirmed):
+#   F=Female, M=Male, U=Unisex, X/Z=unspecified (unisex),
+#   K=Kids, B=Boys, G=Girls, Y=Youth — all four kids variants -> Child.
 _MARCOLIN_GENDER_MAP = {
     "F": "Woman",
     "M": "Man",
     "U": "Man|Woman",
+    "X": "Man|Woman",
+    "Z": "Man|Woman",
+    "K": "Child",
+    "B": "Child",
+    "G": "Child",
+    "Y": "Child",
 }
 
 
