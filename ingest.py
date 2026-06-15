@@ -187,6 +187,7 @@ def _load_marcolin_new(df):
                     break
         if not material and mat_key and mat_key not in ("", "NO FRONT", "NAN"):
             unmapped.add(f"Marcolin -> Glasses_main_material: '{front_mat}'")
+            material = front_mat  # keep original, flag for review
         out["Glasses_main_material"] = material
 
         # ---- Dimensions ----
@@ -198,15 +199,23 @@ def _load_marcolin_new(df):
         out["Glasses_size_lens_height"] = _marcolin_round(src.get("B MEASURE"))
 
         # ---- Shape ----
-        shape = str(src.get("SHAPE", "")).strip().upper()
-        out["Glasses_shape"] = _MARCOLIN_SHAPE_MAP.get(shape, "")
-        if shape and shape != "NAN" and shape not in _MARCOLIN_SHAPE_MAP:
+        shape = str(src.get("SHAPE", "")).strip()
+        if not shape or shape.upper() == "NAN":
+            out["Glasses_shape"] = ""
+        elif shape.upper() in _MARCOLIN_SHAPE_MAP:
+            out["Glasses_shape"] = _MARCOLIN_SHAPE_MAP[shape.upper()]
+        else:
+            out["Glasses_shape"] = shape  # keep original, flag for review
             unmapped.add(f"Marcolin -> Glasses_shape: '{shape}'")
 
         # ---- Rim ----
-        rim = str(src.get("TYPOLOGY", "")).strip().upper()
-        out["Glasses_frame_type"] = _MARCOLIN_RIM_MAP.get(rim, "")
-        if rim and rim != "NAN" and rim not in _MARCOLIN_RIM_MAP:
+        rim = str(src.get("TYPOLOGY", "")).strip()
+        if not rim or rim.upper() == "NAN":
+            out["Glasses_frame_type"] = ""
+        elif rim.upper() in _MARCOLIN_RIM_MAP:
+            out["Glasses_frame_type"] = _MARCOLIN_RIM_MAP[rim.upper()]
+        else:
+            out["Glasses_frame_type"] = rim  # keep original, flag for review
             unmapped.add(f"Marcolin -> Glasses_frame_type: '{rim}'")
 
         # ---- Flex ----
@@ -215,40 +224,50 @@ def _load_marcolin_new(df):
 
         # ---- Gender ----
         g = str(src.get("GENDER", "")).strip().upper()
-        out["Glasses_gendre"] = _MARCOLIN_GENDER_MAP.get(g, "")
-        if g and g not in _MARCOLIN_GENDER_MAP:
-            unmapped.add(f"Marcolin -> Glasses_gendre: '{g}' (needs legend)")
+        if not g or g == "NAN":
+            out["Glasses_gendre"] = ""
+        elif g in _MARCOLIN_GENDER_MAP:
+            out["Glasses_gendre"] = _MARCOLIN_GENDER_MAP[g]
+        else:
+            out["Glasses_gendre"] = g  # keep original code, flag for review
+            unmapped.add(f"Marcolin -> Glasses_gendre: '{g}'")
 
         # ---- Colours (separate columns; classify each) ----
         front_col = str(src.get("FRONT COLOUR", "")).strip()
         temple_col = str(src.get("TEMPLE COLOUR", "")).strip()
         lens_col = str(src.get("LENS COLOR", "")).strip()
+        # Colours: keep the original value when the classifier can't match it,
+        # so the cell isn't empty and the validator can flag it for manual fix.
         if front_col and front_col.lower() != "nan":
             res = classify_color(front_col, "frame")
-            out["Frame_Colour"] = res
+            out["Frame_Colour"] = res if res else front_col
             if not res:
                 unmapped.add(f"Marcolin -> Frame_Colour: '{front_col}'")
         else:
             out["Frame_Colour"] = ""
         if temple_col and temple_col.lower() != "nan":
             res = classify_color(temple_col, "frame")
-            out["Temple_Colour"] = res
+            out["Temple_Colour"] = res if res else temple_col
             if not res:
                 unmapped.add(f"Marcolin -> Temple_Colour: '{temple_col}'")
         else:
             out["Temple_Colour"] = ""
         if lens_col and lens_col.lower() != "nan":
             res = classify_color(lens_col, "lens")
-            out["Glasses_lens_Colour"] = res
+            out["Glasses_lens_Colour"] = res if res else lens_col
             if not res:
                 unmapped.add(f"Marcolin -> Glasses_lens_Colour: '{lens_col}'")
         else:
             out["Glasses_lens_Colour"] = ""
 
         # ---- Lens material ----
-        lm = str(src.get("LENS MATERIAL", "")).strip().upper()
-        out["Glasses_lens_material"] = _MARCOLIN_LENS_MATERIAL_MAP.get(lm, "")
-        if lm and lm not in _MARCOLIN_LENS_MATERIAL_MAP and lm != "NAN":
+        lm = str(src.get("LENS MATERIAL", "")).strip()
+        if not lm or lm.upper() == "NAN":
+            out["Glasses_lens_material"] = ""
+        elif lm.upper() in _MARCOLIN_LENS_MATERIAL_MAP:
+            out["Glasses_lens_material"] = _MARCOLIN_LENS_MATERIAL_MAP[lm.upper()]
+        else:
+            out["Glasses_lens_material"] = lm  # keep original, flag for review
             unmapped.add(f"Marcolin -> Glasses_lens_material: '{lm}'")
 
         # ---- Filter category (+ polarized signal) ----
@@ -596,6 +615,7 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                             final_values.add(lower_dict[shape_lower])
                     else:
                         unmapped_values.add(f"{mfg.title()} -> {col_name}: '{first_shape}'")
+                        final_values.add(first_shape)  # keep original, flag for review
                 else:
                     final_values.add(first_shape)
 
@@ -607,7 +627,10 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                     for c in result.split("|"):
                         final_values.add(c)
                 else:
+                    # No keyword match — keep the original value so the cell
+                    # isn't empty and the validator can flag it for manual fix.
                     unmapped_values.add(f"{mfg.title()} -> {col_name}: '{raw_val}'")
+                    final_values.add(raw_val)
 
         elif raw_val and raw_val.lower() != "nan":
             if col_name in VALUE_TRANSLATOR:
@@ -620,7 +643,10 @@ def load_single_catalog(mfg_name, config_settings, file_path):
                         if lower_dict[part_lower]:
                             final_values.add(lower_dict[part_lower])
                     else:
+                        # Unknown value — keep the original so the cell isn't
+                        # empty and the validator can flag it for manual fix.
                         unmapped_values.add(f"{mfg.title()} -> {col_name}: '{part}'")
+                        final_values.add(part)
             else:
                 final_values.add(raw_val)
 
