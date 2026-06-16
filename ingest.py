@@ -572,8 +572,13 @@ def _load_derigo(df):
         name_parts = [p for p in (brand, model, color_code) if p and p.lower() != "nan"]
         out["Assembled_Name"] = " ".join(name_parts)
 
-        # ---- Clip-on: none in De Rigo feed ----
-        out["Extracted_Clip_on"] = ""
+        # ---- Clip-on: De Rigo has no explicit clip column, but an OPTICAL
+        # frame that carries a sun filter category in LENS BASE is an optical
+        # frame bundled with a (magnetic) sun clip-on. Polarized -> ' p' variant.
+        clip = ""
+        if out["Glasses_type"] == "Frames" and cat:
+            clip = "Magnetic sun clip-on p" if pol_lb else "Magnetic sun clip-on"
+        out["Extracted_Clip_on"] = clip
         out["Clip_on_Alert"] = False
 
         out["Producing_company"] = "Derigo"
