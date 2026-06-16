@@ -403,6 +403,27 @@ def _derigo_material(raw):
     return s, False  # unknown — keep original, flag
 
 
+def _derigo_lens_base(raw):
+    """Parse LENS BASE -> (filter_category, is_polarized, is_photochromic).
+    Examples: 'CATEGORIA *3', 'CATEGORIA *3 POLARIZZANTE',
+    'CATEGORIA *1-3 FOTOCROMATICA'. 'BASE 2'/'BASE 4' are base curves -> no cat."""
+    s = str(raw or "").strip().upper()
+    if not s or s == "NAN":
+        return "", False, False
+    polarized = "POLARIZZANTE" in s
+    photochromic = "FOTOCROMATIC" in s
+    cat = ""
+    m = re.search(r"CATEGORIA\s*\*?\s*(\d)\s*-\s*(\d)", s)
+    if m:
+        lo, hi = sorted([m.group(1), m.group(2)], key=int)
+        cat = f"Category range {lo} - {hi}"
+    else:
+        m2 = re.search(r"CATEGORIA\s*\*?\s*(\d)", s)
+        if m2:
+            cat = f"Category {m2.group(1)}"
+    return cat, polarized, photochromic
+
+
 def _derigo_lens_material(raw):
     s = str(raw or "").strip()
     low = s.lower()
@@ -514,15 +535,16 @@ def _load_derigo(df):
         else:
             out["Glasses_lens_Colour"] = ""
 
-        # ---- Lens effect ----
-        eff = set()
-        if str(src.get("POLARIZED (YES/NO)", "")).strip().upper() == "YES":
-            eff.add("Polarized")
-        out["Glasses_lens_effect"] = "|".join(sorted(eff))
+        # ---- Filter category + lens effect (both from LENS BASE) ----
+        cat, pol_lb, photo_lb = _derigo_lens_base(src.get("LENS BASE"))
+        out["Sunglasses_filter"] = cat
 
-        # ---- Filter category: no source column — leave empty (filler estimates
-        # it from lens colour for sunglasses, same as other manufacturers) ----
-        out["Sunglasses_filter"] = ""
+        eff = set()
+        if str(src.get("POLARIZED (YES/NO)", "")).strip().upper() == "YES" or pol_lb:
+            eff.add("Polarized")
+        if photo_lb:
+            eff.add("Photochromic")
+        out["Glasses_lens_effect"] = "|".join(sorted(eff))
 
         # ---- Gender ----
         g = str(src.get("GENDER", "")).strip()
