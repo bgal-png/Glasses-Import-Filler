@@ -260,6 +260,19 @@ MANUFACTURER_CONFIG = {
             "Material_Number": "Material Number",
         },
     },
+    "derigo": {
+        # De Rigo master data. Uses a dedicated handler (_load_derigo in
+        # ingest.py) rather than the generic column map, so "columns" is left
+        # empty — only "brands" is consumed (for the brand-expansion step and
+        # the KNOWN_BRANDS whitelist).
+        "file": "derigo.xlsx",
+        "brands": [
+            "Police",
+            "Furla",
+            "Just Cavalli",
+        ],
+        "columns": {},
+    },
 }
 
 # ==========================================
@@ -315,6 +328,8 @@ BRAND_USABLE_MAP = {
     "persol": "Fashion glasses",
     "polaroid": "Fashion glasses",
     "police": "Fashion glasses",
+    "furla": "Fashion glasses",
+    "just cavalli": "Fashion glasses",
     "puma": "Fashion glasses",
     "radley": "Fashion glasses",
     "ray-ban": "Fashion glasses",
@@ -485,6 +500,7 @@ BRAND_GLASSES_CONTAIN = {
     "kate spade":         {"Frames": _BOTH, "Sunglasses": _BOTH},
     "balenciaga":         {"Frames": _BOTH, "Sunglasses": _BOTH},
     "police":             {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
+    "furla":              {"Frames": _BOTH, "Sunglasses": _BOTH},  # assumed case+cloth — confirm with De Rigo
     "chiara ferragni":    {"Frames": _BOTH, "Sunglasses": _BOTH},
     "missoni":            {"Frames": _BOTH, "Sunglasses": _BOTH},
     "montblanc":          {"Frames": _BOTH, "Sunglasses": _BOTH},
@@ -1536,6 +1552,10 @@ _FRAME_TEMPLE_KEYWORDS = [
     ('transparent', 'Transparent'), ('clear', 'Transparent'),
     ('mastic', 'Ivory'), ('nickel', 'Silver'), ('roviex', 'Brown'), ('animal', 'Brown'), ('avana', 'Havana'),
     ('liliac', 'Purple'),
+    # De Rigo / Italian terms + abbreviations
+    ('nero', 'Black'), ('blu', 'Blue'), ('jeans', 'Blue'),
+    ('trasparente', 'Transparent'), ('transp', 'Transparent'),
+    ('camel', 'Brown'), ('cream', 'Ivory'), ('powder', 'Pink'), ('ruth', 'Ruthenium'),
     ('multicolor', 'Multicolor'), ('multilayer', 'Multicolor'), ('stripe', 'Multicolor'), ('vícebarev', 'Multicolor'),
 ]
 

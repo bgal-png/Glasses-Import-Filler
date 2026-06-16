@@ -333,6 +333,233 @@ def _load_marcolin_new(df):
     return result_df, unmapped, skipped
 
 
+# ==========================================================================
+# DE RIGO — master data format
+# ==========================================================================
+# New manufacturer (Police, Furla, Just Cavalli). Clean structure: Sun/optical
+# flag, readable brand/gender, FRAME SHAPE column that mixes rim type and shape,
+# size embedded as first 2 chars of "size+colour". Self-contained handler
+# returning the same (df, unmapped, skipped) shape as load_single_catalog.
+
+_DERIGO_BRAND_MAP = {
+    "police": "Police",
+    "furla": "Furla",
+    "just cavalli": "Just Cavalli",
+}
+
+# FRAME SHAPE column carries BOTH rim type and (occasionally) actual shape.
+_DERIGO_RIM_MAP = {
+    "FULL-FRAME": "Full rim",
+    "FULL FRAME": "Full rim",
+    "RIMLESS": "Rimless",
+    "HALF-FRAME": "Half rim",
+    "HALF FRAME": "Half rim",
+    "SEMI-RIMLESS": "Half rim",
+}
+_DERIGO_SHAPE_MAP = {
+    "SQUARE": "Square",
+    "RECTANGULAR": "Rectangular",
+    "ROUND": "Round",
+    "GEOMETRIC": "Extravagant",
+    "CAT": "Cat Eye",
+    "CAT-EYE": "Cat Eye",
+    "NAVIGATOR": "Pilot",
+    "PILOT": "Pilot",
+    "SHIELD": "Single lens",
+    "OVAL": "Oval / Elipse",
+    "BUTTERFLY": "Butterfly",
+    "BROWLINE": "Browline",
+    "PANTOS": "Panthos / Tea cup",
+    "PANTHOS": "Panthos / Tea cup",
+}
+
+_DERIGO_GENDER_MAP = {
+    "WOMAN": "Woman",
+    "MAN": "Man",
+    "UNISEX": "Man|Woman",
+    "JUNIOR": "Child",
+    "KIDS": "Child",
+    "CHILD": "Child",
+}
+
+_DERIGO_ORIGIN_MAP = {
+    "CN": "China", "BD": "Bangladesh", "VN": "Vietnam",
+    "KH": "Cambodia", "IT": "Italy", "JP": "Japan", "FR": "France",
+}
+
+
+def _derigo_material(raw):
+    """Map FRONT MATERIAL free-text to Plastic / Metal / Titanium."""
+    s = str(raw or "").strip()
+    low = s.lower()
+    if not s or low == "nan":
+        return "", False
+    if "titanium" in low:
+        return "Titanium", True
+    if any(k in low for k in ("acetate", "acetato", "injected", "pet", "rpet", "nylon", "tritan", "renew", "plastic")):
+        return "Plastic", True
+    if any(k in low for k in ("steel", "metal", "monel", "alumin", "alloy", "bronze")):
+        return "Metal", True
+    return s, False  # unknown — keep original, flag
+
+
+def _derigo_lens_material(raw):
+    s = str(raw or "").strip()
+    low = s.lower()
+    if not s or low == "nan":
+        return "", False
+    if "cr39" in low or "cr 39" in low:
+        return "CR 39", True
+    if "nylon" in low:
+        return "Nylon", True
+    if "policarbon" in low or "polycarbon" in low:
+        return "Polycarbonate", True
+    if "triacetato" in low or "tca" in low or "tritan" in low or "copoliestere" in low or "poliestere" in low:
+        return "Plastic", True
+    return s, False  # unknown — keep original, flag
+
+
+def _load_derigo(df):
+    unmapped = set()
+    skipped = set()
+    rows = []
+
+    for _, src in df.iterrows():
+        barcode = str(src.get("EAN", "")).strip()
+        if not barcode or barcode.lower() == "nan":
+            continue
+        join_key = re.sub(r"\.0$", "", barcode).lstrip("0")
+        if not join_key or join_key == "nan":
+            continue
+
+        out = {"Barcode": barcode, "join_key": join_key}
+
+        # ---- Brand ----
+        brand_raw = str(src.get("Brand", "")).strip()
+        brand_norm = re.sub(r"\s+", " ", brand_raw).strip().lower()
+        brand = _DERIGO_BRAND_MAP.get(brand_norm, brand_raw)
+        if brand_norm and brand_norm not in _DERIGO_BRAND_MAP:
+            unmapped.add(f"Derigo -> Brand: '{brand_raw}'")
+        out["Brand"] = brand
+        out["Manufacturer"] = brand
+
+        # ---- Type ----
+        so = str(src.get("Sun/optical", "")).strip().lower()
+        if so.startswith("sun"):
+            out["Glasses_type"] = "Sunglasses"
+        elif so.startswith("opt"):
+            out["Glasses_type"] = "Frames"
+        else:
+            out["Glasses_type"] = ""
+
+        # ---- size+colour -> lens width + colour code ----
+        sc = str(src.get("size+colour", "")).strip()
+        m = re.match(r"(\d{2})(.*)", sc)
+        if m:
+            size = m.group(1)
+            color_code = m.group(2).strip()
+        else:
+            size = ""
+            color_code = sc
+        out["Glasses_size_lens_width"] = size
+        out["Combination"] = size
+        out["Glasses_color_code"] = color_code
+
+        # ---- Other dimensions ----
+        out["Glasses_size_bridge"] = _marcolin_round(src.get("BRIDGE LENGHT"))
+        out["Glasses_size_temple_length"] = _marcolin_round(src.get("TEMPLE LENGHT"))
+        out["Glasses_size_lens_height"] = _marcolin_round(src.get("LENS HIGHT"))
+
+        # ---- FRAME SHAPE: split into rim type vs shape ----
+        fs = str(src.get("FRAME SHAPE", "")).strip()
+        fs_u = fs.upper()
+        out["Glasses_frame_type"] = ""
+        out["Glasses_shape"] = ""
+        if fs and fs_u != "NAN":
+            if fs_u in _DERIGO_RIM_MAP:
+                out["Glasses_frame_type"] = _DERIGO_RIM_MAP[fs_u]
+            elif fs_u in _DERIGO_SHAPE_MAP:
+                out["Glasses_shape"] = _DERIGO_SHAPE_MAP[fs_u]
+            else:
+                out["Glasses_shape"] = fs  # keep original, flag
+                unmapped.add(f"Derigo -> FRAME SHAPE: '{fs}'")
+
+        # ---- Materials ----
+        mat, ok = _derigo_material(src.get("FRONT MATERIAL"))
+        out["Glasses_main_material"] = mat
+        if mat and not ok:
+            unmapped.add(f"Derigo -> Glasses_main_material: '{src.get('FRONT MATERIAL')}'")
+        lm, ok2 = _derigo_lens_material(src.get("LENS MATERIAL"))
+        out["Glasses_lens_material"] = lm
+        if lm and not ok2:
+            unmapped.add(f"Derigo -> Glasses_lens_material: '{src.get('LENS MATERIAL')}'")
+
+        # ---- Colours ----
+        frame_col = str(src.get("COLOR DESCRIPTION", "")).strip()
+        lens_col = str(src.get("LENS COLOR", "")).strip()
+        if frame_col and frame_col.lower() != "nan":
+            res = classify_color(frame_col, "frame")
+            out["Frame_Colour"] = res if res else frame_col
+            out["Temple_Colour"] = res if res else frame_col
+            if not res:
+                unmapped.add(f"Derigo -> Frame_Colour: '{frame_col}'")
+        else:
+            out["Frame_Colour"] = ""
+            out["Temple_Colour"] = ""
+        if lens_col and lens_col.lower() != "nan":
+            res = classify_color(lens_col, "lens")
+            out["Glasses_lens_Colour"] = res if res else lens_col
+            if not res:
+                unmapped.add(f"Derigo -> Glasses_lens_Colour: '{lens_col}'")
+        else:
+            out["Glasses_lens_Colour"] = ""
+
+        # ---- Lens effect ----
+        eff = set()
+        if str(src.get("POLARIZED (YES/NO)", "")).strip().upper() == "YES":
+            eff.add("Polarized")
+        out["Glasses_lens_effect"] = "|".join(sorted(eff))
+
+        # ---- Filter category: no source column — leave empty (filler estimates
+        # it from lens colour for sunglasses, same as other manufacturers) ----
+        out["Sunglasses_filter"] = ""
+
+        # ---- Gender ----
+        g = str(src.get("GENDER", "")).strip()
+        if not g or g.upper() == "NAN":
+            out["Glasses_gendre"] = ""
+        elif g.upper() in _DERIGO_GENDER_MAP:
+            out["Glasses_gendre"] = _DERIGO_GENDER_MAP[g.upper()]
+        else:
+            out["Glasses_gendre"] = g  # keep original, flag
+            unmapped.add(f"Derigo -> Glasses_gendre: '{g}'")
+
+        # ---- RX: no source column ----
+        out["SunGlasses_RX_lenses"] = ""
+
+        # ---- Origin ----
+        origin = str(src.get("COUNTY OF ORIGIN", "")).strip().upper()
+        out["Item_origin_country"] = _DERIGO_ORIGIN_MAP.get(
+            origin, origin if origin and origin != "NAN" else ""
+        )
+
+        # ---- Model + name ----
+        model = str(src.get("model", "")).strip()
+        out["Extracted_Model"] = model
+        out["Extracted_Color"] = color_code
+        name_parts = [p for p in (brand, model, color_code) if p and p.lower() != "nan"]
+        out["Assembled_Name"] = " ".join(name_parts)
+
+        # ---- Clip-on: none in De Rigo feed ----
+        out["Extracted_Clip_on"] = ""
+        out["Clip_on_Alert"] = False
+
+        out["Producing_company"] = "Derigo"
+        rows.append(out)
+
+    return pd.DataFrame(rows), unmapped, skipped
+
+
 def load_single_catalog(mfg_name, config_settings, file_path):
     """Apply the manufacturer rules engine to a single raw catalog file.
 
@@ -379,6 +606,10 @@ def load_single_catalog(mfg_name, config_settings, file_path):
     # dedicated handler. Old-format Marcolin files (if any) fall through.
     if mfg_name == "marcolin" and {"MAIN MATERIAL", "STYLE", "TYPOLOGY"}.issubset(set(df.columns)):
         return _load_marcolin_new(df)
+
+    # De Rigo (Police / Furla / Just Cavalli) — dedicated format handler.
+    if mfg_name == "derigo":
+        return _load_derigo(df)
 
     new_df = pd.DataFrame()
 
