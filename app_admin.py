@@ -771,3 +771,160 @@ with col2:
                 st.success(f"✅ Item Origin updated! ({len(df_origin)} items)")
             else:
                 st.error("⚠️ 'item_name' or 'country_master' column missing.")
+
+# ==========================================
+# 📒 CREATED-ITEMS REGISTRY (history of what we've already made)
+# ==========================================
+st.divider()
+st.subheader("📒 Created Items Registry")
+st.caption(
+    "Keep a record of products you've already created. Store past filled files "
+    "(Name + barcode + size), then later check a list of barcodes to see which "
+    "you've already done."
+)
+
+
+def _clean_bc(x):
+    """Normalize a barcode the same way as master_catalog join_key."""
+    return re.sub(r"\.0$", "", str(x).strip()).lstrip("0")
+
+
+def _read_any(uploaded):
+    """Read an uploaded xlsx/csv into a string DataFrame with stripped headers."""
+    if uploaded.name.lower().endswith(".csv"):
+        try:
+            d = pd.read_csv(uploaded, dtype=str, sep=",", on_bad_lines="skip")
+            if len(d.columns) <= 1:
+                uploaded.seek(0)
+                d = pd.read_csv(uploaded, dtype=str, sep=";", on_bad_lines="skip")
+        except Exception:
+            uploaded.seek(0)
+            d = pd.read_csv(uploaded, dtype=str, sep=";", on_bad_lines="skip")
+    else:
+        d = pd.read_excel(uploaded, dtype=str, engine="openpyxl")
+    d.columns = (
+        d.columns.astype(str)
+        .str.replace(r"[\r\n\t]", " ", regex=True)
+        .str.replace(r"\s+", " ", regex=True)
+        .str.strip()
+    )
+    return d
+
+
+def _find_col(df, candidates):
+    """Return the first column whose name matches any candidate (case-insensitive)."""
+    lower_map = {c.lower(): c for c in df.columns}
+    for cand in candidates:
+        if cand.lower() in lower_map:
+            return lower_map[cand.lower()]
+    return None
+
+
+reg_col1, reg_col2 = st.columns(2)
+
+# --- STORE side ---
+with reg_col1:
+    st.markdown("**➕ Store created items**")
+    st.caption("Upload one or more older filled files. Stores Name + barcode + size, merging by barcode.")
+    stored_files = st.file_uploader(
+        "Upload filled file(s)", type=["xlsx", "csv"], accept_multiple_files=True, key="reg_store"
+    )
+    if stored_files and st.button("💾 Store as created items", type="primary"):
+        with st.spinner("Storing..."):
+            new_rows = []
+            problems = []
+            for uf in stored_files:
+                try:
+                    d = _read_any(uf)
+                except Exception as e:
+                    problems.append(f"{uf.name}: could not read ({e})")
+                    continue
+                bc_col = _find_col(d, ["Barcode", "EAN", "UPC", "EAN/UPC"])
+                name_col = _find_col(d, ["Glasses name", "XML description", "Name"])
+                size_col = _find_col(d, ["Combination (size on glasses)", "Combination", "Size"])
+                if not bc_col:
+                    problems.append(f"{uf.name}: no Barcode column found")
+                    continue
+                tmp = pd.DataFrame()
+                tmp["join_key"] = d[bc_col].apply(_clean_bc)
+                tmp["barcode"] = d[bc_col].astype(str).str.strip()
+                tmp["name"] = d[name_col].astype(str).str.strip() if name_col else ""
+                tmp["size"] = d[size_col].astype(str).str.strip() if size_col else ""
+                tmp = tmp[tmp["join_key"].notna() & (tmp["join_key"] != "") & (tmp["join_key"] != "nan")]
+                new_rows.append(tmp)
+
+            if problems:
+                for p in problems:
+                    st.warning(f"⚠️ {p}")
+
+            if new_rows:
+                incoming = pd.concat(new_rows, ignore_index=True)
+                try:
+                    existing = pd.read_sql_table("created_items", con=engine)
+                except Exception:
+                    existing = pd.DataFrame(columns=["join_key", "barcode", "name", "size"])
+                before = len(existing)
+                combined = pd.concat([existing, incoming], ignore_index=True)
+                combined.drop_duplicates(subset=["join_key"], keep="last", inplace=True)
+                combined.to_sql("created_items", con=engine, if_exists="replace", index=False)
+                added = len(combined) - before
+                st.success(
+                    f"✅ Stored {len(incoming)} rows from {len(new_rows)} file(s). "
+                    f"Registry now holds {len(combined):,} unique items ({added:,} new)."
+                )
+            else:
+                st.error("No usable rows found in the uploaded file(s).")
+
+# --- CHECK side ---
+with reg_col2:
+    st.markdown("**🔎 Check barcodes against registry**")
+    st.caption("Upload a file with barcodes to see which you've already created.")
+    check_file = st.file_uploader("Upload barcode list", type=["xlsx", "csv"], key="reg_check")
+    if check_file and st.button("🔎 Check barcodes"):
+        with st.spinner("Checking..."):
+            try:
+                registry = pd.read_sql_table("created_items", con=engine)
+            except Exception:
+                registry = pd.DataFrame(columns=["join_key", "barcode", "name", "size"])
+
+            if registry.empty:
+                st.warning("⚠️ Registry is empty — store some filled files first.")
+            else:
+                d = _read_any(check_file)
+                bc_col = _find_col(d, ["Barcode", "EAN", "UPC", "EAN/UPC"]) or d.columns[0]
+                reg_lookup = registry.set_index("join_key")
+                results = []
+                for raw in d[bc_col]:
+                    key = _clean_bc(raw)
+                    if not key or key == "nan":
+                        continue
+                    if key in reg_lookup.index:
+                        row = reg_lookup.loc[key]
+                        if isinstance(row, pd.DataFrame):
+                            row = row.iloc[0]
+                        results.append({
+                            "Barcode": str(raw).strip(),
+                            "Status": "✅ Already created",
+                            "Name": row.get("name", ""),
+                            "Size": row.get("size", ""),
+                        })
+                    else:
+                        results.append({
+                            "Barcode": str(raw).strip(),
+                            "Status": "🆕 New",
+                            "Name": "",
+                            "Size": "",
+                        })
+                res_df = pd.DataFrame(results)
+                already = (res_df["Status"] == "✅ Already created").sum()
+                new_n = (res_df["Status"] == "🆕 New").sum()
+                m1, m2 = st.columns(2)
+                m1.metric("Already created", f"{already}")
+                m2.metric("New", f"{new_n}")
+                st.dataframe(res_df, use_container_width=True, hide_index=True)
+                st.download_button(
+                    "📥 Download result (CSV)",
+                    data=res_df.to_csv(index=False).encode("utf-8-sig"),
+                    file_name="barcode_check_result.csv",
+                    mime="text/csv",
+                )
