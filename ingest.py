@@ -376,24 +376,65 @@ def _safilo_frames_material(raw):
     s = str(raw or "").strip()
     low = s.lower()
     if not s or low == "nan":
-        return "", True
+        return None, True
     if "titanium" in low:
         return "Titanium", True
     if any(k in low for k in ("steel", "monel", "metal")):
         return "Metal", True
     if any(k in low for k in ("acetate", "cellulose", "pmma", "polyamide", "polyester",
                               "optyl", "inject", "nylon", "grilamid", "propionate", "prop",
-                              "co-polyester", "tr90", "plastic")):
+                              "co-polyester", "tr90", "plastic", "polycarbon", "rubber", "tpu",
+                              "carbon")):
         return "Plastic", True
     return s, False  # unknown — keep original, flag
 
 
-def _load_safilo_frames(df):
+def _safilo_lens_material_from_desc(desc):
+    """Extract lens material from a Lens Description ('POLYESTER', 'POLICARBONATE
+    LENS', 'TRIACETATE LENS'...). Returns None if the description is a colour."""
+    d = str(desc or "").upper()
+    if "POLICARBON" in d or "POLYCARBON" in d:
+        return "Polycarbonate"
+    if "TRIACETAT" in d:
+        return "Plastic"
+    if "POLYESTER" in d:
+        return "Plastic"
+    if "NYLON" in d:
+        return "Nylon"
+    if "CR39" in d or "CR 39" in d:
+        return "CR 39"
+    if "GLASS" in d:
+        return "Glass"
+    return None
+
+
+def _safilo_lens_effect_from_desc(desc, photochromic_flag):
+    """Derive lens effect set from Lens Description + Photochromic column."""
+    d = str(desc or "").upper()
+    eff = set()
+    if "POLARIZED" in d or "POLARIS" in d:
+        eff.add("Polarized")
+    if "MIRROR" in d:
+        eff.add("Mirror")
+    if "SHADED" in d or "GRADIENT" in d:
+        eff.add("Gradient")
+    if str(photochromic_flag or "").strip().upper() == "X" or "PHOTOCHROM" in d or "PHOTOCROM" in d:
+        eff.add("Photochromic")
+    return eff
+
+
+def _load_safilo_catalog(df):
+    """Handle the Safilo catalog-export format (optical frames, opt+clip-on, and
+    sunglasses — all share the same 27 columns). Type is derived from Product
+    type. Empty cells are emitted as None so the barcode upsert SKIPS them,
+    preserving richer daily-feed data (bridge/lens height/rim/filter) for
+    overlapping items while still adding items missing from the daily feed."""
     unmapped = set()
     skipped = set()
     rows = []
 
     shape_dict = {str(k).lower(): v for k, v in VALUE_TRANSLATOR.get("Glasses_shape", {}).items() if k}
+    type_dict = {str(k).lower(): v for k, v in VALUE_TRANSLATOR.get("Glasses_type", {}).items() if k}
 
     for _, src in df.iterrows():
         barcode = str(src.get("EAN/UPC", "")).strip()
@@ -410,8 +451,16 @@ def _load_safilo_frames(df):
         out["Brand"] = brand
         out["Manufacturer"] = brand
 
-        # ---- Type: file is optical frames only ----
-        out["Glasses_type"] = "Frames"
+        # ---- Type (from Product type) ----
+        prod_type = re.sub(r"\s+", " ", str(src.get("Product type", "")).strip().upper())
+        g_type = type_dict.get(prod_type.lower(), "")
+        if not g_type:
+            if "SUNGLASS" in prod_type:
+                g_type = "Sunglasses"
+            elif "FRAME" in prod_type or "CLIP" in prod_type:
+                g_type = "Frames"
+        out["Glasses_type"] = g_type
+        is_sun = g_type == "Sunglasses"
 
         # ---- Model + colour code ----
         style = str(src.get("Style", "")).strip()
@@ -424,53 +473,73 @@ def _load_safilo_frames(df):
 
         # ---- Dimensions we HAVE (lens width + temple only) ----
         size = _marcolin_round(src.get("Size"))
-        out["Glasses_size_lens_width"] = size
-        out["Combination"] = size
-        out["Glasses_size_temple_length"] = _marcolin_round(src.get("Temple Length"))
-        # NOTE: bridge, lens height, rim intentionally NOT output (not in file) —
-        # so the upsert won't wipe richer daily-feed values for overlapping items.
+        out["Glasses_size_lens_width"] = size or None
+        out["Combination"] = size or None
+        out["Glasses_size_temple_length"] = _marcolin_round(src.get("Temple Length")) or None
+        # bridge, lens height, rim, filter category intentionally NOT output
+        # (absent/unreliable in this format) so the upsert won't wipe daily-feed
+        # values for overlapping items.
 
-        # ---- Shape (real data; translate, fall through original) ----
+        # ---- Shape (translate, fall through original) ----
         shp = str(src.get("Shape", "")).strip()
         if not shp or shp.lower() == "nan":
-            out["Glasses_shape"] = ""
+            out["Glasses_shape"] = None
         elif shp.lower() in shape_dict:
             mapped = shape_dict[shp.lower()]
-            out["Glasses_shape"] = mapped if mapped and mapped != "NOT MAPPED" else ""
+            out["Glasses_shape"] = mapped if mapped and mapped != "NOT MAPPED" else None
         else:
             out["Glasses_shape"] = shp
-            unmapped.add(f"Safilo(frames) -> Glasses_shape: '{shp}'")
+            unmapped.add(f"Safilo(catalog) -> Glasses_shape: '{shp}'")
 
-        # ---- Material ----
+        # ---- Frame material ----
         mat, ok = _safilo_frames_material(src.get("First Front Material Description"))
         out["Glasses_main_material"] = mat
         if mat and not ok:
-            unmapped.add(f"Safilo(frames) -> Glasses_main_material: '{src.get('First Front Material Description')}'")
+            unmapped.add(f"Safilo(catalog) -> Glasses_main_material: '{src.get('First Front Material Description')}'")
 
-        # ---- Colours (single frame colour applies to front + temple) ----
+        # ---- Frame colour (front + temple) ----
         col = str(src.get("Color Code Description", "")).strip()
         if col and col.lower() != "nan":
             res = classify_color(col, "frame")
             out["Frame_Colour"] = res if res else col
             out["Temple_Colour"] = res if res else col
             if not res:
-                unmapped.add(f"Safilo(frames) -> Frame_Colour: '{col}'")
+                unmapped.add(f"Safilo(catalog) -> Frame_Colour: '{col}'")
         else:
-            out["Frame_Colour"] = ""
-            out["Temple_Colour"] = ""
+            out["Frame_Colour"] = None
+            out["Temple_Colour"] = None
+
+        # ---- Lens fields (sunglasses only; None otherwise so upsert skips) ----
+        lens_desc = str(src.get("Lens Description", "")).strip()
+        photo = src.get("Photochromic", "")
+        if is_sun and lens_desc and lens_desc.lower() != "nan":
+            lens_color = classify_color(lens_desc, "lens")
+            out["Glasses_lens_Colour"] = lens_color or None  # material-only desc -> None
+            out["Glasses_lens_material"] = _safilo_lens_material_from_desc(lens_desc)
+            eff = _safilo_lens_effect_from_desc(lens_desc, photo)
+            out["Glasses_lens_effect"] = "|".join(sorted(eff)) if eff else None
+        else:
+            out["Glasses_lens_Colour"] = None
+            out["Glasses_lens_material"] = None
+            out["Glasses_lens_effect"] = None
 
         # ---- Origin ----
         origin = str(src.get("Country of origin", "")).strip().upper()
         out["Item_origin_country"] = _SAFILO_FRAMES_ORIGIN_MAP.get(
-            origin, origin if origin and origin != "NAN" else ""
+            origin, origin if origin and origin != "NAN" else None
         )
 
-        # ---- Clip-on (Style ending in /C, same convention as daily feed) ----
+        # ---- Clip-on (Product type '+ CLIP-ON' or Style ending in /C) ----
         clip = ""
-        if style.upper().endswith("/C"):
-            clip = "Magnetic sun clip-on"
+        clip_lens = None
+        if "CLIP-ON" in prod_type or "CLIP ON" in prod_type or style.upper().endswith("/C"):
+            polarized = "POLARIZED" in lens_desc.upper()
+            clip = "Magnetic sun clip-on p" if polarized else "Magnetic sun clip-on"
+            clip_lens = classify_color(lens_desc, "lens") or None
         out["Extracted_Clip_on"] = clip
         out["Clip_on_Alert"] = False
+        if clip_lens:
+            out["Clip_on_lens_colour"] = clip_lens
 
         # ---- Name ----
         name_parts = [p for p in (brand, style, color_code) if p and p.lower() != "nan"]
@@ -783,10 +852,10 @@ def load_single_catalog(mfg_name, config_settings, file_path):
     if mfg_name == "marcolin" and {"MAIN MATERIAL", "STYLE", "TYPOLOGY"}.issubset(set(df.columns)):
         return _load_marcolin_new(df)
 
-    # Safilo optical-frames catalog export (2nd Safilo format) — detected by its
-    # signature columns. Additive top-up handler (see _load_safilo_frames).
+    # Safilo catalog export (2nd Safilo format: optical frames / opt+clip-on /
+    # sunglasses) — detected by its signature columns. Additive top-up handler.
     if mfg_name == "safilo" and {"Division Description", "Color Code Description"}.issubset(set(df.columns)):
-        return _load_safilo_frames(df)
+        return _load_safilo_catalog(df)
 
     # De Rigo (Police / Furla / Just Cavalli) — dedicated format handler.
     if mfg_name == "derigo":
