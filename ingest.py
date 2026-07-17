@@ -92,6 +92,9 @@ _MARCOLIN_ORIGIN_MAP = {
     "IT": "Italy",
     "JP": "Japan",
     "FR": "France",
+    "DE": "Germany",
+    "KH": "Cambodia",
+    "SI": "Slovenia",
 }
 
 # Marcolin/Guess gender codes (legend confirmed):
@@ -483,6 +486,249 @@ def _load_marcolin_tomford(df):
         out["Assembled_Name"] = " ".join(name_parts)
 
         out["Producing_company"] = "Marcolin"
+        rows.append(out)
+
+    return pd.DataFrame(rows), unmapped, skipped
+
+
+# ==========================================================================
+# THÉLIOS — LVMH eyewear master data (Celine, Dior, Bulgari, Loewe, Fendi,
+# Barton Perreira, Vuarnet, Givenchy, Tag Heuer, Kenzo, Fred, ...)
+# ==========================================================================
+# New manufacturer. Well-structured English columns, but the export carries a
+# junk top row (real headers on the 2nd row) which the handler promotes.
+
+_THELIOS_BRAND_MAP = {
+    "celine": "Celine",
+    "dior woman": "Dior",
+    "dior man": "Dior",
+    "dior": "Dior",
+    "bulgari": "Bulgari",
+    "loewe": "Loewe",
+    "fendi": "Fendi",
+    "vuarnet": "Vuarnet",
+    "givenchy": "Givenchy",
+    "tag heuer": "Tag Heuer",
+    "kenzo": "Kenzo",
+    "fred": "Fred",
+    "barton perreira": "Barton Perreira",
+}
+
+_THELIOS_SHAPE_MAP = {
+    "GEOMETRIC": "Extravagant",
+    "RECTANGULAR": "Rectangular",
+    "SQUARE": "Square",
+    "ROUND": "Round",
+    "OVAL": "Oval / Elipse",
+    "CAT EYE": "Cat Eye",
+    "PILOT": "Pilot",
+    "NAVIGATOR": "Pilot",
+    "AVIATOR": "Pilot",
+    "BUTTERFLY": "Butterfly",
+    "SHIELD": "Single lens",
+    "MASK": "Single lens",
+    "PANTOS": "Panthos / Tea cup",
+    "PANTHOS": "Panthos / Tea cup",
+    "BROWLINE": "Browline",
+}
+
+_THELIOS_RIM_MAP = {
+    "FULL RIM": "Full rim",
+    "RIMLESS": "Rimless",
+    "SEMIRIMLESS": "Half rim",
+    "INVERTED HALF RIM": "Half rim",
+    "HALF RIM": "Half rim",
+    "3 PIECES COMPRESSION": "Rimless",
+    "SHIELD": "Full rim",
+}
+
+_THELIOS_GENDER_MAP = {
+    "FEMALE": "Woman",
+    "MALE": "Man",
+    "UNISEX": "Man|Woman",
+    "MAN": "Man",
+    "WOMAN": "Woman",
+    "KIDS": "Child",
+    "JUNIOR": "Child",
+}
+
+
+def _thelios_material(raw):
+    s = str(raw or "").strip()
+    low = s.lower()
+    if not s or low == "nan":
+        return None
+    if "titanium" in low:
+        return "Titanium"
+    if any(k in low for k in ("acetate", "injected", "nylon", "plastic")):
+        return "Plastic"
+    if any(k in low for k in ("metal", "alumin", "gold", "steel", "monel")):
+        return "Metal"
+    return None
+
+
+def _thelios_filter(raw):
+    """Parse Lens Base -> (category, is_polarized). Handles 3, 3P, 3L, 3PL,
+    1-2, 1-3, 0..4. L (mirror/light treatment) is ignored for the category."""
+    s = str(raw or "").strip().upper()
+    if not s or s == "NAN":
+        return "", False
+    pol = "P" in s
+    m = re.search(r"(\d)\s*-\s*(\d)", s)
+    if m:
+        lo, hi = sorted([m.group(1), m.group(2)], key=int)
+        return f"Category range {lo} - {hi}", pol
+    m2 = re.search(r"(\d)", s)
+    if m2:
+        return f"Category {m2.group(1)}", pol
+    return "", pol
+
+
+def _load_thelios(df):
+    unmapped = set()
+    skipped = set()
+
+    # Promote the real header row if the export carried a junk top row.
+    df = df.copy()
+    if "Brand" not in df.columns and (df.iloc[0].astype(str) == "Brand").any():
+        df.columns = df.iloc[0].astype(str).str.replace("\xa0", " ", regex=False).str.strip()
+        df = df.iloc[1:].reset_index(drop=True)
+    else:
+        df.columns = df.columns.astype(str).str.replace("\xa0", " ", regex=False).str.strip()
+    # Drop duplicate columns (junk headers may collide)
+    df = df.loc[:, ~df.columns.duplicated()]
+
+    ean_col = next((c for c in df.columns if "EAN" in c.upper()), "* EAN Code")
+    rows = []
+
+    for _, src in df.iterrows():
+        barcode = str(src.get(ean_col, "")).strip()
+        if not barcode or barcode.lower() == "nan":
+            continue
+        join_key = re.sub(r"\.0$", "", barcode).lstrip("0")
+        if not join_key or join_key == "nan":
+            continue
+
+        out = {"Barcode": barcode, "join_key": join_key}
+
+        # ---- Brand ----
+        brand_raw = str(src.get("Brand", "")).strip()
+        brand_norm = re.sub(r"\s+", " ", brand_raw).strip().lower()
+        brand = _THELIOS_BRAND_MAP.get(brand_norm, brand_raw)
+        if brand_norm and brand_norm not in _THELIOS_BRAND_MAP:
+            unmapped.add(f"Thelios -> Brand: '{brand_raw}'")
+        out["Brand"] = brand
+        out["Manufacturer"] = brand
+
+        # ---- Type + material (from Material: '<mat> Sunglasses/Ophtalmic') ----
+        material_raw = str(src.get("Material", "")).strip()
+        out["Glasses_type"] = "Sunglasses" if "sunglass" in material_raw.lower() else "Frames"
+        is_sun = out["Glasses_type"] == "Sunglasses"
+        out["Glasses_main_material"] = _thelios_material(material_raw)
+
+        # ---- Model + colour code (Supplier Color Code = SIZE + COLOR) ----
+        model = str(src.get("Model Code", "")).strip()
+        supplier_color = str(src.get("Supplier Color Code", "")).strip()
+        m = re.match(r"(\d{2})(.*)", supplier_color)
+        size_from_code = m.group(1) if m else ""
+        color_code = m.group(2).strip() if m else supplier_color
+        out["Extracted_Model"] = model
+        out["Extracted_Color"] = color_code
+        out["Glasses_color_code"] = color_code
+
+        # ---- Dimensions (A=lens width, B=lens height, DBL=bridge, temple) ----
+        lens_w = _marcolin_round(src.get("Width (A)")) or size_from_code
+        out["Glasses_size_lens_width"] = lens_w or None
+        out["Combination"] = lens_w or None
+        out["Glasses_size_lens_height"] = _marcolin_round(src.get("Height (B) B-depth")) or None
+        out["Glasses_size_bridge"] = _marcolin_round(src.get("Bridge Size - DBL")) or None
+        out["Glasses_size_temple_length"] = _marcolin_round(src.get("Temple Length")) or None
+
+        # ---- Shape ----
+        shp = str(src.get("Frame Shape", "")).strip()
+        if not shp or shp.upper() in ("NAN", "?"):
+            out["Glasses_shape"] = None
+        elif shp.upper() in _THELIOS_SHAPE_MAP:
+            out["Glasses_shape"] = _THELIOS_SHAPE_MAP[shp.upper()]
+        else:
+            out["Glasses_shape"] = shp
+            unmapped.add(f"Thelios -> Glasses_shape: '{shp}'")
+
+        # ---- Rim ----
+        rim = str(src.get("Technical Rim Type", "")).strip()
+        if not rim or rim.upper() in ("NAN", "?"):
+            out["Glasses_frame_type"] = None
+        elif rim.upper() in _THELIOS_RIM_MAP:
+            out["Glasses_frame_type"] = _THELIOS_RIM_MAP[rim.upper()]
+        else:
+            out["Glasses_frame_type"] = rim
+            unmapped.add(f"Thelios -> Glasses_frame_type: '{rim}'")
+
+        # ---- Gender ----
+        g = str(src.get("Gender", "")).strip()
+        if not g or g.upper() == "NAN":
+            out["Glasses_gendre"] = None
+        elif g.upper() in _THELIOS_GENDER_MAP:
+            out["Glasses_gendre"] = _THELIOS_GENDER_MAP[g.upper()]
+        else:
+            out["Glasses_gendre"] = g
+            unmapped.add(f"Thelios -> Glasses_gendre: '{g}'")
+
+        # ---- Colour: 'front / lens' (split on ' / ') ----
+        color_full = str(src.get("Color", "")).strip()
+        front_part, lens_part = color_full, ""
+        if color_full and color_full.lower() != "nan":
+            parts = re.split(r"\s+/\s+", color_full, maxsplit=1)
+            front_part = parts[0].strip()
+            lens_part = parts[1].strip() if len(parts) > 1 else ""
+        if front_part and front_part.lower() != "nan":
+            res = classify_color(front_part, "frame")
+            out["Frame_Colour"] = res if res else front_part
+            out["Temple_Colour"] = res if res else front_part
+            if not res:
+                unmapped.add(f"Thelios -> Frame_Colour: '{front_part}'")
+        else:
+            out["Frame_Colour"] = None
+            out["Temple_Colour"] = None
+        if is_sun and lens_part:
+            res = classify_color(lens_part, "lens")
+            out["Glasses_lens_Colour"] = res if res else None
+        else:
+            out["Glasses_lens_Colour"] = None
+
+        # ---- Filter category + lens effect ----
+        filter_cat, pol_lb = _thelios_filter(src.get("Lens Base"))
+        out["Sunglasses_filter"] = filter_cat or None
+        eff = set()
+        if str(src.get("Polarized", "")).strip().lower() == "yes" or pol_lb or "polariz" in lens_part.lower():
+            eff.add("Polarized")
+        if str(src.get("Photochromic", "")).strip().lower() == "yes":
+            eff.add("Photochromic")
+        if "gradient" in lens_part.lower():
+            eff.add("Gradient")
+        if "mirror" in lens_part.lower():
+            eff.add("Mirror")
+        out["Glasses_lens_effect"] = "|".join(sorted(eff)) if eff else None
+
+        # ---- RX (Glazeable, sunglasses only) ----
+        if is_sun and str(src.get("Glazeable", "")).strip().lower() == "yes":
+            out["SunGlasses_RX_lenses"] = "Yes"
+        else:
+            out["SunGlasses_RX_lenses"] = None
+
+        # ---- Origin ----
+        origin = str(src.get("Country of Origin", "")).strip().upper()
+        out["Item_origin_country"] = _MARCOLIN_ORIGIN_MAP.get(
+            origin, origin if origin and origin != "NAN" else None
+        )
+
+        # ---- Name ----
+        name_parts = [p for p in (brand, model, color_code) if p and p.lower() != "nan"]
+        out["Assembled_Name"] = " ".join(name_parts)
+
+        out["Extracted_Clip_on"] = ""
+        out["Clip_on_Alert"] = False
+        out["Producing_company"] = "Thelios"
         rows.append(out)
 
     return pd.DataFrame(rows), unmapped, skipped
@@ -1020,6 +1266,10 @@ def load_single_catalog(mfg_name, config_settings, file_path):
     # De Rigo (Police / Furla / Just Cavalli) — dedicated format handler.
     if mfg_name == "derigo":
         return _load_derigo(df)
+
+    # Thélios (LVMH: Celine, Dior, Bulgari, Loewe, Fendi, ...) — dedicated handler.
+    if mfg_name == "thelios":
+        return _load_thelios(df)
 
     new_df = pd.DataFrame()
 

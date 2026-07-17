@@ -273,6 +273,24 @@ MANUFACTURER_CONFIG = {
         ],
         "columns": {},
     },
+    "thelios": {
+        # Thélios (LVMH) master data. Dedicated handler (_load_thelios).
+        "file": "thelios.xlsx",
+        "brands": [
+            "Celine",
+            "Dior",
+            "Bulgari",
+            "Loewe",
+            "Fendi",
+            "Barton Perreira",
+            "Vuarnet",
+            "Givenchy",
+            "Tag Heuer",
+            "Kenzo",
+            "Fred",
+        ],
+        "columns": {},
+    },
 }
 
 # ==========================================
@@ -384,6 +402,13 @@ BRAND_USABLE_MAP = {
     "beron": "Luxury glasses",
     "lewish": "Luxury glasses",
     "giorgio armani": "Luxury glasses",
+    "bulgari": "Luxury glasses",
+    "loewe": "Luxury glasses",
+    "barton perreira": "Luxury glasses",
+    "fred": "Luxury glasses",
+    "kenzo": "Luxury glasses",
+    "vuarnet": "Fashion glasses",
+    "tag heuer": "Fashion glasses",
     "carolina herrera": "Luxury glasses",
     "david beckham": "Luxury glasses",
     "ralph lauren": "Luxury glasses",
@@ -501,6 +526,17 @@ BRAND_GLASSES_CONTAIN = {
     "balenciaga":         {"Frames": _BOTH, "Sunglasses": _BOTH},
     "police":             {"Frames": _CASE_ONLY, "Sunglasses": _CASE_ONLY},
     "furla":              {"Frames": _BOTH, "Sunglasses": _BOTH},  # assumed case+cloth — confirm with De Rigo
+    # Thélios (LVMH) — Case Included=Yes for all; assumed case+cloth (luxury
+    # default) — confirm with Thélios. Celine/Dior/Fendi/Givenchy already above.
+    "bulgari":            {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "loewe":              {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "barton perreira":    {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "vuarnet":            {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "givenchy":           {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "tag heuer":          {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "kenzo":              {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "fred":               {"Frames": _BOTH, "Sunglasses": _BOTH},
+    "dior":               {"Frames": _BOTH, "Sunglasses": _BOTH},
     "chiara ferragni":    {"Frames": _BOTH, "Sunglasses": _BOTH},
     "missoni":            {"Frames": _BOTH, "Sunglasses": _BOTH},
     "montblanc":          {"Frames": _BOTH, "Sunglasses": _BOTH},
@@ -1535,7 +1571,7 @@ _FRAME_TEMPLE_KEYWORDS = [
     ('champagne', 'Gold'),
     ('gold', 'Gold'), ('copper', 'Gold'),
     ('palladium', 'Silver'), ('platinum', 'Silver'),
-    ('silver', 'Silver'), ('argento', 'Silver'), ('gunmetal', 'Silver'),
+    ('silver', 'Silver'), ('argento', 'Silver'), ('gunmetal', 'Silver'), ('gumetal', 'Silver'), ('rhodium', 'Silver'),
     ('gun', 'Grey'),  # short for gunmetal — already mapped above but stand-alone too
     ('grey', 'Grey'), ('gray', 'Grey'), ('smoke', 'Grey'), ('graphite', 'Grey'),
     ('orange', 'Orange'), ('amber', 'Orange'),
