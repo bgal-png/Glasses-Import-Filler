@@ -81,6 +81,8 @@ _MARCOLIN_LENS_MATERIAL_MAP = {
     "NYLON": "Nylon",
     "TRIACETATO": "Plastic",
     "NXT": "Plastic",
+    "METACRILATO": "Plastic",
+    "POLYCARBONATE": "Polycarbonate",
 }
 
 _MARCOLIN_ORIGIN_MAP = {
@@ -331,6 +333,159 @@ def _load_marcolin_new(df):
 
     result_df = pd.DataFrame(rows)
     return result_df, unmapped, skipped
+
+
+# ==========================================================================
+# TOM FORD catalogue (Marcolin family, Tom Ford-specific column names)
+# ==========================================================================
+# Same conventions as the Marcolin master (MAIN MATERIAL encodes type,
+# SKU = MODEL@SIZE+COLOR#, SI/NO flex, filter categories, +CLIP-ON) but with
+# Tom Ford column names (MODEL, SIZE/COLOR, BRIDGE, MADE IN) and no TYPOLOGY /
+# lens-height / RX columns. Uploaded as "marcolin"; Producing_company=Marcolin.
+
+def _load_marcolin_tomford(df):
+    unmapped = set()
+    skipped = set()
+    rows = []
+
+    for _, src in df.iterrows():
+        barcode = str(src.get("UPC", "")).strip()
+        if not barcode or barcode.lower() == "nan":
+            continue
+        join_key = re.sub(r"\.0$", "", barcode).lstrip("0")
+        if not join_key or join_key == "nan":
+            continue
+
+        out = {"Barcode": barcode, "join_key": join_key}
+
+        # ---- Brand (always Tom Ford in this file) ----
+        brand = str(src.get("BRAND", "")).strip() or "Tom Ford"
+        out["Brand"] = brand
+        out["Manufacturer"] = brand
+
+        # ---- Type from MAIN MATERIAL (MASK counts as Sunglasses) ----
+        main_mat = str(src.get("MAIN MATERIAL", "")).strip().upper()
+        if "SUNGLASS" in main_mat or "MASK" in main_mat:
+            out["Glasses_type"] = "Sunglasses"
+        elif "FRAME" in main_mat:
+            out["Glasses_type"] = "Frames"
+        else:
+            out["Glasses_type"] = ""
+
+        # ---- Material (FRONT MATERIAL, fall back to MAIN MATERIAL word) ----
+        front_mat = str(src.get("FRONT MATERIAL", "")).strip().upper()
+        mat_key = front_mat.split("/")[0].strip()
+        material = _MARCOLIN_MATERIAL_MAP.get(mat_key, "")
+        if not material:
+            for word, mapped in _MARCOLIN_MATERIAL_MAP.items():
+                if word in main_mat:
+                    material = mapped
+                    break
+        if not material and mat_key and mat_key not in ("", "NO FRONT", "NAN"):
+            unmapped.add(f"TomFord -> Glasses_main_material: '{front_mat}'")
+            material = front_mat
+        out["Glasses_main_material"] = material or None
+
+        # ---- Dimensions (lens width, bridge, temple; no lens height) ----
+        size = _marcolin_round(src.get("SIZE"))
+        out["Glasses_size_lens_width"] = size or None
+        out["Combination"] = size or None
+        out["Glasses_size_bridge"] = _marcolin_round(src.get("BRIDGE")) or None
+        out["Glasses_size_temple_length"] = _marcolin_round(src.get("TEMPLE")) or None
+
+        # ---- Shape ----
+        shape = str(src.get("SHAPE", "")).strip()
+        if not shape or shape.upper() == "NAN":
+            out["Glasses_shape"] = None
+        elif shape.upper() in _MARCOLIN_SHAPE_MAP:
+            out["Glasses_shape"] = _MARCOLIN_SHAPE_MAP[shape.upper()]
+        else:
+            out["Glasses_shape"] = shape
+            unmapped.add(f"TomFord -> Glasses_shape: '{shape}'")
+
+        # ---- Flex ----
+        flex = str(src.get("FLEX", "")).strip().upper()
+        out["Glasses_other_info"] = "Flex" if flex == "SI" else None
+
+        # ---- Gender ----
+        g = str(src.get("GENDER", "")).strip().upper()
+        if not g or g == "NAN":
+            out["Glasses_gendre"] = None
+        elif g in _MARCOLIN_GENDER_MAP:
+            out["Glasses_gendre"] = _MARCOLIN_GENDER_MAP[g]
+        else:
+            out["Glasses_gendre"] = g
+            unmapped.add(f"TomFord -> Glasses_gendre: '{g}'")
+
+        # ---- Colours ----
+        for src_col, out_col, ctype in [
+            ("FRONT COLOUR", "Frame_Colour", "frame"),
+            ("TEMPLE COLOUR", "Temple_Colour", "frame"),
+            ("LENS COLOR", "Glasses_lens_Colour", "lens"),
+        ]:
+            v = str(src.get(src_col, "")).strip()
+            if v and v.lower() != "nan":
+                res = classify_color(v, ctype)
+                out[out_col] = res if res else v
+                if not res:
+                    unmapped.add(f"TomFord -> {out_col}: '{v}'")
+            else:
+                out[out_col] = None
+
+        # ---- Lens material ----
+        lm = str(src.get("LENS MATERIAL", "")).strip()
+        lm_key = lm.split("/")[0].strip().upper()  # "CR39/NYLON" -> "CR39"
+        if not lm or lm.upper() == "NAN":
+            out["Glasses_lens_material"] = None
+        elif lm_key in _MARCOLIN_LENS_MATERIAL_MAP:
+            out["Glasses_lens_material"] = _MARCOLIN_LENS_MATERIAL_MAP[lm_key]
+        else:
+            out["Glasses_lens_material"] = lm
+            unmapped.add(f"TomFord -> Glasses_lens_material: '{lm}'")
+
+        # ---- Filter category + lens effect ----
+        filter_cat, pol_from_filter = _marcolin_filter_category(src.get("LENS FILTER CATEGORIES"))
+        out["Sunglasses_filter"] = filter_cat or None
+        eff = set()
+        lens_type = str(src.get("LENSES TYPE DESCRIPTION", "")).strip().upper()
+        if "POLAR" in lens_type or pol_from_filter:
+            eff.add("Polarized")
+        if "PHOTO" in lens_type:
+            eff.add("Photochromic")
+        if str(src.get("GRADIENT", "")).strip().upper() == "YES":
+            eff.add("Gradient")
+        out["Glasses_lens_effect"] = "|".join(sorted(eff)) if eff else None
+
+        # ---- Origin (MADE IN) ----
+        origin = str(src.get("MADE IN", "")).strip().upper()
+        out["Item_origin_country"] = _MARCOLIN_ORIGIN_MAP.get(
+            origin, origin if origin and origin != "NAN" else None
+        )
+
+        # ---- Model + colour code (SKU = MODEL@SIZE+COLOR#) ----
+        model = str(src.get("MODEL", "")).strip()
+        size_color = str(src.get("SIZE/COLOR", "")).strip()
+        color_code = size_color[len(size):] if size and size_color.startswith(size) else size_color
+        out["Extracted_Model"] = model
+        out["Extracted_Color"] = color_code
+        out["Glasses_color_code"] = color_code
+
+        # ---- Clip-on ----
+        clip = ""
+        if str(src.get("CLIP-ON", "")).strip() == "ClipOn Included" or "CLIP-ON" in main_mat:
+            polarized = "Polarized" in (out["Glasses_lens_effect"] or "")
+            clip = "Magnetic sun clip-on p" if polarized else "Magnetic sun clip-on"
+        out["Extracted_Clip_on"] = clip
+        out["Clip_on_Alert"] = False
+
+        # ---- Name ----
+        name_parts = [p for p in (brand, model, color_code) if p and p.lower() != "nan"]
+        out["Assembled_Name"] = " ".join(name_parts)
+
+        out["Producing_company"] = "Marcolin"
+        rows.append(out)
+
+    return pd.DataFrame(rows), unmapped, skipped
 
 
 # ==========================================================================
@@ -851,6 +1006,11 @@ def load_single_catalog(mfg_name, config_settings, file_path):
     # dedicated handler. Old-format Marcolin files (if any) fall through.
     if mfg_name == "marcolin" and {"MAIN MATERIAL", "STYLE", "TYPOLOGY"}.issubset(set(df.columns)):
         return _load_marcolin_new(df)
+
+    # Tom Ford catalogue (Marcolin family, Tom Ford column names). Upload as
+    # "marcolin"; detected by its signature columns.
+    if mfg_name == "marcolin" and {"MAIN MATERIAL", "SIZE/COLOR", "MADE IN"}.issubset(set(df.columns)):
+        return _load_marcolin_tomford(df)
 
     # Safilo catalog export (2nd Safilo format: optical frames / opt+clip-on /
     # sunglasses) — detected by its signature columns. Additive top-up handler.
