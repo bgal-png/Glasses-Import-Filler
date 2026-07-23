@@ -928,3 +928,223 @@ with reg_col2:
                     file_name="barcode_check_result.csv",
                     mime="text/csv",
                 )
+
+# ==========================================
+# 🎨 FILL MISSING COLOURS FROM PHOTOS
+# ==========================================
+import io
+import zipfile
+from dictionaries import _FRAME_TEMPLE_KEYWORDS, _LENS_KEYWORDS
+
+st.divider()
+st.subheader("🎨 Fill Missing Colours from Photos")
+st.caption(
+    "Upload a ZIP of product photos (filenames must contain the model + colour "
+    "code). The tool finds catalogue items with missing colours, matches a photo "
+    "to each, and lets you assign colours with one click — writing to every "
+    "barcode that shares that model + colour."
+)
+
+# Canonical colour categories (distinct system colours from the classifier)
+_FRAME_COLOURS = list(dict.fromkeys(v for _, v in _FRAME_TEMPLE_KEYWORDS))
+_LENS_COLOURS = list(dict.fromkeys(v for _, v in _LENS_KEYWORDS))
+
+_COLOUR_FIELDS = [
+    # (master_catalog column, human label, which palette, condition)
+    ("Frame_Colour", "Frame colour", "frame", "any"),
+    ("Temple_Colour", "Temple colour", "frame", "any"),
+    ("Glasses_lens_Colour", "Lens colour", "lens", "sunglasses"),
+    ("Clip_on_lens_colour", "Clip-on lens colour", "lens", "clip"),
+]
+
+
+def _norm(s):
+    return re.sub(r"[^A-Za-z0-9]", "", str(s or "")).upper()
+
+
+with st.expander("🎨 Open the colour-filling tool", expanded=False):
+    # --- Scope + upload ---
+    all_companies = ["Safilo", "Luxottica", "Marcolin", "Kering", "Derigo", "Thelios"]
+    scope = st.multiselect(
+        "Limit to manufacturers (Producing_company):",
+        all_companies,
+        default=["Derigo", "Thelios"],
+        key="colfill_scope",
+    )
+    photos_zip = st.file_uploader("Upload ZIP of photos", type=["zip"], key="colfill_zip")
+
+    if photos_zip and st.button("🔍 Build worklist", key="colfill_build"):
+        with st.spinner("Reading photos and scanning catalogue for missing colours..."):
+            zbytes = photos_zip.getvalue()
+            # Index photos by normalized basename
+            photo_index = []  # (normalized_name, original_name)
+            try:
+                with zipfile.ZipFile(io.BytesIO(zbytes)) as zf:
+                    for n in zf.namelist():
+                        if n.endswith("/"):
+                            continue
+                        base = n.rsplit("/", 1)[-1]
+                        if base.lower().rsplit(".", 1)[-1] in ("jpg", "jpeg", "png", "webp", "gif"):
+                            stem = base.rsplit(".", 1)[0]
+                            photo_index.append((_norm(stem), n))
+            except Exception as e:
+                st.error(f"Could not read ZIP: {e}")
+                photo_index = []
+
+            mc = pd.read_sql_table("master_catalog", con=engine)
+            if scope and "Producing_company" in mc.columns:
+                mc = mc[mc["Producing_company"].astype(str).isin(scope)]
+
+            def _blank(v):
+                return v is None or (isinstance(v, float) and pd.isna(v)) or str(v).strip() in ("", "nan")
+
+            # Group rows by (model, colour) — colour is shared across sizes
+            groups = {}
+            for _, row in mc.iterrows():
+                model = str(row.get("Extracted_Model", "")).strip()
+                colour = str(row.get("Glasses_color_code", "")).strip()
+                if not model or model.lower() == "nan":
+                    continue
+                g_type = str(row.get("Glasses_type", "")).strip()
+                has_clip = not _blank(row.get("Extracted_Clip_on", ""))
+                missing = []
+                for col, label, palette, cond in _COLOUR_FIELDS:
+                    if not _blank(row.get(col, "")):
+                        continue
+                    if cond == "sunglasses" and "Sunglasses" not in g_type:
+                        continue
+                    if cond == "clip" and not has_clip:
+                        continue
+                    missing.append(col)
+                if not missing:
+                    continue
+                key = (_norm(model), _norm(colour))
+                if key not in groups:
+                    groups[key] = {
+                        "brand": str(row.get("Brand", "")).strip(),
+                        "model": model,
+                        "colour_code": colour,
+                        "size": str(row.get("Combination", "")).strip(),
+                        "type": g_type,
+                        "name": str(row.get("Assembled_Name", "")).strip(),
+                        "barcodes": set(),
+                        "missing": set(),
+                    }
+                groups[key]["barcodes"].add(str(row.get("join_key", "")).strip())
+                groups[key]["missing"].update(missing)
+
+            # Match each group to a photo
+            worklist = []
+            unmatched = 0
+            for (model_n, colour_n), g in groups.items():
+                size_n = _norm(g["size"])
+                sizecolour_n = size_n + colour_n
+                found = None
+                for norm_name, orig in photo_index:
+                    if model_n and model_n in norm_name and (
+                        (colour_n and colour_n in norm_name) or (sizecolour_n and sizecolour_n in norm_name)
+                    ):
+                        found = orig
+                        break
+                if found:
+                    worklist.append({
+                        "key": f"{model_n}|{colour_n}",
+                        "photo": found,
+                        "brand": g["brand"], "model": g["model"], "colour_code": g["colour_code"],
+                        "type": g["type"], "name": g["name"],
+                        "barcodes": sorted(g["barcodes"]),
+                        "missing": [c for c, _, _, _ in _COLOUR_FIELDS if c in g["missing"]],
+                    })
+                else:
+                    unmatched += 1
+
+            st.session_state["colfill_zip_bytes"] = zbytes
+            st.session_state["colfill_worklist"] = worklist
+            st.session_state["colfill_idx"] = 0
+            st.session_state["colfill_assign"] = {}
+            st.success(
+                f"Found {len(groups)} model/colour groups with missing colours. "
+                f"Matched a photo for {len(worklist)}; {unmatched} had no matching photo."
+            )
+
+    # --- Review UI ---
+    worklist = st.session_state.get("colfill_worklist")
+    if worklist:
+        idx = st.session_state.get("colfill_idx", 0)
+        assign = st.session_state.setdefault("colfill_assign", {})
+        total = len(worklist)
+        done = len(assign)
+
+        st.progress(min(idx, total) / total if total else 0.0)
+        st.write(f"**Item {min(idx + 1, total)} / {total}**  ·  {done} groups assigned")
+
+        if idx >= total:
+            st.success("🎉 Reached the end of the worklist.")
+        else:
+            item = worklist[idx]
+            key = item["key"]
+            colL, colR = st.columns([1, 1])
+            with colL:
+                try:
+                    with zipfile.ZipFile(io.BytesIO(st.session_state["colfill_zip_bytes"])) as zf:
+                        st.image(zf.read(item["photo"]), use_container_width=True)
+                except Exception:
+                    st.warning("Could not display photo.")
+                st.caption(item["photo"])
+            with colR:
+                st.markdown(f"**{item['name'] or item['brand']}**")
+                st.write(f"Brand: {item['brand']}  ·  Model: {item['model']}  ·  Colour code: {item['colour_code']}")
+                st.write(f"Type: {item['type']}  ·  {len(item['barcodes'])} barcode(s) share this")
+                st.divider()
+                label_map = {c: lbl for c, lbl, _, _ in _COLOUR_FIELDS}
+                palette_map = {c: (_FRAME_COLOURS if p == "frame" else _LENS_COLOURS) for c, _, p, _ in _COLOUR_FIELDS}
+                cur = assign.get(key, {})
+                for field in item["missing"]:
+                    chosen = cur.get(field)
+                    st.write(f"**{label_map[field]}**" + (f" → ✅ {chosen}" if chosen else " → _not set_"))
+                    palette = palette_map[field]
+                    ncols = 6
+                    for r in range(0, len(palette), ncols):
+                        bcols = st.columns(ncols)
+                        for j, colour in enumerate(palette[r:r + ncols]):
+                            if bcols[j].button(colour, key=f"cf_{idx}_{field}_{colour}",
+                                               type=("primary" if chosen == colour else "secondary")):
+                                assign.setdefault(key, {})[field] = colour
+                                if all(f in assign.get(key, {}) for f in item["missing"]):
+                                    st.session_state["colfill_idx"] = idx + 1
+                                st.rerun()
+
+            nav1, nav2, nav3 = st.columns(3)
+            if nav1.button("⬅️ Previous", key="cf_prev", disabled=idx == 0):
+                st.session_state["colfill_idx"] = max(0, idx - 1)
+                st.rerun()
+            if nav2.button("⏭️ Skip", key="cf_skip"):
+                st.session_state["colfill_idx"] = idx + 1
+                st.rerun()
+            if nav3.button("➡️ Next", key="cf_next"):
+                st.session_state["colfill_idx"] = min(total, idx + 1)
+                st.rerun()
+
+        # --- Save ---
+        st.divider()
+        if assign and st.button(f"💾 Save {len(assign)} assignment(s) to database", type="primary", key="cf_save"):
+            with st.spinner("Writing colours to master_catalog..."):
+                full = pd.read_sql_table("master_catalog", con=engine)
+                full["join_key"] = full["join_key"].astype(str).str.strip()
+                bc_by_key = {w["key"]: w["barcodes"] for w in worklist}
+                cells = 0
+                for gkey, fields in assign.items():
+                    barcodes = set(bc_by_key.get(gkey, []))
+                    if not barcodes:
+                        continue
+                    mask = full["join_key"].isin(barcodes)
+                    for field, value in fields.items():
+                        if field not in full.columns:
+                            full[field] = ""
+                        full.loc[mask, field] = value
+                        cells += int(mask.sum())
+                full.to_sql("master_catalog", con=engine, if_exists="replace", index=False)
+                st.success(f"✅ Saved. Updated {cells} cell(s) across {len(assign)} model/colour group(s).")
+                for k in ("colfill_worklist", "colfill_idx", "colfill_assign", "colfill_zip_bytes"):
+                    st.session_state.pop(k, None)
+                st.rerun()
