@@ -1154,3 +1154,79 @@ with st.expander("🎨 Open the colour-filling tool", expanded=False):
                 for k in ("colfill_worklist", "colfill_idx", "colfill_assign", "colfill_zip_bytes"):
                     st.session_state.pop(k, None)
                 st.rerun()
+
+# ==========================================
+# ✏️ RENAME PRODUCTS BY BARCODE
+# ==========================================
+st.divider()
+st.subheader("✏️ Rename Products by Barcode")
+st.caption(
+    "Upload a file with barcodes and names. For every barcode found in the "
+    "database, the product name is updated. Great for bulk-fixing names. "
+    "(Reuses the same barcode normalization, so leading zeros / .0 don't matter.)"
+)
+
+with st.expander("✏️ Open the renamer", expanded=False):
+    rename_file = st.file_uploader("Upload file with Barcode + Name columns", type=["xlsx", "csv"], key="renamer_file")
+    if rename_file:
+        try:
+            rdf = _read_any(rename_file)
+        except Exception as e:
+            st.error(f"Could not read file: {e}")
+            rdf = None
+
+        if rdf is not None:
+            bc_col = _find_col(rdf, ["Barcode", "EAN", "UPC", "EAN/UPC"])
+            name_col = _find_col(rdf, ["Glasses name", "Name", "Assembled_Name", "XML description", "Product name"])
+
+            c1, c2 = st.columns(2)
+            bc_col = c1.selectbox("Barcode column", list(rdf.columns),
+                                  index=(list(rdf.columns).index(bc_col) if bc_col else 0), key="renamer_bc")
+            name_col = c2.selectbox("Name column", list(rdf.columns),
+                                    index=(list(rdf.columns).index(name_col) if name_col else 0), key="renamer_name")
+
+            preview = pd.DataFrame({
+                "Barcode": rdf[bc_col].astype(str).str.strip(),
+                "New name": rdf[name_col].astype(str).str.strip(),
+            })
+            preview = preview[(preview["Barcode"] != "") & (preview["Barcode"].str.lower() != "nan")]
+            st.caption(f"{len(preview)} rows to apply. Preview:")
+            st.dataframe(preview.head(10), use_container_width=True, hide_index=True)
+
+            if st.button("✏️ Apply renames to database", type="primary", key="renamer_apply"):
+                with st.spinner("Updating names..."):
+                    full = pd.read_sql_table("master_catalog", con=engine)
+                    full["join_key"] = full["join_key"].astype(str).str.strip()
+                    if "Assembled_Name" not in full.columns:
+                        full["Assembled_Name"] = ""
+                    # Build barcode -> new name map (last wins on dupes)
+                    name_map = {}
+                    for _, r in preview.iterrows():
+                        key = _clean_bc(r["Barcode"])
+                        nm = str(r["New name"]).strip()
+                        if key and key != "nan" and nm and nm.lower() != "nan":
+                            name_map[key] = nm
+
+                    mask = full["join_key"].isin(name_map.keys())
+                    updated = 0
+                    for pos in full.index[mask]:
+                        key = full.at[pos, "join_key"]
+                        full.at[pos, "Assembled_Name"] = name_map[key]
+                        updated += 1
+
+                    found_keys = set(full.loc[mask, "join_key"])
+                    not_found = [bc for bc, key in
+                                 ((str(r["Barcode"]).strip(), _clean_bc(r["Barcode"])) for _, r in preview.iterrows())
+                                 if key not in found_keys]
+                    not_found = sorted(set(not_found))
+
+                    full.to_sql("master_catalog", con=engine, if_exists="replace", index=False)
+                    st.success(f"✅ Renamed {updated} product row(s) across {len(name_map)} barcode(s).")
+                    if not_found:
+                        st.warning(f"⚠️ {len(not_found)} barcode(s) were not found in the database.")
+                        st.download_button(
+                            "📥 Download not-found barcodes (CSV)",
+                            data=pd.DataFrame({"Barcode": not_found}).to_csv(index=False).encode("utf-8-sig"),
+                            file_name="rename_not_found.csv",
+                            mime="text/csv",
+                        )
