@@ -964,11 +964,17 @@ def _norm(s):
 
 with st.expander("🎨 Open the colour-filling tool", expanded=False):
     # --- Scope + upload ---
-    all_companies = ["Safilo", "Luxottica", "Marcolin", "Kering", "Derigo", "Thelios"]
+    try:
+        _companies_df = pd.read_sql('SELECT DISTINCT "Producing_company" FROM master_catalog', con=engine)
+        all_companies = sorted(
+            c for c in _companies_df["Producing_company"].dropna().astype(str).str.strip().unique() if c
+        )
+    except Exception:
+        all_companies = []
     scope = st.multiselect(
-        "Limit to manufacturers (Producing_company):",
+        "Limit to manufacturers (optional — leave empty to scan ALL):",
         all_companies,
-        default=["Derigo", "Thelios"],
+        default=[],
         key="colfill_scope",
     )
     photos_zip = st.file_uploader("Upload ZIP of photos", type=["zip"], key="colfill_zip")
