@@ -1081,55 +1081,113 @@ with st.expander("🎨 Open the colour-filling tool", expanded=False):
         total = len(worklist)
         done = len(assign)
 
-        st.progress(min(idx, total) / total if total else 0.0)
-        st.write(f"**Item {min(idx + 1, total)} / {total}**  ·  {done} groups assigned")
+        label_map = {c: lbl for c, lbl, _, _ in _COLOUR_FIELDS}
+        palette_map = {c: (_FRAME_COLOURS if p == "frame" else _LENS_COLOURS) for c, _, p, _ in _COLOUR_FIELDS}
+        st.write(f"**{total} items to review**  ·  {done} assigned so far")
 
-        if idx >= total:
-            st.success("🎉 Reached the end of the worklist.")
-        else:
-            item = worklist[idx]
-            key = item["key"]
-            colL, colR = st.columns([1, 1])
-            with colL:
+        layout = st.radio("Layout", ["🔲 Grid (fast)", "🖼️ One-by-one"], horizontal=True, key="colfill_layout")
+
+        if layout == "🔲 Grid (fast)":
+            csel1, csel2 = st.columns([1, 2])
+            per_page = csel1.selectbox("Per page", [8, 12, 20, 30], index=1, key="colfill_perpage")
+            n_pages = max(1, (total + per_page - 1) // per_page)
+            page = csel2.number_input(f"Page (1–{n_pages})", 1, n_pages, 1, key="colfill_gridpage") - 1
+            start, end = page * per_page, min(page * per_page + per_page, total)
+            page_items = worklist[start:end]
+
+            st.caption(f"Showing {start + 1}–{end} of {total}. Set the dropdowns, then **Save this page** "
+                       "(changing dropdowns won't reload — only Save does). Save each page before paging.")
+
+            with st.form(f"colfill_grid_{page}"):
+                ncol = 4
                 try:
-                    with zipfile.ZipFile(io.BytesIO(st.session_state["colfill_zip_bytes"])) as zf:
-                        st.image(zf.read(item["photo"]), use_container_width=True)
+                    zf = zipfile.ZipFile(io.BytesIO(st.session_state["colfill_zip_bytes"]))
                 except Exception:
-                    st.warning("Could not display photo.")
-                st.caption(item["photo"])
-            with colR:
-                st.markdown(f"**{item['name'] or item['brand']}**")
-                st.write(f"Brand: {item['brand']}  ·  Model: {item['model']}  ·  Colour code: {item['colour_code']}")
-                st.write(f"Type: {item['type']}  ·  {len(item['barcodes'])} barcode(s) share this")
-                st.divider()
-                label_map = {c: lbl for c, lbl, _, _ in _COLOUR_FIELDS}
-                palette_map = {c: (_FRAME_COLOURS if p == "frame" else _LENS_COLOURS) for c, _, p, _ in _COLOUR_FIELDS}
-                cur = assign.get(key, {})
-                for field in item["missing"]:
-                    chosen = cur.get(field)
-                    st.write(f"**{label_map[field]}**" + (f" → ✅ {chosen}" if chosen else " → _not set_"))
-                    palette = palette_map[field]
-                    ncols = 6
-                    for r in range(0, len(palette), ncols):
-                        bcols = st.columns(ncols)
-                        for j, colour in enumerate(palette[r:r + ncols]):
-                            if bcols[j].button(colour, key=f"cf_{idx}_{field}_{colour}",
-                                               type=("primary" if chosen == colour else "secondary")):
-                                assign.setdefault(key, {})[field] = colour
-                                if all(f in assign.get(key, {}) for f in item["missing"]):
-                                    st.session_state["colfill_idx"] = idx + 1
-                                st.rerun()
+                    zf = None
+                for r in range(0, len(page_items), ncol):
+                    cols = st.columns(ncol)
+                    for j, item in enumerate(page_items[r:r + ncol]):
+                        with cols[j]:
+                            if zf is not None:
+                                try:
+                                    st.image(zf.read(item["photo"]), use_container_width=True)
+                                except Exception:
+                                    st.write("(photo error)")
+                            st.caption(f"{item['brand']} {item['model']} {item['colour_code']}")
+                            cur = assign.get(item["key"], {})
+                            for field in item["missing"]:
+                                palette = palette_map[field]
+                                opts = ["—"] + palette
+                                chosen = cur.get(field)
+                                st.selectbox(
+                                    label_map[field], opts,
+                                    index=(opts.index(chosen) if chosen in opts else 0),
+                                    key=f"grid_{item['key']}_{field}",
+                                )
+                saved = st.form_submit_button("💾 Save this page")
 
-            nav1, nav2, nav3 = st.columns(3)
-            if nav1.button("⬅️ Previous", key="cf_prev", disabled=idx == 0):
-                st.session_state["colfill_idx"] = max(0, idx - 1)
+            if saved:
+                for item in page_items:
+                    for field in item["missing"]:
+                        val = st.session_state.get(f"grid_{item['key']}_{field}")
+                        if val and val != "—":
+                            assign.setdefault(item["key"], {})[field] = val
+                        elif item["key"] in assign and field in assign[item["key"]]:
+                            del assign[item["key"]][field]
+                            if not assign[item["key"]]:
+                                del assign[item["key"]]
+                st.session_state["colfill_assign"] = assign
+                st.success(f"Saved page {page + 1}. {len(assign)} groups assigned so far.")
                 st.rerun()
-            if nav2.button("⏭️ Skip", key="cf_skip"):
-                st.session_state["colfill_idx"] = idx + 1
-                st.rerun()
-            if nav3.button("➡️ Next", key="cf_next"):
-                st.session_state["colfill_idx"] = min(total, idx + 1)
-                st.rerun()
+
+        else:
+            idx = min(idx, total)
+            st.progress(min(idx, total) / total if total else 0.0)
+            if idx >= total:
+                st.success("🎉 Reached the end of the worklist.")
+            else:
+                item = worklist[idx]
+                key = item["key"]
+                st.write(f"**Item {idx + 1} / {total}**")
+                colL, colR = st.columns([1, 1])
+                with colL:
+                    try:
+                        with zipfile.ZipFile(io.BytesIO(st.session_state["colfill_zip_bytes"])) as zf:
+                            st.image(zf.read(item["photo"]), use_container_width=True)
+                    except Exception:
+                        st.warning("Could not display photo.")
+                    st.caption(item["photo"])
+                with colR:
+                    st.markdown(f"**{item['name'] or item['brand']}**")
+                    st.write(f"Brand: {item['brand']}  ·  Model: {item['model']}  ·  Colour code: {item['colour_code']}")
+                    st.write(f"Type: {item['type']}  ·  {len(item['barcodes'])} barcode(s) share this")
+                    st.divider()
+                    cur = assign.get(key, {})
+                    for field in item["missing"]:
+                        chosen = cur.get(field)
+                        st.write(f"**{label_map[field]}**" + (f" → ✅ {chosen}" if chosen else " → _not set_"))
+                        palette = palette_map[field]
+                        ncols = 6
+                        for r in range(0, len(palette), ncols):
+                            bcols = st.columns(ncols)
+                            for j, colour in enumerate(palette[r:r + ncols]):
+                                if bcols[j].button(colour, key=f"cf_{idx}_{field}_{colour}",
+                                                   type=("primary" if chosen == colour else "secondary")):
+                                    assign.setdefault(key, {})[field] = colour
+                                    if all(f in assign.get(key, {}) for f in item["missing"]):
+                                        st.session_state["colfill_idx"] = idx + 1
+                                    st.rerun()
+
+                nav1, nav2, nav3 = st.columns(3)
+                if nav1.button("⬅️ Previous", key="cf_prev", disabled=idx == 0):
+                    st.session_state["colfill_idx"] = max(0, idx - 1)
+                    st.rerun()
+                if nav2.button("⏭️ Skip", key="cf_skip"):
+                    st.session_state["colfill_idx"] = idx + 1
+                    st.rerun()
+                if nav3.button("➡️ Next", key="cf_next"):
+                    st.session_state["colfill_idx"] = min(total, idx + 1)
+                    st.rerun()
 
         # --- Save ---
         st.divider()
