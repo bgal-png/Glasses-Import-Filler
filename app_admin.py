@@ -1022,7 +1022,11 @@ with st.expander("🎨 Open the colour-filling tool", expanded=False):
                     if cond == "clip" and not has_clip:
                         continue
                     missing.append(col)
-                if not missing:
+                # Sunglasses whose lens effect doesn't already include Gradient
+                # can be marked as gradient during review.
+                lens_effect = str(row.get("Glasses_lens_effect", "")).strip()
+                can_gradient = ("Sunglasses" in g_type) and ("gradient" not in lens_effect.lower())
+                if not missing and not can_gradient:
                     continue
                 key = (_norm(model), _norm(colour))
                 if key not in groups:
@@ -1035,9 +1039,12 @@ with st.expander("🎨 Open the colour-filling tool", expanded=False):
                         "name": str(row.get("Assembled_Name", "")).strip(),
                         "barcodes": set(),
                         "missing": set(),
+                        "can_gradient": False,
                     }
                 groups[key]["barcodes"].add(str(row.get("join_key", "")).strip())
                 groups[key]["missing"].update(missing)
+                if can_gradient:
+                    groups[key]["can_gradient"] = True
 
             # Match each group to a photo
             worklist = []
@@ -1060,6 +1067,7 @@ with st.expander("🎨 Open the colour-filling tool", expanded=False):
                         "type": g["type"], "name": g["name"],
                         "barcodes": sorted(g["barcodes"]),
                         "missing": [c for c, _, _, _ in _COLOUR_FIELDS if c in g["missing"]],
+                        "can_gradient": g["can_gradient"],
                     })
                 else:
                     unmatched += 1
@@ -1124,6 +1132,9 @@ with st.expander("🎨 Open the colour-filling tool", expanded=False):
                                     index=(opts.index(chosen) if chosen in opts else 0),
                                     key=f"grid_{item['key']}_{field}",
                                 )
+                            if item.get("can_gradient"):
+                                st.checkbox("Gradient lens", value=bool(cur.get("__gradient__")),
+                                            key=f"grid_{item['key']}__gradient__")
                 saved = st.form_submit_button("💾 Save this page")
 
             if saved:
@@ -1134,8 +1145,13 @@ with st.expander("🎨 Open the colour-filling tool", expanded=False):
                             assign.setdefault(item["key"], {})[field] = val
                         elif item["key"] in assign and field in assign[item["key"]]:
                             del assign[item["key"]][field]
-                            if not assign[item["key"]]:
-                                del assign[item["key"]]
+                    if item.get("can_gradient"):
+                        if st.session_state.get(f"grid_{item['key']}__gradient__"):
+                            assign.setdefault(item["key"], {})["__gradient__"] = True
+                        elif item["key"] in assign and "__gradient__" in assign[item["key"]]:
+                            del assign[item["key"]]["__gradient__"]
+                    if item["key"] in assign and not assign[item["key"]]:
+                        del assign[item["key"]]
                 st.session_state["colfill_assign"] = assign
                 st.success(f"Saved page {page + 1}. {len(assign)} groups assigned so far.")
                 st.rerun()
@@ -1177,6 +1193,12 @@ with st.expander("🎨 Open the colour-filling tool", expanded=False):
                                     if all(f in assign.get(key, {}) for f in item["missing"]):
                                         st.session_state["colfill_idx"] = idx + 1
                                     st.rerun()
+                    if item.get("can_gradient"):
+                        grad_now = bool(assign.get(key, {}).get("__gradient__"))
+                        if st.checkbox("Gradient lens", value=grad_now, key=f"cf_grad_{idx}"):
+                            assign.setdefault(key, {})["__gradient__"] = True
+                        elif key in assign and "__gradient__" in assign[key]:
+                            del assign[key]["__gradient__"]
 
                 nav1, nav2, nav3 = st.columns(3)
                 if nav1.button("⬅️ Previous", key="cf_prev", disabled=idx == 0):
@@ -1197,12 +1219,25 @@ with st.expander("🎨 Open the colour-filling tool", expanded=False):
                 full["join_key"] = full["join_key"].astype(str).str.strip()
                 bc_by_key = {w["key"]: w["barcodes"] for w in worklist}
                 cells = 0
+                def _add_gradient(v):
+                    parts = [p.strip() for p in str(v or "").split("|") if p.strip() and p.strip().lower() != "nan"]
+                    if "Gradient" not in parts:
+                        parts.append("Gradient")
+                    return "|".join(sorted(set(parts)))
+
                 for gkey, fields in assign.items():
                     barcodes = set(bc_by_key.get(gkey, []))
                     if not barcodes:
                         continue
                     mask = full["join_key"].isin(barcodes)
                     for field, value in fields.items():
+                        if field == "__gradient__":
+                            # Append 'Gradient' to Glasses_lens_effect, keeping existing effects
+                            if "Glasses_lens_effect" not in full.columns:
+                                full["Glasses_lens_effect"] = ""
+                            full.loc[mask, "Glasses_lens_effect"] = full.loc[mask, "Glasses_lens_effect"].apply(_add_gradient)
+                            cells += int(mask.sum())
+                            continue
                         if field not in full.columns:
                             full[field] = ""
                         full.loc[mask, field] = value
