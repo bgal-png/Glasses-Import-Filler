@@ -1,0 +1,30 @@
+name: Seed ingest log
+
+# One-time (or occasional) manual run to backfill the last-catalogue-update
+# panel with approximate dates for producers set up before the feature existed.
+# Safe to re-run: it never overwrites producers that already have a timestamp.
+on:
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install pandas SQLAlchemy psycopg2-binary
+
+      - name: Seed ingest_log
+        env:
+          DB_URL: ${{ secrets.DB_URL }}
+        run: python scripts/seed_ingest_log.py
