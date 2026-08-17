@@ -72,7 +72,8 @@ def _render_last_update_sidebar():
         st.caption("Updated whenever a catalogue is processed (manual or automated).")
 
 
-_render_last_update_sidebar()
+# The last-update panel is shown in the standalone Barcode Checker app, not here.
+# (record_ingest below still writes the timestamps that feed it.)
 
 # ==========================================
 # 🧠 THE ENGINE (ADAPTED FOR UI)

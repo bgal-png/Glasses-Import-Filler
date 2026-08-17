@@ -42,6 +42,9 @@ def _engine():
     return create_engine(DB_URL, pool_pre_ping=True, pool_recycle=300)
 
 
+# (sidebar panel rendered near the end, after helpers are defined)
+
+
 @st.cache_data(ttl=600, show_spinner=False)
 def _load_known():
     """Return a dict: clean_barcode -> a short label (name) for display.
@@ -60,6 +63,44 @@ def _load_known():
     df["join_key"] = df["join_key"].astype(str).str.strip()
     df = df[(df["join_key"] != "") & (df["join_key"].str.lower() != "nan")]
     return dict(zip(df["join_key"], df["Assembled_Name"].astype(str).fillna("")))
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _load_ingest_log():
+    """Cached read of the tiny ingest_log table (producer -> last-updated)."""
+    try:
+        log = pd.read_sql_table("ingest_log", con=_engine())
+        return {str(r["manufacturer"]).lower(): str(r["last_updated"]) for _, r in log.iterrows()}
+    except Exception:
+        return {}
+
+
+def _render_last_update_sidebar():
+    from datetime import datetime
+    try:
+        from dictionaries import MANUFACTURER_CONFIG
+        producers = list(MANUFACTURER_CONFIG.keys())
+    except Exception:
+        producers = ["safilo", "luxottica", "marcolin", "kering", "derigo", "thelios"]
+
+    log_map = _load_ingest_log()
+    for extra in log_map:
+        if extra not in [p.lower() for p in producers]:
+            producers.append(extra)
+
+    def _fmt(iso):
+        if not iso or iso.lower() == "none":
+            return "never"
+        try:
+            return datetime.fromisoformat(iso.replace("Z", "")).strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            return iso
+
+    with st.sidebar:
+        st.markdown("### 🗓️ Last catalogue update")
+        rows = [{"Producer": p.title(), "Last update (UTC)": _fmt(log_map.get(p.lower()))} for p in producers]
+        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        st.caption("When each producer's catalogue was last processed.")
 
 
 def _clean_bc(x):
@@ -103,6 +144,8 @@ def _find_barcode_col(df):
 
 
 # ---------------------------------------------------------------------------
+_render_last_update_sidebar()
+
 uploaded = st.file_uploader("Upload your file (.xlsx or .csv)", type=["xlsx", "csv"])
 
 if uploaded is not None:
