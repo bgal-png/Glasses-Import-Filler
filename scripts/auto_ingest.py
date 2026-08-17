@@ -46,7 +46,7 @@ from googleapiclient.http import MediaIoBaseDownload
 _sys_path_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _sys_path_root)
 from dictionaries import MANUFACTURER_CONFIG  # noqa: E402
-from ingest import load_single_catalog, perform_upsert  # noqa: E402
+from ingest import load_single_catalog, perform_upsert, record_ingest  # noqa: E402
 
 
 def _log(msg: str) -> None:
@@ -196,6 +196,9 @@ def main(mfg: str) -> int:
                     _log(f"  Upserting to master_catalog…")
                     msg = perform_upsert(expanded, engine)
                     _log(f"  Upsert: {msg}")
+                    unique_count = df["join_key"].nunique() if "join_key" in df.columns else len(df)
+                    record_ingest(engine, mfg, unique_count)
+                    _log(f"  Recorded last-update timestamp for {mfg}.")
 
                 _log(f"  Moving original Drive file to archive…")
                 _move_to_archive(drive, file_id, inbox_id, archive_id)

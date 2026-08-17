@@ -1737,6 +1737,32 @@ def load_single_catalog(mfg_name, config_settings, file_path):
     return new_df, unmapped_values, skipped_not_mapped
 
 
+def record_ingest(engine, mfg_key, row_count=None):
+    """Record that a manufacturer's catalogue was just processed, into the
+    `ingest_log` table (one row per manufacturer, upserted). Used by both the
+    admin app and the headless auto-ingest so the 'last updated' panel reflects
+    every import. Never raises — a logging failure must not fail an ingest."""
+    from datetime import datetime, timezone
+    try:
+        ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        try:
+            existing = pd.read_sql_table("ingest_log", con=engine)
+        except Exception:
+            existing = pd.DataFrame(columns=["manufacturer", "last_updated", "rows"])
+        existing = existing[
+            existing["manufacturer"].astype(str).str.lower() != str(mfg_key).lower()
+        ]
+        new_row = pd.DataFrame([{
+            "manufacturer": str(mfg_key),
+            "last_updated": ts,
+            "rows": int(row_count) if row_count is not None else None,
+        }])
+        combined = pd.concat([existing, new_row], ignore_index=True)
+        combined.to_sql("ingest_log", con=engine, if_exists="replace", index=False)
+    except Exception:
+        pass
+
+
 def perform_upsert(new_data_df, engine):
     """Merge a freshly processed DataFrame into the `master_catalog` table.
 

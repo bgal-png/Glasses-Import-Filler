@@ -15,6 +15,7 @@ from dictionaries import (
 from ingest import (
     load_single_catalog as _pure_load_single_catalog,
     perform_upsert as _pure_perform_upsert,
+    record_ingest as _record_ingest,
 )
 
 # ==========================================
@@ -32,6 +33,42 @@ def get_engine():
     return create_engine(DB_URL, pool_pre_ping=True, pool_recycle=300)
 
 engine = get_engine()
+
+# ==========================================
+# 🗓️ SIDEBAR — LAST CATALOGUE UPDATE PER PRODUCER
+# ==========================================
+def _render_last_update_sidebar():
+    from datetime import datetime
+    with st.sidebar:
+        st.markdown("### 🗓️ Last catalogue update")
+        try:
+            log = pd.read_sql_table("ingest_log", con=engine)
+            log_map = {
+                str(r["manufacturer"]).lower(): str(r["last_updated"])
+                for _, r in log.iterrows()
+            }
+        except Exception:
+            log_map = {}
+
+        def _fmt(iso):
+            if not iso or iso.lower() == "none":
+                return "never"
+            try:
+                return datetime.fromisoformat(iso.replace("Z", "")).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                return iso
+
+        producers = list(MANUFACTURER_CONFIG.keys())
+        for extra in log_map:  # include any logged producer not in config
+            if extra not in [p.lower() for p in producers]:
+                producers.append(extra)
+        rows = [{"Producer": p.title(), "Last update (UTC)": _fmt(log_map.get(p.lower()))}
+                for p in producers]
+        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        st.caption("Updated whenever a catalogue is processed (manual or automated).")
+
+
+_render_last_update_sidebar()
 
 # ==========================================
 # 🧠 THE ENGINE (ADAPTED FOR UI)
@@ -683,7 +720,9 @@ with col1:
             
             if not processed_df.empty:
                 st.success(f"🧹 Cleaned successfully! Extracted {len(processed_df)} raw rows. Pushing to Cloud...")
+                unique_count = processed_df["join_key"].nunique() if "join_key" in processed_df.columns else len(processed_df)
                 msg = perform_upsert(processed_df)
+                _record_ingest(engine, mfg_choice, unique_count)
                 st.success(msg)
             else:
                 st.error("Failed to extract any data. Please check the file format.")
