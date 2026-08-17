@@ -65,9 +65,11 @@ def _load_known():
     return dict(zip(df["join_key"], df["Assembled_Name"].astype(str).fillna("")))
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _load_ingest_log():
-    """Cached read of the tiny ingest_log table (producer -> last-updated)."""
+    """Cached read of the tiny ingest_log table (producer -> last-updated).
+    Short TTL so new ingests appear within a few minutes; a Refresh button in
+    the sidebar clears it immediately."""
     try:
         log = pd.read_sql_table("ingest_log", con=_engine())
         return {str(r["manufacturer"]).lower(): str(r["last_updated"]) for _, r in log.iterrows()}
@@ -102,6 +104,9 @@ def _render_last_update_sidebar():
         rows = [{"Producer": p.title(), "Last update": _fmt(log_map.get(p.lower()))} for p in producers]
         st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
         st.caption("When each producer's catalogue was last processed.")
+        if st.button("🔄 Refresh", key="refresh_ingest_log"):
+            _load_ingest_log.clear()
+            st.rerun()
 
 
 def _clean_bc(x):
