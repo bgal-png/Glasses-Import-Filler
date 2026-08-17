@@ -37,18 +37,22 @@ engine = get_engine()
 # ==========================================
 # 🗓️ SIDEBAR — LAST CATALOGUE UPDATE PER PRODUCER
 # ==========================================
+@st.cache_data(ttl=3600, show_spinner=False)
+def _load_ingest_log():
+    """Cached read of the tiny ingest_log table so the sidebar doesn't hit the
+    database on every rerun. Cleared after a manual ingest so it stays current."""
+    try:
+        log = pd.read_sql_table("ingest_log", con=get_engine())
+        return {str(r["manufacturer"]).lower(): str(r["last_updated"]) for _, r in log.iterrows()}
+    except Exception:
+        return {}
+
+
 def _render_last_update_sidebar():
     from datetime import datetime
     with st.sidebar:
         st.markdown("### 🗓️ Last catalogue update")
-        try:
-            log = pd.read_sql_table("ingest_log", con=engine)
-            log_map = {
-                str(r["manufacturer"]).lower(): str(r["last_updated"])
-                for _, r in log.iterrows()
-            }
-        except Exception:
-            log_map = {}
+        log_map = _load_ingest_log()
 
         def _fmt(iso):
             if not iso or iso.lower() == "none":
@@ -723,6 +727,7 @@ with col1:
                 unique_count = processed_df["join_key"].nunique() if "join_key" in processed_df.columns else len(processed_df)
                 msg = perform_upsert(processed_df)
                 _record_ingest(engine, mfg_choice, unique_count)
+                _load_ingest_log.clear()  # refresh the sidebar panel
                 st.success(msg)
             else:
                 st.error("Failed to extract any data. Please check the file format.")

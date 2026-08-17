@@ -44,21 +44,22 @@ def _engine():
 
 @st.cache_data(ttl=600, show_spinner=False)
 def _load_known():
-    """Return a dict: clean_barcode -> a short label (name/brand) for display."""
+    """Return a dict: clean_barcode -> a short label (name) for display.
+    Loads only the two columns needed and builds the map vectorized (fast even
+    on 150k+ rows)."""
     eng = _engine()
     try:
-        df = pd.read_sql_table("master_catalog", con=eng)
-    except Exception as e:
-        raise RuntimeError(f"Could not read the database: {e}")
-    if "join_key" not in df.columns:
-        raise RuntimeError("Database has no 'join_key' column.")
-    label_col = next((c for c in ("Assembled_Name", "Brand", "Producing_company") if c in df.columns), None)
-    known = {}
-    for _, row in df.iterrows():
-        key = str(row["join_key"]).strip()
-        if key and key.lower() != "nan":
-            known[key] = str(row.get(label_col, "")).strip() if label_col else ""
-    return known
+        df = pd.read_sql('SELECT join_key, "Assembled_Name" FROM master_catalog', con=eng)
+    except Exception:
+        # Fallback: table exists but without Assembled_Name
+        try:
+            df = pd.read_sql('SELECT join_key FROM master_catalog', con=eng)
+            df["Assembled_Name"] = ""
+        except Exception as e:
+            raise RuntimeError(f"Could not read the database: {e}")
+    df["join_key"] = df["join_key"].astype(str).str.strip()
+    df = df[(df["join_key"] != "") & (df["join_key"].str.lower() != "nan")]
+    return dict(zip(df["join_key"], df["Assembled_Name"].astype(str).fillna("")))
 
 
 def _clean_bc(x):
