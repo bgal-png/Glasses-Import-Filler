@@ -12,17 +12,25 @@ Run via the 'Seed ingest log' GitHub Action (uses the DB_URL secret), or
 locally with DB_URL set in the environment.
 """
 import os
+from datetime import datetime, timezone
 
 import pandas as pd
 from sqlalchemy import create_engine
 
 # Approximate last-update timestamps (UTC ISO), derived from git history.
-SEED = {
+HISTORICAL = {
     "derigo": "2026-06-16T06:56:43+00:00",
     "thelios": "2026-07-17T11:39:12+00:00",
     "marcolin": "2026-07-17T05:29:04+00:00",
     "kering": "2026-02-24T10:34:00+00:00",
 }
+# Safilo & Luxottica have no recorded past ingest, so stamp them with the
+# current time when this seeder runs. The next REAL ingest overwrites it with
+# the true date automatically.
+SEED = dict(HISTORICAL)
+_now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+SEED["safilo"] = _now
+SEED["luxottica"] = _now
 
 
 def main():
