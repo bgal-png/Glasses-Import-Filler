@@ -25,6 +25,15 @@ st.write(
 )
 
 # ---------------------------------------------------------------------------
+if "DB_URL" not in st.secrets:
+    st.error(
+        "⚙️ This app isn't connected to the database yet.\n\n"
+        "Add a secret named **DB_URL** in this app's settings "
+        "(Manage app → Settings → Secrets) with the same value as the admin app, "
+        "then reboot."
+    )
+    st.stop()
+
 DB_URL = st.secrets["DB_URL"]
 
 
