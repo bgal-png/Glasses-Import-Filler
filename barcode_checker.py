@@ -92,13 +92,14 @@ def _render_last_update_sidebar():
         if not iso or iso.lower() == "none":
             return "never"
         try:
-            return datetime.fromisoformat(iso.replace("Z", "")).strftime("%Y-%m-%d %H:%M")
+            dt = datetime.fromisoformat(iso.replace("Z", ""))
+            return f"{dt.day}.{dt.month}.{dt.year}"
         except Exception:
             return iso
 
     with st.sidebar:
         st.markdown("### 🗓️ Last catalogue update")
-        rows = [{"Producer": p.title(), "Last update (UTC)": _fmt(log_map.get(p.lower()))} for p in producers]
+        rows = [{"Producer": p.title(), "Last update": _fmt(log_map.get(p.lower()))} for p in producers]
         st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
         st.caption("When each producer's catalogue was last processed.")
 
