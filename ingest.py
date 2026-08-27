@@ -1206,6 +1206,250 @@ def _load_derigo(df):
     return pd.DataFrame(rows), unmapped, skipped
 
 
+# ==========================================================================
+# ALPINA — German sports-eyewear master data
+# ==========================================================================
+# All sunglasses (Sportbrillen) and ski goggles (Skibrillen); no optical
+# frames. German values throughout. Very complete: dimensions, filter
+# category, materials, lens effects (Technologien column), gender, origin.
+
+_ALPINA_SHAPE_MAP = {
+    "RECHTECKIG": "Rectangular",
+    "RUND": "Round",
+    "OVAL": "Oval / Elipse",
+    "PILOT": "Pilot",
+    "MONOSCHEIBE": "Single lens",
+    "SPORTLICH (WRAP)": "Extravagant",
+    "SPORTLICH": "Extravagant",
+    "WRAP": "Extravagant",
+    "SCHMETTERLING": "Butterfly",
+    "QUADRATISCH": "Square",
+    "KATZENAUGE": "Cat Eye",
+}
+
+_ALPINA_RIM_MAP = {
+    "VOLLRAND": "Full rim",
+    "HALBRAND": "Half rim",
+    "RANDLOS": "Rimless",
+}
+
+
+def _alpina_material(raw):
+    """German frame/lens material -> Plastic / Metal / Titanium / etc."""
+    s = str(raw or "").strip()
+    low = s.lower()
+    if not s or low in ("nan", "(blank)"):
+        return None
+    if "titan" in low:
+        return "Titanium"
+    if "neusilber" in low or "metall" in low or "alumin" in low or "stahl" in low:
+        return "Metal"
+    if "polycarbonat" in low or "polykarbonat" in low:
+        return "Polycarbonate"
+    if "nylon" in low:
+        return "Nylon"
+    if "triacetat" in low or "tac" in low:
+        return "Plastic"
+    if any(k in low for k in ("polyamid", "tr 90", "tr90", "tpee", "tpr", "tpu",
+                              "polyester", "elastomer", "polyurethan", "nxt", "kunststoff", "pa")):
+        return "Plastic"
+    return None
+
+
+def _alpina_filter(raw):
+    """'cat. 3' -> 'Category 3'; 'cat. 1-cat. 3' -> 'Category range 1 - 3'."""
+    s = str(raw or "").strip().lower()
+    if not s or s in ("nan", "(blank)"):
+        return None
+    nums = re.findall(r"(\d)", s)
+    if not nums:
+        return None
+    if len(nums) >= 2 and ("-" in s or "bis" in s):
+        lo, hi = sorted([nums[0], nums[-1]], key=int)
+        return f"Category range {lo} - {hi}"
+    return f"Category {nums[0]}"
+
+
+def _load_alpina(df):
+    unmapped = set()
+    skipped = set()
+    rows = []
+
+    df = df.copy()
+    df.columns = df.columns.astype(str).str.replace("\xa0", " ", regex=False).str.strip()
+
+    def col(*names):
+        for n in names:
+            for c in df.columns:
+                if n.lower() == c.lower():
+                    return c
+        for n in names:  # fuzzy contains
+            for c in df.columns:
+                if n.lower() in c.lower():
+                    return c
+        return None
+
+    C = {
+        "ean": col("Europäische Artikelnummer EAN", "EAN"),
+        "type": col("Bezeichnung PL2"),
+        "prod": col("Materialnummer Produkt"),
+        "kurz": col("Materialkurztext"),
+        "farbe": col("Farben Merkmalswerteliste"),
+        "gender": col("Geschlecht"),
+        "form": col("Form"),
+        "rim": col("Rahmentyp"),
+        "filter": col("Filterkategorie"),
+        "frame_col": col("Rahmen Farbe"),
+        "temple_col": col("Bügel Farbe"),
+        "lens_col": col("Scheibenfarben Merkmalswerteli", "Scheibenfarben"),
+        "frame_mat": col("Rahmen Material"),
+        "lens_mat": col("Scheibe Material"),
+        "origin": col("Ursprungsland des Materials"),
+        "weight": col("Nettogewicht"),
+        "lens_w": col("Glasbreite"),
+        "bridge": col("Nasenstegbreite"),
+        "temple": col("Bügellänge"),
+        "lens_h": col("Glashöhe"),
+        "mirror": col("Scheibe Verspiegelung (außen)", "Verspiegelung"),
+        "tech": col("Technologien"),
+    }
+
+    def g(row, key):
+        c = C.get(key)
+        return str(row.get(c, "")).strip() if c else ""
+
+    for _, row in df.iterrows():
+        barcode = g(row, "ean")
+        if not barcode or barcode.lower() == "nan":
+            continue
+        join_key = re.sub(r"\.0$", "", barcode).lstrip("0")
+        if not join_key or join_key == "nan":
+            continue
+
+        out = {"Barcode": barcode, "join_key": join_key}
+        out["Brand"] = "Alpina"
+        out["Manufacturer"] = "Alpina"
+
+        # Type: Skibrillen -> Sport glasses, everything else -> Sunglasses
+        t = g(row, "type").lower()
+        out["Glasses_type"] = "Sport glasses" if "ski" in t else "Sunglasses"
+        is_sun = True  # both sunglasses and ski goggles carry lens data
+
+        # Dimensions (strip " mm", round)
+        out["Glasses_size_lens_width"] = _marcolin_round(g(row, "lens_w")) or None
+        out["Combination"] = _marcolin_round(g(row, "lens_w")) or None
+        out["Glasses_size_bridge"] = _marcolin_round(g(row, "bridge")) or None
+        out["Glasses_size_temple_length"] = _marcolin_round(g(row, "temple")) or None
+        out["Glasses_size_lens_height"] = _marcolin_round(g(row, "lens_h")) or None
+
+        # Shape
+        form = g(row, "form")
+        if not form or form.lower() == "nan":
+            out["Glasses_shape"] = None
+        elif form.upper() in _ALPINA_SHAPE_MAP:
+            out["Glasses_shape"] = _ALPINA_SHAPE_MAP[form.upper()]
+        else:
+            out["Glasses_shape"] = form
+            unmapped.add(f"Alpina -> Glasses_shape: '{form}'")
+
+        # Rim
+        rim = g(row, "rim")
+        if not rim or rim.lower() == "nan":
+            out["Glasses_frame_type"] = None
+        elif rim.upper() in _ALPINA_RIM_MAP:
+            out["Glasses_frame_type"] = _ALPINA_RIM_MAP[rim.upper()]
+        else:
+            out["Glasses_frame_type"] = rim
+            unmapped.add(f"Alpina -> Glasses_frame_type: '{rim}'")
+
+        # Materials
+        out["Glasses_main_material"] = _alpina_material(g(row, "frame_mat"))
+        if g(row, "frame_mat") and out["Glasses_main_material"] is None and g(row, "frame_mat").lower() != "nan":
+            unmapped.add(f"Alpina -> Glasses_main_material: '{g(row, 'frame_mat')}'")
+        out["Glasses_lens_material"] = _alpina_material(g(row, "lens_mat"))
+
+        # Colours
+        for src_key, out_col, ctype in [
+            ("frame_col", "Frame_Colour", "frame"),
+            ("temple_col", "Temple_Colour", "frame"),
+            ("lens_col", "Glasses_lens_Colour", "lens"),
+        ]:
+            v = g(row, src_key)
+            if v and v.lower() != "nan":
+                res = classify_color(v, ctype)
+                out[out_col] = res if res else v
+                if not res:
+                    unmapped.add(f"Alpina -> {out_col}: '{v}'")
+            else:
+                out[out_col] = None
+
+        # Filter category
+        out["Sunglasses_filter"] = _alpina_filter(g(row, "filter"))
+
+        # Lens effect (from Technologien + Verspiegelung + lens colour/material)
+        tech = g(row, "tech").lower()
+        lens_col_v = g(row, "lens_col").lower()
+        lens_mat_v = g(row, "lens_mat").lower()
+        eff = set()
+        if "polaris" in tech or "polaris" in lens_col_v or "pola" in lens_mat_v:
+            eff.add("Polarized")
+        if "mirror" in tech or "mirror" in lens_col_v or g(row, "mirror").lower() == "ja":
+            eff.add("Mirror")
+        if "photochrom" in tech or "selbsttön" in tech or "varioflex" in lens_col_v or "vario" in tech:
+            eff.add("Photochromic")
+        if "verlauf" in lens_col_v or "gradient" in lens_col_v or "gradient" in tech:
+            eff.add("Gradient")
+        out["Glasses_lens_effect"] = "|".join(sorted(eff)) if eff else None
+
+        # Gender
+        gd = g(row, "gender").lower()
+        genders = set()
+        if "herren" in gd or "jungen" in gd:
+            genders.add("Man")
+        if "damen" in gd or "mädchen" in gd or "madchen" in gd:
+            genders.add("Woman")
+        if "unisex" in gd:
+            genders.update({"Man", "Woman"})
+        # Kids: Jungen/Mädchen -> Child
+        if "jungen" in gd or "mädchen" in gd or "madchen" in gd or "kinder" in gd:
+            out["Glasses_gendre"] = "Child"
+        elif genders:
+            out["Glasses_gendre"] = "|".join(sorted(genders))
+        else:
+            out["Glasses_gendre"] = None
+
+        # Origin (e.g. 'CN: VR China' -> China)
+        origin_raw = g(row, "origin")
+        code = origin_raw.split(":")[0].strip().upper() if origin_raw else ""
+        origin_map = dict(_MARCOLIN_ORIGIN_MAP)
+        origin_map.update({"TW": "Taiwan", "DE": "Germany"})
+        out["Item_origin_country"] = origin_map.get(code, None)
+
+        # Weight (grams)
+        w = g(row, "weight")
+        if w and w.lower() != "nan":
+            try:
+                out["Glasses_weight_g"] = str(int(round(float(w.replace(",", ".")))))
+            except Exception:
+                pass
+
+        # Model / colour code / name
+        model = g(row, "prod")
+        colour_code = g(row, "farbe")
+        out["Extracted_Model"] = model
+        out["Extracted_Color"] = colour_code
+        out["Glasses_color_code"] = colour_code
+        kurz = g(row, "kurz")
+        out["Assembled_Name"] = f"Alpina {kurz}".strip() if kurz and kurz.lower() != "nan" else f"Alpina {model}".strip()
+
+        out["Extracted_Clip_on"] = ""
+        out["Clip_on_Alert"] = False
+        out["Producing_company"] = "Alpina"
+        rows.append(out)
+
+    return pd.DataFrame(rows), unmapped, skipped
+
+
 def load_single_catalog(mfg_name, config_settings, file_path):
     """Apply the manufacturer rules engine to a single raw catalog file.
 
@@ -1270,6 +1514,10 @@ def load_single_catalog(mfg_name, config_settings, file_path):
     # Thélios (LVMH: Celine, Dior, Bulgari, Loewe, Fendi, ...) — dedicated handler.
     if mfg_name == "thelios":
         return _load_thelios(df)
+
+    # Alpina (German sports eyewear) — dedicated handler.
+    if mfg_name == "alpina":
+        return _load_alpina(df)
 
     new_df = pd.DataFrame()
 

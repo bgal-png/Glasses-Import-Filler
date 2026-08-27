@@ -701,7 +701,7 @@ with col1:
     st.subheader("🏭 Update Manufacturer Catalogs")
     st.write("Upload a raw manufacturer file. It will be cleaned, processed, and merged into the Master Vault.")
     
-    mfg_choice = st.selectbox("Select Manufacturer:", ["safilo", "luxottica", "marcolin", "kering", "derigo", "thelios"])
+    mfg_choice = st.selectbox("Select Manufacturer:", ["safilo", "luxottica", "marcolin", "kering", "derigo", "thelios", "alpina"])
     uploaded_mfg = st.file_uploader(f"Upload new {mfg_choice.title()} file", type=["csv", "xlsx"])
     
     if uploaded_mfg and st.button(f"🚀 Process & Upsert {mfg_choice.title()} Catalog", type="primary"):
@@ -738,7 +738,7 @@ with col1:
     st.caption("Use this before re-uploading after a structure change (e.g. Safilo CSV migration). Rows are matched by `Producing_company`.")
     del_mfg = st.selectbox(
         "Manufacturer to wipe:",
-        ["safilo", "luxottica", "marcolin", "kering", "derigo", "thelios"],
+        ["safilo", "luxottica", "marcolin", "kering", "derigo", "thelios", "alpina"],
         key="del_mfg_choice",
     )
     confirm_text = st.text_input(

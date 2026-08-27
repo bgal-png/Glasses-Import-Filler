@@ -291,6 +291,13 @@ MANUFACTURER_CONFIG = {
         ],
         "columns": {},
     },
+    "alpina": {
+        # Alpina sports eyewear (German master data). Dedicated handler
+        # (_load_alpina). All sunglasses / ski goggles, no optical frames.
+        "file": "alpina.xlsx",
+        "brands": ["Alpina"],
+        "columns": {},
+    },
 }
 
 # ==========================================
@@ -1594,6 +1601,12 @@ _FRAME_TEMPLE_KEYWORDS = [
     ('trasparente', 'Transparent'), ('transp', 'Transparent'),
     ('camel', 'Brown'), ('cream', 'Ivory'), ('powder', 'Pink'), ('ruth', 'Ruthenium'),
     ('multicolor', 'Multicolor'), ('multilayer', 'Multicolor'), ('stripe', 'Multicolor'), ('vícebarev', 'Multicolor'),
+    # German (Alpina etc.)
+    ('schwarz', 'Black'), ('grau', 'Grey'), ('braun', 'Brown'), ('wei', 'White'),
+    ('blau', 'Blue'), ('grün', 'Green'), ('gruen', 'Green'), ('gelb', 'Yellow'),
+    ('lila', 'Purple'), ('violett', 'Purple'), ('silber', 'Silver'),
+    ('türkis', 'Turquoise'), ('tuerkis', 'Turquoise'), ('rosa', 'Pink'),
+    ('rot', 'Red'), ('sand', 'Ivory'),
 ]
 
 _LENS_KEYWORDS = [
@@ -1648,6 +1661,13 @@ _LENS_KEYWORDS = [
     ('prizm deep water', 'Blue'), ('prizm shallow water', 'Green'),
     ('prizm low', 'Yellow'), ('prizm denn', 'Brown'), ('prizm daily', 'Brown'),
     ('prizm tr22', 'Brown'), ('prizm tr45', 'Brown'),
+    # German (Alpina etc.)
+    ('schwarz', 'Black'), ('grau', 'Grey'), ('braun', 'Brown'), ('wei', 'Transparent'),
+    ('blau', 'Blue'), ('grün', 'Green'), ('gruen', 'Green'), ('gelb', 'Yellow'),
+    ('lila', 'Purple'), ('violett', 'Purple'), ('silber', 'Silver'),
+    ('türkis', 'Blue'), ('tuerkis', 'Blue'), ('rosa', 'Pink'), ('rot', 'Red'),
+    ('klar', 'Transparent'), ('rainbow', 'Multicolor'), ('rainb', 'Multicolor'),
+    ('bronce', 'Orange'), ('varioflex', 'Transparent'),
 ]
 
 
