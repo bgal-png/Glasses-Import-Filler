@@ -38,8 +38,9 @@ from workers import Worker  # noqa: E402
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, skip_startup_network: bool = False):
         super().__init__()
+        self.skip_startup_network = skip_startup_network
         self.settings = Settings()
         self._catalogue = None
         self._loader = None
@@ -49,10 +50,14 @@ class MainWindow(QMainWindow):
         self.resize(1400, 880)
 
         # --- tabs ---
+        # --selftest --force-admin builds the admin tabs without writing a
+        # DB_URL anywhere; the tabs still refuse to act without a real one.
+        admin_ok = self.settings.admin_enabled or ("--force-admin" in sys.argv)
+
         self.tabs = QTabWidget()
         self.tab_widgets = []
         for cls in ALL_TABS:
-            if getattr(cls, "NEEDS_ADMIN", False) and not self.settings.admin_enabled:
+            if getattr(cls, "NEEDS_ADMIN", False) and not admin_ok:
                 continue
             tab = cls(self.settings, self)
             tab.status_message.connect(self.show_status)
@@ -77,8 +82,12 @@ class MainWindow(QMainWindow):
         self._build_statusbar()
 
         self._on_tab_changed(self.tabs.currentIndex())
-        self.refresh_data()
-        self._check_updates_quietly()
+        if not self.skip_startup_network:
+            self.refresh_data()
+            self._check_updates_quietly()
+        else:
+            self.data_status.setText("Catalogue: not loaded (offline selftest)")
+            self.data_status.setStyleSheet(theme.status_style("loading"))
 
     # ------------------------------------------------------------- toolbar
     def _build_toolbar(self) -> None:
@@ -372,10 +381,16 @@ def main() -> int:
     settings = Settings()
     theme.apply_theme(app, settings.dark_mode)
 
-    win = MainWindow()
+    win = MainWindow(skip_startup_network=selftest)
     if selftest:
         QApplication.processEvents()
-        return _selftest(win)
+        code = _selftest(win)
+        # Never leave a QThread alive at interpreter exit — Qt hangs on it.
+        for attr in ("_loader", "_update_worker"):
+            worker = getattr(win, attr, None)
+            if worker is not None and worker.isRunning():
+                worker.wait(5000)
+        return code
 
     win.show()
     return app.exec()
