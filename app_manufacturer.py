@@ -1,88 +1,18 @@
 import streamlit as st
 import pandas as pd
-import re
-import base64
-import zipfile
-import os
 from io import BytesIO
 from sqlalchemy import create_engine
-from dictionaries import (
-    TARGET_MAPPING,
-    FACE_SHAPE_MAP,
-    BRAND_USABLE_MAP,
-    PREMIUM_KERING_BRANDS,
-    BRAND_GLASSES_CONTAIN,
-    estimate_filter_category,
+
+from dictionaries import TARGET_MAPPING
+from filler_core import (
+    FillOptions,
+    changed_columns,
+    extract_images_from_zip,
+    fill_target,
+    read_target_file,
+    run_ai_vision,
+    write_filled_excel,
 )
-
-# ==========================================
-# 👓 SHAPE RECOGNITION VIA CLAUDE VISION
-# ==========================================
-SHAPE_CATEGORIES = [
-    "Panthos / Tea cup", "Browline", "Cat Eye", "Oval / Elipse",
-    "Butterfly", "Extravagant", "Single lens", "Square",
-    "Oversize", "Hexagonal", "Pilot", "Rectangular", "Round",
-]
-
-def classify_glasses(image_bytes: bytes, api_key: str) -> dict:
-    """Classify shape and sport type from a single image. Returns dict with 'shape' and 'is_sport'."""
-    try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
-
-        img_b64 = base64.b64encode(image_bytes).decode("utf-8")
-        ext_check = image_bytes[:8]
-        media_type = "image/png" if ext_check[:4] == b'\x89PNG' else "image/jpeg"
-
-        response = client.messages.create(
-            model="claude-haiku-4-20250414",
-            max_tokens=80,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": img_b64}},
-                    {"type": "text", "text": (
-                        "Analyze this eyewear image and answer TWO questions:\n\n"
-                        "1. SHAPE: Classify into exactly ONE of these categories:\n"
-                        + ", ".join(SHAPE_CATEGORIES) + "\n\n"
-                        "2. SPORT: Are these sport/performance glasses (wrap-around, shield lens, "
-                        "rubber grips, aerodynamic design, cycling/running/ski goggles)? Answer YES or NO.\n\n"
-                        "Respond in exactly this format:\nSHAPE: <category>\nSPORT: <YES or NO>"
-                    )},
-                ],
-            }],
-        )
-        result = response.content[0].text.strip()
-
-        shape = ""
-        is_sport = False
-        for line in result.split("\n"):
-            line = line.strip()
-            if line.upper().startswith("SHAPE:"):
-                raw_shape = line.split(":", 1)[1].strip()
-                for cat in SHAPE_CATEGORIES:
-                    if cat.lower() == raw_shape.lower():
-                        shape = cat
-                        break
-                if not shape:
-                    shape = raw_shape
-            elif line.upper().startswith("SPORT:"):
-                is_sport = "yes" in line.lower()
-
-        return {"shape": shape, "is_sport": is_sport}
-    except Exception:
-        return {"shape": "", "is_sport": False}
-
-def extract_images_from_zip(zip_file) -> dict:
-    images = {}
-    with zipfile.ZipFile(zip_file, "r") as z:
-        for name in z.namelist():
-            lower = name.lower()
-            if lower.endswith((".jpg", ".jpeg", ".png")) and not name.startswith("__MACOSX"):
-                basename = os.path.splitext(os.path.basename(name))[0]
-                if basename:
-                    images[basename] = z.read(name)
-    return images
 
 # ==========================================
 # 🛑 VERSION CHECK & CONFIG
@@ -188,19 +118,20 @@ def load_cloud_data():
         # 2. Fetch Package Data
         try:
             package_df = pd.read_sql_table('package_data', con=engine)
-        except:
+        except Exception:
             pass
 
-        # 3. Fetch Global Categories (master_clean)
+        # 3. Fetch Global Categories (kept for the status metric only — the
+        #    filler now uses the static BRAND_GLASSES_CONTAIN table instead)
         try:
             historical_df = pd.read_sql_table('historical_data', con=engine)
-        except:
+        except Exception:
             pass
 
         # 4. Fetch Item Origin
         try:
             origin_df = pd.read_sql_table('origin_data', con=engine)
-        except:
+        except Exception:
             pass
 
         return master_db, package_df, historical_df, origin_df
@@ -212,7 +143,7 @@ with st.spinner("☁️ Fetching live data from Supabase Vault..."):
     master_db, package_df, master_clean_df, origin_df = load_cloud_data()
 
 if master_db.empty:
-    st.warning("⚠️ Database is empty. Please run your 'admin_updater.py' script first.")
+    st.warning("⚠️ Database is empty. Please upload a catalogue through the admin panel first.")
     st.stop()
 
 # --- 📊 DATA STATUS METRICS ---
@@ -255,21 +186,9 @@ uploaded_file = st.file_uploader("Upload your Target Excel or CSV file", type=["
 
 if uploaded_file:
     try:
-        if uploaded_file.name.endswith(".csv"):
-            target_df = pd.read_csv(uploaded_file, dtype=str)
-        else:
-            target_df = pd.read_excel(uploaded_file, dtype=str, engine="openpyxl")
-
-        target_df.columns = (
-            target_df.columns.astype(str)
-            .str.replace("\n", " ", regex=False)
-            .str.replace(r"\s+", " ", regex=True)
-            .str.strip()
-        )
-
+        target_df = read_target_file(uploaded_file)
         # Save a copy of the original data for before/after comparison
         original_df = target_df.copy()
-
     except Exception as e:
         st.error(f"Could not read your uploaded file: {e}")
         st.stop()
@@ -307,436 +226,64 @@ if uploaded_file:
 
     if st.button("🚀 Run Auto-Filler", type="primary"):
         with st.spinner("Matching barcodes and pouring data from the Cloud..."):
+            options = FillOptions(
+                priv_sun=priv_sun,
+                priv_eye=priv_eye,
+                priv_pc=priv_pc,
+                priv_sport=priv_sport,
+                priv_drive=priv_drive,
+            )
+            try:
+                target_df, report = fill_target(
+                    target_df, master_db, package_df, origin_df, options=options
+                )
+            except ValueError as e:
+                st.error(f"❌ {e}")
+                st.stop()
 
-            for global_col, target_col in TARGET_MAPPING.items():
-                if isinstance(target_col, list):
-                    for tc in target_col:
-                        if tc not in target_df.columns: target_df[tc] = ""
-                else:
-                    if target_col not in target_df.columns: target_df[target_col] = ""
-
-            match_count = 0
-            found_sport_glasses = False
-            found_polarized_clip_on = False
-
-            # --- VALIDATION TRACKING ---
-            unmapped_tracker = {}   # col -> set of unmapped source values
-            missing_tracker = {}    # col -> count of rows with no source data
-
-            # --- CACHES FOR MAJORITY ENGINES ---
-            brand_majority_cache = {}
-            brand_contain_cache = {}
-            brand_origin_cache = {}
-
-            # Accept both "Glasses contain ID:84" (no space) and "Glasses contain ID: 84"
-            # (with space) in templates — older templates used the space form, newer ones
-            # don't. Whichever exists in the user's template is what we write to.
-            if "Glasses contain ID:84" in target_df.columns:
-                CONTAIN_COL = "Glasses contain ID:84"
-            elif "Glasses contain ID: 84" in target_df.columns:
-                CONTAIN_COL = "Glasses contain ID: 84"
-            else:
-                CONTAIN_COL = "Glasses contain ID:84"  # default for brand-new templates
-
-            for c in ["Case length (mm)", "Case height (mm)", "Case width (mm)", "Case weight (g)", CONTAIN_COL]:
-                if c not in target_df.columns: target_df[c] = ""
-
-            for index, row in target_df.iterrows():
-                raw_barcode = str(row[target_barcode_col]).strip()
-                clean_barcode = re.sub(r"\.0$", "", raw_barcode).lstrip("0")
-
-                if clean_barcode in master_db.index:
-                    match_count += 1
-                    master_row = master_db.loc[clean_barcode]
-
-                    is_frames = str(master_row.get("Glasses_type", "")).strip() == "Frames"
-                    lens_cols_to_skip = [
-                        "Glasses_lens_Colour", "Glasses_lens_material",
-                        "Sunglasses_filter", "Glasses_lens_effect",
-                        "SunGlasses_RX_lenses",  # not applicable to optical frames
-                    ]
-                    
-                    target_df.at[index, "Items type ID: 20"] = "Glasses"
-                    target_df.at[index, "Items packing ID: 21"] = "Basic"
-
-                    g_type = str(master_row.get("Glasses_type", "")).strip()
-                    private_name = ""
-
-                    if "Sunglasses" in g_type and priv_sun: private_name = f"(Sunglasses {priv_sun})"
-                    elif "Sport glasses" in g_type and priv_sport: private_name = f"(Sports glasses {priv_sport})"
-                    elif "Driving glasses" in g_type and priv_drive: private_name = f"(Eyeglasses driving {priv_drive})"
-                    elif "PC Glasses without power" in g_type and priv_pc: private_name = f"(Eyeglasses PC {priv_pc})"
-                    elif "Frames" in g_type and priv_eye: private_name = f"(Eyeglasses {priv_eye})"
-
-                    if private_name: target_df.at[index, "Name private"] = private_name.strip()
-
-                    assembled_name = str(master_row.get("Assembled_Name", "")).strip()
-                    meta_desc = ""
-
-                    if "Sunglasses" in g_type: meta_desc = f"Sunglasses {assembled_name}"
-                    elif "Sport glasses" in g_type: 
-                        meta_desc = f"Ski goggles {assembled_name}"
-                        found_sport_glasses = True
-                    elif "Driving glasses" in g_type: meta_desc = f"Driving glasses {assembled_name}"
-                    elif "PC Glasses without power" in g_type: meta_desc = f"Computer glasses {assembled_name}"
-                    elif "Frames" in g_type: meta_desc = f"Eyeglasses {assembled_name}"
-
-                    if meta_desc: target_df.at[index, "Meta description"] = meta_desc.strip()
-
-                    for global_col, target_col in TARGET_MAPPING.items():
-                        if global_col == "Barcode": continue
-                        if is_frames and global_col in lens_cols_to_skip: continue
-
-                        if global_col in master_db.columns:
-                            val = master_row[global_col]
-                            t_col_name = target_col[0] if isinstance(target_col, list) else target_col
-                            if pd.notna(val) and str(val).strip() != "":
-                                val_str = str(val).strip()
-                                # Filter out NOT MAPPED values (handles pipe-separated)
-                                unmapped_parts = []
-                                if "|" in val_str:
-                                    all_parts = [p.strip() for p in val_str.split("|") if p.strip()]
-                                    clean_parts = [p for p in all_parts if p != "NOT MAPPED"]
-                                    unmapped_parts = [p for p in all_parts if p == "NOT MAPPED"]
-                                    val_str = "|".join(clean_parts)
-                                elif val_str == "NOT MAPPED":
-                                    unmapped_parts = [val_str]
-                                    val_str = ""
-                                if unmapped_parts:
-                                    if t_col_name not in unmapped_tracker: unmapped_tracker[t_col_name] = set()
-                                    raw_val = str(val).strip()
-                                    unmapped_tracker[t_col_name].add(raw_val)
-                                if val_str:
-                                    if isinstance(target_col, list):
-                                        for tc in target_col: target_df.at[index, tc] = val_str
-                                    else: target_df.at[index, target_col] = val_str
-                                elif not val_str:
-                                    missing_tracker[t_col_name] = missing_tracker.get(t_col_name, 0) + 1
-                            else:
-                                missing_tracker[t_col_name] = missing_tracker.get(t_col_name, 0) + 1
-
-                    g_shape_raw = str(master_row.get("Glasses_shape", "")).strip()
-                    if g_shape_raw and g_shape_raw.lower() not in ["nan", ""]:
-                        shapes = [s.strip() for s in g_shape_raw.split("|")]
-                        recommended_faces = set()
-                        for s in shapes:
-                            for shape_key, face_val in FACE_SHAPE_MAP.items():
-                                if shape_key.lower() == s.lower():
-                                    for face in face_val.split("|"): recommended_faces.add(face)
-                        if recommended_faces:
-                            target_df.at[index, "Glasses for your face shape ID:94"] = "|".join(sorted(list(recommended_faces)))
-
-                    if "Sunglasses" in g_type: target_df.at[index, "UV filter ID: 60"] = "400"
-
-                    # --- 🕶️ SUNGLASSES FILTER ESTIMATION (from lens color) ---
-                    filter_col = "Sunglasses filter ID: 77"
-                    if filter_col in target_df.columns and "Sunglasses" in g_type:
-                        current_filter = str(target_df.at[index, filter_col]).strip()
-                        if not current_filter or current_filter.lower() in ["nan", ""]:
-                            raw_lens = str(master_row.get("Glasses_lens_Colour", "")).strip()
-                            estimated = estimate_filter_category(raw_lens)
-                            if estimated:
-                                target_df.at[index, filter_col] = estimated
-
-                    usable_tags = set()
-                    raw_brand = str(master_row.get("Brand", "")).strip().lower()
-                    # Lookup candidates: each row's brand may have entries under the
-                    # new customer-facing long form ("Boss by Hugo Boss") OR the
-                    # legacy short form ("Hugo Boss") in any given reference table.
-                    # Different tables (origin_data, package_data, historical_data,
-                    # BRAND_USABLE_MAP) were built at different times so they may
-                    # disagree. We try the long form first, fall back to short.
-                    brand_lookup_candidates = [raw_brand]
-                    if raw_brand == "boss by hugo boss":
-                        brand_lookup_candidates.append("hugo boss")
-                    elif raw_brand == "hugo by hugo boss":
-                        brand_lookup_candidates.append("hugo")
-                    for _cand in brand_lookup_candidates:
-                        if _cand in BRAND_USABLE_MAP:
-                            usable_tags.add(BRAND_USABLE_MAP[_cand])
-                            break
-                    lens_effect = str(master_row.get("Glasses_lens_effect", "")).strip()
-
-                    if "Sunglasses" in g_type:
-                        if "Polarized" in lens_effect: usable_tags.add("Driving glasses")
-                        else: usable_tags.add("Common use")
-
-                    if usable_tags: target_df.at[index, "Glasses usable ID: 51"] = "|".join(sorted(list(usable_tags)))
-
-                    if any(c in PREMIUM_KERING_BRANDS for c in brand_lookup_candidates):
-                        target_df.at[index, "Glasses collection ID: 33"] = "Prémiové brýle - Kering"
-
-                    raw_material = str(master_row.get("Glasses_main_material", "")).strip().lower()
-                    if "Sunglasses" in g_type: target_df.at[index, "HS Code"] = "90041091"
-                    elif "Sport glasses" in g_type: target_df.at[index, "HS Code"] = "90049090"
-                    elif "Frames" in g_type:
-                        if "plastic" in raw_material: target_df.at[index, "HS Code"] = "90031100"
-                        elif "metal" in raw_material: target_df.at[index, "HS Code"] = "90031900"
-
-                    if "Frames" in g_type: target_df.at[index, "Item description"] = "Eyeglasses"
-                    elif "PC Glasses without power" in g_type: target_df.at[index, "Item description"] = "PC Glasses without power"
-                    elif "Driving glasses" in g_type: target_df.at[index, "Item description"] = "Driving glasses"
-                    elif "Sunglasses" in g_type:
-                        has_plastic = "plastic" in raw_material
-                        has_metal = "metal" in raw_material
-                        if has_plastic and has_metal: target_df.at[index, "Item description"] = "Sunglasses, mixed plastic and metal frame"
-                        elif has_plastic: target_df.at[index, "Item description"] = "Sunglasses, plastic frame"
-                        elif has_metal: target_df.at[index, "Item description"] = "Sunglasses, metal frame"
-
-                    # --- 🧳 CASE DIMENSIONS MAJORITY ENGINE ---
-                    if not package_df.empty and raw_brand and raw_brand != "nan":
-                        if raw_brand not in brand_majority_cache:
-                            brand_matches = pd.DataFrame()
-                            for _cand in brand_lookup_candidates:
-                                mask = package_df['item_name'].astype(str).str.contains(rf'\b{re.escape(_cand)}\b', case=False, na=False)
-                                if mask.any():
-                                    brand_matches = package_df[mask]
-                                    break
-
-                            if not brand_matches.empty:
-                                def get_mode(col_name):
-                                    if col_name in brand_matches.columns:
-                                        modes = brand_matches[col_name].dropna().mode()
-                                        if not modes.empty: return re.sub(r'\.0$', '', str(modes.iloc[0]).strip())
-                                    return ""
-                                
-                                brand_majority_cache[raw_brand] = {
-                                    "Case length (mm)": get_mode("case_length"),
-                                    "Case height (mm)": get_mode("case_height"),
-                                    "Case width (mm)": get_mode("case_width"),
-                                    "Case weight (g)": get_mode("case_weight"),
-                                    "Glasses weight (g)": get_mode("item_weight"),
-                                }
-                            else: brand_majority_cache[raw_brand] = None
-                                
-                        cached_data = brand_majority_cache.get(raw_brand)
-                        if cached_data:
-                            target_df.at[index, "Case length (mm)"] = cached_data["Case length (mm)"]
-                            target_df.at[index, "Case height (mm)"] = cached_data["Case height (mm)"]
-                            target_df.at[index, "Case width (mm)"] = cached_data["Case width (mm)"]
-                            target_df.at[index, "Case weight (g)"] = cached_data["Case weight (g)"]
-                            if cached_data.get("Glasses weight (g)"):
-                                target_df.at[index, "Glasses weight (g)"] = cached_data["Glasses weight (g)"]
-
-                    # --- 🌍 ORIGIN COUNTRY MAJORITY ENGINE ---
-                    if not origin_df.empty and raw_brand and raw_brand != "nan":
-                        if raw_brand not in brand_origin_cache:
-                            if "item_name" in origin_df.columns and "country_master" in origin_df.columns:
-                                brand_matches = pd.DataFrame()
-                                for _cand in brand_lookup_candidates:
-                                    mask = origin_df['item_name'].astype(str).str.contains(rf'\b{re.escape(_cand)}\b', case=False, na=False)
-                                    if mask.any():
-                                        brand_matches = origin_df[mask]
-                                        break
-                                if not brand_matches.empty:
-                                    modes = brand_matches["country_master"].dropna().mode()
-                                    brand_origin_cache[raw_brand] = str(modes.iloc[0]).strip() if not modes.empty else ""
-                                else:
-                                    brand_origin_cache[raw_brand] = ""
-                            else:
-                                brand_origin_cache[raw_brand] = ""
-
-                        cached_origin = brand_origin_cache.get(raw_brand, "")
-                        if cached_origin and "Item origin country" in target_df.columns:
-                            target_df.at[index, "Item origin country"] = cached_origin
-
-                    # --- 🎁 GLASSES CONTAIN — STATIC BRAND × TYPE LOOKUP ---
-                    # Uses the BRAND_GLASSES_CONTAIN table in dictionaries.py
-                    # (sourced from the master "Glasses accessories" sheet).
-                    # Picks "Frames" or "Sunglasses" sub-entry based on g_type;
-                    # sport/driving glasses count as Sunglasses for case purposes.
-                    if raw_brand and raw_brand != "nan":
-                        if any(kw in g_type for kw in ("Sunglasses", "Sport glasses", "Driving glasses")):
-                            type_key = "Sunglasses"
-                        else:
-                            type_key = "Frames"
-                        contain_cache_key = (raw_brand, type_key)
-                        if contain_cache_key not in brand_contain_cache:
-                            resolved = ""
-                            for _cand in brand_lookup_candidates:
-                                entry = BRAND_GLASSES_CONTAIN.get(_cand)
-                                if entry and entry.get(type_key):
-                                    resolved = entry[type_key]
-                                    break
-                            brand_contain_cache[contain_cache_key] = resolved
-
-                        cached_contain = brand_contain_cache.get(contain_cache_key, "")
-                        
-                        clip_on_val = str(master_row.get("Extracted_Clip_on", "")).strip()
-                        needs_alert = master_row.get("Clip_on_Alert", False)
-
-                        if needs_alert: found_polarized_clip_on = True
-
-                        # Clip-on lens colour
-                        clip_lens_col = "Glasses clip-on lens colour ID:112"
-                        if clip_lens_col in target_df.columns:
-                            clip_lens_val = str(master_row.get("Clip_on_lens_colour", "")).strip()
-                            if clip_lens_val and clip_lens_val.lower() not in ["nan", ""]:
-                                target_df.at[index, clip_lens_col] = clip_lens_val
-                            
-                        final_contain = []
-                        if cached_contain: final_contain.extend(cached_contain.split("|"))
-                        if clip_on_val and clip_on_val.lower() not in ["nan", ""]: final_contain.append(clip_on_val)
-                            
-                        if final_contain:
-                            unique_contain_dict = {item.strip().lower(): item.strip() for item in final_contain if item.strip()}
-                            ordered_items = []
-                            if "original glasses case" in unique_contain_dict:
-                                ordered_items.append("Original glasses case")
-                                del unique_contain_dict["original glasses case"]
-                            if "cleaning cloth" in unique_contain_dict:
-                                ordered_items.append("Cleaning cloth")
-                                del unique_contain_dict["cleaning cloth"]
-                            
-                            remaining_items = sorted(list(unique_contain_dict.values()))
-                            ordered_items.extend(remaining_items)
-                            target_df.at[index, CONTAIN_COL] = "|".join(ordered_items)
-
-                    # --- 🌟 OTHER FEATURES ENGINE ---
-                    other_features = set()
-                    if "Glasses other features ID:99" in target_df.columns:
-                        existing_features = str(target_df.at[index, "Glasses other features ID:99"]).strip()
-                        if existing_features and existing_features.lower() not in ["nan", ""]:
-                            for e in existing_features.split("|"): other_features.add(e.strip())
-
-                    # "Prescription sunglasses" only makes sense for actual sunglasses —
-                    # Safilo flags RXable=Y on optical frames too (any frame can be glazed),
-                    # so without this check the feature gets added to every row.
-                    if "Sunglasses" in g_type and "SunGlasses RX lenses ID:108" in target_df.columns:
-                        if str(target_df.at[index, "SunGlasses RX lenses ID:108"]).strip().lower() == "yes":
-                            other_features.add("Prescription sunglasses")
-
-                    if CONTAIN_COL in target_df.columns:
-                        contain_val = str(target_df.at[index, CONTAIN_COL]).strip().lower()
-                        contain_items = [item.strip() for item in re.split(r"[,|]", contain_val) if item.strip()]
-
-                        clip_on_found = False
-                        if "sun clip-on" in contain_items: other_features.add("Sun clip-on"); clip_on_found = True
-                        if "sun clip-on p" in contain_items: other_features.add("Sun clip-on p"); clip_on_found = True
-                        if "magnetic sun clip-on" in contain_items: other_features.add("Magnetic sun clip-on"); clip_on_found = True
-                        if "magnetic sun clip-on p" in contain_items: other_features.add("Magnetic sun clip-on p"); clip_on_found = True
-                        if clip_on_found: other_features.add("Glasses with sun clip-on")
-
-                    if other_features:
-                        target_df.at[index, "Glasses other features ID:99"] = "|".join(sorted(list(other_features)))
-
-                    # --- 🚫 LENSES NO-ORDERS ENGINE ---
-                    no_orders = set()
-                    frame_type = str(target_df.at[index, "Glasses frame type ID: 50"]).strip().lower() if "Glasses frame type ID: 50" in target_df.columns else ""
-                    other_feat = str(target_df.at[index, "Glasses other features ID:99"]).strip().lower() if "Glasses other features ID:99" in target_df.columns else ""
-
-                    if frame_type == "half rim":
-                        no_orders.add("CoatingPolarized")
-                        no_orders.add("Glasses index 1.5")
-                    elif frame_type == "rimless":
-                        no_orders.add("CoatingPolarized")
-                        no_orders.add("Glasses index 1.5")
-                        no_orders.add("Glasses index 1.74")
-
-                    if "clip" in other_feat:
-                        no_orders.add("Glasses index 1.5")
-
-                    if no_orders and "Glasses lenses no-orders ID:103" in target_df.columns:
-                        target_df.at[index, "Glasses lenses no-orders ID:103"] = "|".join(sorted(no_orders))
-
-                    # --- Fill "None" for empty lens effect ---
-                    effect_col = "Glasses lens effect ID: 37"
-                    if effect_col in target_df.columns and not is_frames:
-                        current_effect = str(target_df.at[index, effect_col]).strip()
-                        if not current_effect or current_effect.lower() in ["nan", ""]:
-                            target_df.at[index, effect_col] = "None"
-
-            st.success(f"✅ Match Complete! Successfully filled {match_count} out of {len(target_df)} products.")
+            st.success(
+                f"✅ Match Complete! Successfully filled {report.match_count} "
+                f"out of {report.total_rows} products."
+            )
 
             # --- 👓 AI VISION ENGINE (Shape + Sport Detection) ---
             if image_dict and has_api_key:
-                shape_col = "Glasses shape ID: 25"
-                face_col = "Glasses for your face shape ID:94"
-                sport_col = "Sports Glasses ID: 89"
-                source_col = "Shape source"
-                if shape_col not in target_df.columns: target_df[shape_col] = ""
-                if face_col not in target_df.columns: target_df[face_col] = ""
-                if sport_col not in target_df.columns: target_df[sport_col] = ""
-                target_df[source_col] = ""
-
-                # Mark existing shapes from database
-                for idx, row in target_df.iterrows():
-                    if str(row.get(shape_col, "")).strip() not in ["", "nan"]:
-                        target_df.at[idx, source_col] = "Database"
-
-                name_col = "Glasses name"
-                if name_col not in target_df.columns:
-                    for c in target_df.columns:
-                        if "name" in c.lower() and "private" not in c.lower():
-                            name_col = c
-                            break
-
-                shape_count = 0
-                sport_count = 0
                 shape_bar = st.progress(0, text="🔍 Classifying with AI vision...")
-                total_rows = len(target_df)
 
-                for idx, row in target_df.iterrows():
-                    glasses_name = str(row.get(name_col, "")).strip()
-                    if glasses_name and glasses_name in image_dict:
-                        result = classify_glasses(image_dict[glasses_name], ANTHROPIC_API_KEY)
+                def _ai_progress(frac, text):
+                    shape_bar.progress(frac, text=f"🔍 {text}")
 
-                        if result["shape"]:
-                            target_df.at[idx, shape_col] = result["shape"]
-                            target_df.at[idx, source_col] = "AI"
-                            shape_count += 1
-
-                            # Update face shape recommendation
-                            recommended_faces = set()
-                            for shape_key, face_val in FACE_SHAPE_MAP.items():
-                                if shape_key.lower() == result["shape"].lower():
-                                    for face in face_val.split("|"):
-                                        recommended_faces.add(face)
-                            if recommended_faces:
-                                target_df.at[idx, face_col] = "|".join(sorted(recommended_faces))
-
-                        if result["is_sport"]:
-                            target_df.at[idx, sport_col] = "Yes"
-                            sport_count += 1
-
-                    progress = (list(target_df.index).index(idx) + 1) / total_rows
-                    shape_bar.progress(progress, text=f"🔍 Classifying... ({list(target_df.index).index(idx) + 1}/{total_rows})")
-
+                ai = run_ai_vision(target_df, image_dict, ANTHROPIC_API_KEY, progress=_ai_progress)
                 shape_bar.empty()
-                st.success(f"👓 AI Vision Complete! Shapes: {shape_count}, Sport glasses: {sport_count} (out of {len(image_dict)} images)")
+                st.success(
+                    f"👓 AI Vision Complete! Shapes: {ai.shape_count}, "
+                    f"Sport glasses: {ai.sport_count} (out of {ai.image_count} images)"
+                )
 
             # --- VALIDATION REPORT ---
-            if unmapped_tracker or missing_tracker:
-                total_issues = sum(missing_tracker.values()) + sum(len(v) for v in unmapped_tracker.values())
-                st.warning(f"⚠️ **Validation Report:** {total_issues} potential issues found")
-                if unmapped_tracker:
-                    with st.expander(f"🔴 Unmapped values ({len(unmapped_tracker)} columns)"):
-                        for col, vals in sorted(unmapped_tracker.items()):
+            if report.unmapped or report.missing:
+                st.warning(f"⚠️ **Validation Report:** {report.total_issues} potential issues found")
+                if report.unmapped:
+                    with st.expander(f"🔴 Unmapped values ({len(report.unmapped)} columns)"):
+                        for col, vals in sorted(report.unmapped.items()):
                             st.write(f"**{col}:** {len(vals)} unmapped value(s)")
                             for v in sorted(vals):
                                 st.caption(f"  → `{v}`")
-                if missing_tracker:
-                    with st.expander(f"🟡 Missing from source ({len(missing_tracker)} columns)"):
-                        for col, count in sorted(missing_tracker.items(), key=lambda x: -x[1]):
+                if report.missing:
+                    with st.expander(f"🟡 Missing from source ({len(report.missing)} columns)"):
+                        for col, count in sorted(report.missing.items(), key=lambda x: -x[1]):
                             st.write(f"**{col}:** {count} row(s) with no data")
 
-            if found_sport_glasses:
+            if report.found_sport_glasses:
                 st.warning("⚠️ **Heads Up:** We found 'Sport glasses' in this batch and labeled them as 'Ski goggles' in the Meta Description. Double check them!")
-                
-            if found_polarized_clip_on:
+
+            if report.found_polarized_clip_on:
                 st.warning("⚠️ **Polarized Clip-On Alert:** We found a Marcolin/Kering clip-on that is marked as polarized, but it was assigned standard 'Sun clip-on' or 'Magnetic sun clip-on'. Verify if it needs the ' p' suffix!")
 
             st.write("### 📊 Before / After Comparison")
             preview_tab1, preview_tab2, preview_tab3 = st.tabs(["🔄 Changes Only", "📥 Original", "📤 Filled"])
             with preview_tab1:
-                # Show only columns that changed
-                changed_cols = []
-                for col in target_df.columns:
-                    if col in original_df.columns:
-                        if not target_df[col].equals(original_df[col]):
-                            changed_cols.append(col)
-                    else:
-                        changed_cols.append(col)
+                changed_cols = changed_columns(original_df, target_df)
                 if changed_cols:
                     id_col = "Glasses name" if "Glasses name" in target_df.columns else target_df.columns[0]
                     display_cols = [id_col] + [c for c in changed_cols if c != id_col]
@@ -750,8 +297,7 @@ if uploaded_file:
                 st.dataframe(target_df.head(20), use_container_width=True)
 
             output = BytesIO()
-            with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                target_df.to_excel(writer, index=False, sheet_name="Filled_Data")
+            write_filled_excel(target_df, output)
             processed_data = output.getvalue()
 
             st.download_button(
