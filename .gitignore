@@ -1,1 +1,8 @@
 .streamlit/secrets.toml
+
+# Desktop app
+desktop/defaults.py
+build/
+dist/
+*.spec.bak
+__pycache__/

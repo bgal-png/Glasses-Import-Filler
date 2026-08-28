@@ -156,6 +156,67 @@ def write_filled_excel(df: pd.DataFrame, path_or_buffer, sheet_name: str = "Fill
         df.to_excel(writer, index=False, sheet_name=sheet_name)
 
 
+def write_onto_source_workbook(source_path: str, df: pd.DataFrame, out_path: str) -> dict:
+    """Write the filled values back into a COPY of the user's own workbook.
+
+    Preferred over re-creating the sheet: it leaves row 1 exactly as it was, so
+    the header row keeps its colours, fonts and row height, and columns keep
+    their widths and number formats (barcodes stay text). Columns are matched by
+    header name — never by position — using the same header normalisation as
+    read_target_file. Columns present in `df` but not in the workbook are
+    appended after the last existing column.
+
+    Returns {"written": n_cells, "new_columns": [...], "sheet": name}.
+    """
+    from openpyxl import load_workbook
+
+    wb = load_workbook(source_path)
+    ws = wb.active
+
+    def _norm(v):
+        return re.sub(r"\s+", " ", str(v if v is not None else "").replace("\n", " ")).strip()
+
+    # header text -> worksheet column index (1-based)
+    header_to_col = {}
+    max_col = ws.max_column
+    for c in range(1, max_col + 1):
+        name = _norm(ws.cell(row=1, column=c).value)
+        if name and name not in header_to_col:
+            header_to_col[name] = c
+
+    new_columns = []
+    next_col = max_col + 1
+    for col in df.columns:
+        if _norm(col) not in header_to_col:
+            ws.cell(row=1, column=next_col).value = str(col)
+            header_to_col[_norm(col)] = next_col
+            new_columns.append(str(col))
+            next_col += 1
+
+    written = 0
+    for r_offset, (_idx, row) in enumerate(df.iterrows()):
+        excel_row = r_offset + 2  # row 1 is the header
+        for col in df.columns:
+            c = header_to_col.get(_norm(col))
+            if not c:
+                continue
+            val = row[col]
+            if val is None or (isinstance(val, float) and pd.isna(val)):
+                text = ""
+            else:
+                text = str(val)
+                if text == "nan":
+                    text = ""
+            cell = ws.cell(row=excel_row, column=c)
+            if cell.value is None and text == "":
+                continue  # don't dirty untouched empty cells
+            cell.value = text
+            written += 1
+
+    wb.save(out_path)
+    return {"written": written, "new_columns": new_columns, "sheet": ws.title}
+
+
 # ==========================================================================
 # THE AUTO-FILLER ENGINE
 # ==========================================================================

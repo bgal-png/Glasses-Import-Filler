@@ -1,0 +1,69 @@
+name: Publish catalogue snapshot
+
+# Exports the catalogue tables to parquet and pushes them to the PRIVATE data
+# repo that the desktop app reads. Runs:
+#   - automatically after a Safilo or Luxottica auto-ingest completes
+#   - manually from the Actions tab (after a manual admin upload)
+#   - daily at 06:45 UTC as a safety net (after both ingest crons)
+#
+# Required secrets:
+#   DB_URL                  same value as the admin app
+#   SNAPSHOT_REPO           e.g. bgal-png/Glasses-Filler-Data   (private)
+#   SNAPSHOT_TOKEN          PAT with Contents:write on that repo only
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Safilo Drive ingest", "Luxottica Drive ingest"]
+    types: [completed]
+  schedule:
+    - cron: "45 6 * * *"
+
+concurrency:
+  group: publish-snapshot
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+    steps:
+      - name: Checkout code repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install pandas SQLAlchemy psycopg2-binary
+
+      - name: Export snapshot
+        env:
+          DB_URL: ${{ secrets.DB_URL }}
+        run: python scripts/export_snapshot.py --out snapshot
+
+      - name: Checkout private data repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.SNAPSHOT_REPO }}
+          token: ${{ secrets.SNAPSHOT_TOKEN }}
+          path: data-repo
+
+      - name: Commit snapshot to data repo
+        run: |
+          cp snapshot/*.csv.gz snapshot/manifest.json data-repo/
+          cd data-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Snapshot unchanged — nothing to commit."
+          else
+            git commit -m "Catalogue snapshot $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push
+            echo "Snapshot published."
+          fi
