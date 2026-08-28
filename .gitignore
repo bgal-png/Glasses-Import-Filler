@@ -6,3 +6,4 @@ build/
 dist/
 *.spec.bak
 __pycache__/
+build_log.txt
