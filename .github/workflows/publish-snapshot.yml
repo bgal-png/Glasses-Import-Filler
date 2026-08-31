@@ -1,6 +1,6 @@
 name: Publish catalogue snapshot
 
-# Exports the catalogue tables to parquet and pushes them to the PRIVATE data
+# Exports the catalogue tables to gzipped CSV and pushes them to the PRIVATE data
 # repo that the desktop app reads. Runs:
 #   - automatically after a Safilo or Luxottica auto-ingest completes
 #   - manually from the Actions tab (after a manual admin upload)
