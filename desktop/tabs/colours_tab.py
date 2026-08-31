@@ -12,8 +12,9 @@ import os
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QFileDialog, QFrame, QGridLayout, QGroupBox, QLabel,
-    QListWidget, QMessageBox, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFrame,
+    QGridLayout, QGroupBox, QLabel, QListWidget, QMessageBox, QPlainTextEdit,
+    QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 import admin_core
@@ -107,6 +108,7 @@ class ColoursTab(BaseTab):
         self.assignments = {}
         self.page = 0
         self.photo_dir = ""
+        self.photo_names = {}
         self._cards = []
         self._worker = None
         self._panel = None
@@ -173,6 +175,9 @@ class ColoursTab(BaseTab):
         self.unmatched_label.setWordWrap(True)
         self.unmatched_label.setStyleSheet("color: #888; font-size: 11px;")
         nv.addWidget(self.unmatched_label)
+        b_why = QPushButton("🔎 Why didn't these match?")
+        b_why.clicked.connect(self._show_unmatched)
+        nv.addWidget(b_why)
         v.addWidget(nav)
 
         b_save = QPushButton("💾 Save colours to database")
@@ -235,6 +240,7 @@ class ColoursTab(BaseTab):
             QMessageBox.information(self, "No photos", "Select a folder with product photos first.")
             return
 
+        self.photo_names = photos
         producers = [self.scope.item(i).text().lower()
                      for i in range(self.scope.count())
                      if self.scope.item(i).isSelected()] or None
@@ -316,6 +322,62 @@ class ColoursTab(BaseTab):
                 card.gradient.setChecked(True)
             self.grid.addWidget(card, i // cols, i % cols)
             self._cards.append(card)
+
+    def _show_unmatched(self) -> None:
+        """Explain the misses instead of just counting them: show what we looked
+        for next to what the filenames actually are, so the pattern is obvious."""
+        if not self.worklist:
+            QMessageBox.information(self, "Nothing to explain", "Build a worklist first.")
+            return
+        if not self.unmatched:
+            QMessageBox.information(
+                self, "Everything matched",
+                f"All {len(self.matched)} group(s) found a photo.",
+            )
+            return
+
+        lines = [
+            f"{len(self.unmatched)} of {len(self.worklist)} group(s) found no photo, "
+            f"out of {len(self.photo_names)} image(s) in the folder.",
+            "",
+            "A filename matches when it contains the model code AND either the "
+            "colour code or size+colour (ignoring spaces, dashes, underscores "
+            "and letter case).",
+            "",
+            "LOOKED FOR (first 25 unmatched groups)",
+            f"{'model':<20} {'colour':<10} {'or size+colour':<16} brand",
+        ]
+        for g in self.unmatched[:25]:
+            lines.append(
+                f"{g['_model_n']:<20} {g['_colour_n']:<10} "
+                f"{admin_core.norm_key(g.get('size', '')) + g['_colour_n']:<16} {g['brand']}"
+            )
+        if len(self.unmatched) > 25:
+            lines.append(f"… and {len(self.unmatched) - 25} more")
+
+        lines += ["", "ACTUAL FILENAMES (first 25 in the folder)"]
+        for base in sorted(self.photo_names.values())[:25]:
+            lines.append(f"{base}    ->  normalised: {admin_core.norm_key(base)}")
+        if len(self.photo_names) > 25:
+            lines.append(f"… and {len(self.photo_names) - 25} more")
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Why photos didn't match")
+        dlg.resize(920, 620)
+        v = QVBoxLayout(dlg)
+        box = QPlainTextEdit(chr(10).join(lines))
+        box.setReadOnly(True)
+        f = box.font()
+        f.setFamily("Consolas")
+        box.setFont(f)
+        v.addWidget(box)
+        v.addWidget(QLabel(
+            "Copy this and send it over — it's enough to widen the matcher."
+        ))
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.rejected.connect(dlg.reject)
+        v.addWidget(buttons)
+        dlg.exec()
 
     def _collect(self) -> None:
         for card in self._cards:
