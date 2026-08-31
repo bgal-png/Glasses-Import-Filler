@@ -148,6 +148,71 @@ def apply_renames(engine, name_by_barcode: dict, progress: ProgressFn = None) ->
 
 
 # ==========================================================================
+# Single-row lookup and edit
+# ==========================================================================
+
+def fetch_row(engine, barcode: str):
+    """One master_catalog row as a Series, or None. Targeted query — never
+    pulls the whole table."""
+    from sqlalchemy import text
+
+    key = clean_barcode(barcode)
+    if not key or key == "nan":
+        return None
+    df = pd.read_sql(
+        text('SELECT * FROM master_catalog WHERE join_key = :k LIMIT 1'),
+        con=engine, params={"k": key},
+    )
+    return None if df.empty else df.iloc[0]
+
+
+def update_row(engine, barcode: str, changes: dict, progress: ProgressFn = None) -> dict:
+    """Write only the changed cells of one row.
+
+    A targeted UPDATE, deliberately: the Streamlit version reads the entire
+    table and rewrites it with to_sql(if_exists="replace") to change a single
+    cell, which rewrites 100k+ rows and briefly drops the table.
+
+    Column names are whitelisted against the live table before being
+    interpolated, since an identifier can't be a bound parameter.
+    """
+    from sqlalchemy import text
+
+    key = clean_barcode(barcode)
+    if not key:
+        raise ValueError("No barcode given.")
+    changes = {k: v for k, v in (changes or {}).items() if k != "join_key"}
+    if not changes:
+        return {"updated": 0, "columns": []}
+
+    _tick(progress, 0.2, "Checking the row…")
+    existing = pd.read_sql(
+        text('SELECT * FROM master_catalog WHERE join_key = :k LIMIT 1'),
+        con=engine, params={"k": key},
+    )
+    if existing.empty:
+        raise ValueError(f"Barcode {barcode} is not in the catalogue.")
+
+    valid = set(existing.columns)
+    unknown = [c for c in changes if c not in valid]
+    if unknown:
+        raise ValueError(f"Unknown column(s): {', '.join(sorted(unknown))}")
+
+    assignments = ", ".join(f'"{c}" = :v{i}' for i, c in enumerate(changes))
+    params = {f"v{i}": ("" if v is None else str(v)) for i, v in enumerate(changes.values())}
+    params["k"] = key
+
+    _tick(progress, 0.6, f"Updating {len(changes)} field(s)…")
+    with engine.begin() as conn:
+        conn.execute(
+            text(f'UPDATE master_catalog SET {assignments} WHERE join_key = :k'),
+            params,
+        )
+    _tick(progress, 1.0, "Done.")
+    return {"updated": len(changes), "columns": sorted(changes)}
+
+
+# ==========================================================================
 # Created-items registry
 # ==========================================================================
 

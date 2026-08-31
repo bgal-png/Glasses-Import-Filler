@@ -8,7 +8,7 @@ self-update.
 
 APP_NAME = "Glasses Filler"
 ORG_NAME = "Alensa"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 # Repo that hosts the .exe releases (public code repo).
 RELEASE_REPO = "bgal-png/Glasses-Import-Filler"

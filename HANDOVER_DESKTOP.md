@@ -1,13 +1,13 @@
 # Desktop app — status
 
-Last updated 2026-08-31. **v1.0.0 released.**
+Last updated 2026-08-31. **v1.1.0** (v1.0.0 released; 1.1.0 adds the single-barcode lookup & editor that the Streamlit admin had).
 
 ## Working and verified in real use
 
 | Piece | State |
 |---|---|
 | 🪄 Auto-Filler | ✅ open → fill → save; output keeps its formatting |
-| 🔍 Barcode Checker | ✅ file or pasted list |
+| 🔍 Barcode Checker | ✅ list check (file/paste) + single-barcode lookup & field editor |
 | Snapshot data layer | ✅ live; second launch is instant from local cache |
 | `filler_core.py` / `admin_core.py` | ✅ UI-free, unit-tested without a DB |
 | `.exe` build | ✅ 85 MB, icon, released as `desktop-v1.0.0` |
