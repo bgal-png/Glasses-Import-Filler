@@ -19,8 +19,9 @@ a = Analysis(
     [os.path.join(DESKTOP, "main.py")],
     pathex=[DESKTOP, ROOT],   # desktop modules + repo-root shared logic
     binaries=[],
-    datas=[],                 # nothing bundled: the filler writes onto the
-                              # user's own workbook, so there is no template
+    datas=[(os.path.join(DESKTOP, "app_icon.ico"), ".")],
+    # No template workbook is bundled: the filler writes onto a copy of the
+    # user's own workbook, so its styling is preserved.
     hiddenimports=[
         # Imported lazily inside functions, so PyInstaller can't see them.
         "sqlalchemy.dialects.postgresql",
@@ -57,4 +58,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=os.path.join(DESKTOP, "app_icon.ico"),
 )

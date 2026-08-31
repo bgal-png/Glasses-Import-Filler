@@ -21,13 +21,14 @@ for _p in (_HERE, _ROOT):
 # ---------------------------------------------------------------------------
 
 from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtGui import QAction, QKeySequence  # noqa: E402
+from PySide6.QtGui import QAction, QIcon, QKeySequence  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QApplication, QDockWidget, QLabel, QMainWindow, QMessageBox, QProgressBar,
     QTabWidget, QVBoxLayout, QWidget,
 )
 
 import data_source  # noqa: E402
+from app_paths import resource_path  # noqa: E402
 import theme  # noqa: E402
 import updater  # noqa: E402
 from settings import Settings  # noqa: E402
@@ -377,6 +378,10 @@ def main() -> int:
     app.setApplicationName(APP_NAME)
     app.setOrganizationName(ORG_NAME)
     app.setApplicationVersion(__version__)
+
+    icon_path = resource_path("app_icon.ico")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
 
     settings = Settings()
     theme.apply_theme(app, settings.dark_mode)
