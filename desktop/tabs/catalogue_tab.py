@@ -175,6 +175,9 @@ class CatalogueTab(BaseTab):
             self.tree.addTopLevelItem(root)
         self.tree.expandToDepth(0)
         self.status_message.emit(result["message"])
+        note = self.snapshot_note()
+        if note:
+            QMessageBox.information(self, "Merged", result["message"] + note)
 
     def _on_failed(self, message: str) -> None:
         self.busy.emit(False)
@@ -209,7 +212,7 @@ class CatalogueTab(BaseTab):
             self.confirm.clear()
             msg = f"Deleted {res['deleted']:,} {mfg.title()} row(s). {res['remaining']:,} remain."
             self.status_message.emit(msg)
-            QMessageBox.information(self, "Deleted", msg)
+            QMessageBox.information(self, "Deleted", msg + self.snapshot_note())
 
         self._worker.done.connect(done)
         self._worker.failed.connect(self._on_failed)

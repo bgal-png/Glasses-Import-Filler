@@ -164,8 +164,8 @@ class RenameTab(BaseTab):
         else:
             self.note.setText("Every barcode was found.")
         msg = f"Renamed {res['updated']} row(s)."
-        self.status_message.emit(msg + " Use ☁️ Refresh data to see it in the filler.")
-        QMessageBox.information(self, "Done", msg)
+        self.status_message.emit(msg)
+        QMessageBox.information(self, "Done", msg + self.snapshot_note())
 
     def _on_failed(self, message: str) -> None:
         self.busy.emit(False)

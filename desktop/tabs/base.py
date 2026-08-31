@@ -10,6 +10,8 @@ from __future__ import annotations
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QWidget
 
+NEWLINES = chr(10) * 2
+
 
 class BaseTab(QWidget):
     TITLE = "Tab"
@@ -48,6 +50,19 @@ class BaseTab(QWidget):
 
     def save_action(self) -> None:
         pass
+
+    # --- snapshot staleness ---
+    def snapshot_note(self) -> str:
+        """A DB write is invisible to the filler until the snapshot is
+        republished, so say so. Empty when reading the database directly."""
+        if getattr(self.settings, "snapshot_repo", ""):
+            return (
+                NEWLINES + "Heads up: the filler reads the published snapshot, not the "
+                "database. Run the “Publish catalogue snapshot” Action on "
+                "GitHub (or wait for the daily 06:45 UTC run) for this change to "
+                "reach the filler and your colleagues."
+            )
+        return ""
 
     # --- unsaved-changes tracking ---
     def has_unsaved_changes(self) -> bool:
