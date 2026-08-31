@@ -7,3 +7,6 @@ dist/
 *.spec.bak
 __pycache__/
 build_log.txt
+updatetest/
+build_updatetest/
+build_test_log.txt
