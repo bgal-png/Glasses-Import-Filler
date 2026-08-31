@@ -1,6 +1,6 @@
 # Desktop app — status
 
-Last updated 2026-08-31.
+Last updated 2026-08-31. **v1.0.0 released.**
 
 ## Working and verified in real use
 
@@ -10,36 +10,38 @@ Last updated 2026-08-31.
 | 🔍 Barcode Checker | ✅ file or pasted list |
 | Snapshot data layer | ✅ live; second launch is instant from local cache |
 | `filler_core.py` / `admin_core.py` | ✅ UI-free, unit-tested without a DB |
-| `.exe` build | ✅ 85 MB, runs, all tabs build (throwaway build — not released) |
+| `.exe` build | ✅ 85 MB, icon, released as `desktop-v1.0.0` |
+| Self-update | ✅ updater reads the release; no false "update available" |
 
-## Written but never clicked through
-
-| Tab | Notes |
-|---|---|
-| 🏭 Catalogue | ingest + typed-confirmation delete. Writes to the live catalogue — try it on one manufacturer first. |
-| ✏️ Rename | barcode → name list |
-| 📒 Registry | store filled files, check barcodes against them |
+🏭 Catalogue · ✏️ Rename · 📒 Registry and the Streamlit filler were all
+reported working by the user on 2026-08-31.
 
 ## Still outstanding
 
-1. **One normal fill on the Streamlit filler.** `app_manufacturer.py` was rewritten
-   to call the extracted engine (commit `4c83ad1`). The engine is tested three
-   ways, but the web app hasn't been run since. `git revert 4c83ad1` restores the
-   old inline version if anything looks wrong.
-2. **Drive the three admin tabs by hand.**
-3. **Build + Release**, when you want a distributable .exe:
-   - bump `__version__` in `desktop/version.py`
-   - `"C:\gv\Scripts\pyinstaller.exe" desktop\GlassesFiller.spec`
-   - tag `desktop-v<x.y.z>`, create a GitHub Release, attach `GlassesFiller.exe`
-   - only then does in-app self-update work
-4. **`desktop/defaults.py`** before handing the .exe to colleagues, so they need no
-   setup. Gitignored — never commit a real token:
-   ```python
-   SNAPSHOT_REPO = "bgal-png/Glasses-Filler-Data"
-   SNAPSHOT_TOKEN = "github_pat_…"   # the READ-ONLY token
-   ```
-   Colleagues then get Auto-Filler + Barcode Checker only, with no database
+Nothing required for your own use — it's done and released.
+
+**Only when you hand it to a colleague:**
+1. Send them `GlassesFiller.exe` (or the Release link).
+2. On their machine, open it once → ⚙️ Settings → paste the **snapshot repo** and
+   the **read-only token** → Save. ~30 seconds, once.
+3. They see only 🪄 Auto-Filler and 🔍 Barcode Checker, with no database
    credentials anywhere.
+
+Deliberately **not** baking those into the build via `defaults.py`: a build with
+the token in it must never be attached to a public Release, and distributing it
+privately instead would break self-update. Token-free builds stay publishable
+and auto-updating.
+
+## Shipping an update
+
+```
+# 1. edit desktop/version.py   __version__ = "1.0.1"
+"C:\gv\Scripts\pyinstaller.exe" desktop\GlassesFiller.spec
+# 2. tag desktop-v1.0.1, new GitHub Release, attach dist\GlassesFiller.exe
+```
+
+Every installed copy checks on launch and offers it. The updater only looks at
+tags starting `desktop-v`, and swaps the .exe via a .bat that waits for exit.
 
 ## How the data flows
 
