@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Pure (UI-free) admin operations: catalogue ingest, colour filling, renaming,
-the created-items registry and the danger-zone delete.
+Pure (UI-free) admin operations: catalogue ingest, renaming, the created-items
+registry and the danger-zone delete.
 
 No Streamlit, no Qt — the desktop admin tabs and (optionally) the Streamlit
 admin app both drive these. Every write goes through here so the behaviour
@@ -14,7 +14,7 @@ from typing import Callable, Optional
 
 import pandas as pd
 
-from dictionaries import BRAND_GLASSES_CONTAIN, MANUFACTURER_CONFIG  # noqa: F401
+from dictionaries import MANUFACTURER_CONFIG
 from ingest import load_single_catalog, perform_upsert, record_ingest
 
 ProgressFn = Optional[Callable[[float, str], None]]
@@ -145,173 +145,6 @@ def apply_renames(engine, name_by_barcode: dict, progress: ProgressFn = None) ->
     full.to_sql("master_catalog", con=engine, if_exists="replace", index=False)
     _tick(progress, 1.0, "Done.")
     return {"updated": int(mask.sum()), "not_found": not_found}
-
-
-# ==========================================================================
-# Colours from photos
-# ==========================================================================
-
-COLOUR_FIELDS = [
-    # (master_catalog column, label, palette, applies-when)
-    ("Frame_Colour", "Frame colour", "frame", "any"),
-    ("Temple_Colour", "Temple colour", "frame", "any"),
-    ("Glasses_lens_Colour", "Lens colour", "lens", "sunglasses"),
-    ("Clip_on_lens_colour", "Clip-on lens colour", "lens", "clip"),
-]
-GRADIENT_MARKER = "__gradient__"
-
-
-def _blank(v) -> bool:
-    return v is None or (isinstance(v, float) and pd.isna(v)) or str(v).strip() in ("", "nan")
-
-
-def norm_key(s) -> str:
-    """Alphanumeric-only uppercase, for matching filenames against codes."""
-    return re.sub(r"[^A-Za-z0-9]", "", str(s or "")).upper()
-
-
-def build_colour_worklist(master_db: pd.DataFrame, producers: list | None = None) -> list:
-    """Group rows by (model, colour code) and list which colour fields are
-    missing. Colour is shared across sizes, so one decision fills every
-    barcode in the group. Pure — no DB, no photos.
-    """
-    if master_db is None or master_db.empty:
-        return []
-    df = master_db
-    if df.index.name == "join_key":
-        df = df.reset_index()
-    if producers and "Producing_company" in df.columns:
-        wanted = {str(p).strip().lower() for p in producers}
-        df = df[df["Producing_company"].astype(str).str.strip().str.lower().isin(wanted)]
-
-    groups = {}
-    for _, row in df.iterrows():
-        model = str(row.get("Extracted_Model", "")).strip()
-        colour = str(row.get("Glasses_color_code", "")).strip()
-        if not model or model.lower() == "nan":
-            continue
-        g_type = str(row.get("Glasses_type", "")).strip()
-        has_clip = not _blank(row.get("Extracted_Clip_on", ""))
-
-        missing = []
-        for col, _label, _palette, cond in COLOUR_FIELDS:
-            if not _blank(row.get(col, "")):
-                continue
-            if cond == "sunglasses" and "Sunglasses" not in g_type:
-                continue
-            if cond == "clip" and not has_clip:
-                continue
-            missing.append(col)
-
-        lens_effect = str(row.get("Glasses_lens_effect", "")).strip()
-        can_gradient = ("Sunglasses" in g_type) and ("gradient" not in lens_effect.lower())
-        if not missing and not can_gradient:
-            continue
-
-        key = (norm_key(model), norm_key(colour))
-        if key not in groups:
-            groups[key] = {
-                "key": f"{key[0]}|{key[1]}",
-                "brand": str(row.get("Brand", "")).strip(),
-                "model": model,
-                "colour_code": colour,
-                "size": str(row.get("Combination", "")).strip(),
-                "type": g_type,
-                "name": str(row.get("Assembled_Name", "")).strip(),
-                "barcodes": set(),
-                "missing": set(),
-                "can_gradient": False,
-            }
-        groups[key]["barcodes"].add(str(row.get("join_key", "")).strip())
-        groups[key]["missing"].update(missing)
-        if can_gradient:
-            groups[key]["can_gradient"] = True
-
-    out = []
-    for (model_n, colour_n), g in groups.items():
-        g["barcodes"] = sorted(g["barcodes"])
-        g["missing"] = [c for c, _l, _p, _cd in COLOUR_FIELDS if c in g["missing"]]
-        g["_model_n"] = model_n
-        g["_colour_n"] = colour_n
-        out.append(g)
-    out.sort(key=lambda g: (g["brand"], g["model"], g["colour_code"]))
-    return out
-
-
-def match_photos(worklist: list, photo_names: dict) -> tuple:
-    """Attach a photo to each group.
-
-    `photo_names` maps an identifier (path or zip member) to its basename.
-    Matching is on model + colour code found anywhere in the normalised
-    filename, and also accepts the size+colour form because the stored colour
-    code has the size stripped off.
-
-    Returns (matched_groups, unmatched_groups).
-    """
-    index = [(norm_key(base), ident) for ident, base in photo_names.items()]
-    matched, unmatched = [], []
-    for g in worklist:
-        model_n = g["_model_n"]
-        colour_n = g["_colour_n"]
-        sizecolour_n = norm_key(g.get("size", "")) + colour_n
-        found = None
-        for norm_name, ident in index:
-            if not model_n or model_n not in norm_name:
-                continue
-            if (colour_n and colour_n in norm_name) or (sizecolour_n and sizecolour_n in norm_name):
-                found = ident
-                break
-        if found:
-            item = dict(g)
-            item["photo"] = found
-            matched.append(item)
-        else:
-            unmatched.append(g)
-    return matched, unmatched
-
-
-def save_colours(engine, assignments: dict, barcodes_by_group: dict,
-                 progress: ProgressFn = None) -> dict:
-    """Write chosen colours to every barcode in each group.
-
-    `assignments`: {group_key: {master_column: value, '__gradient__': True}}
-    """
-    if not assignments:
-        return {"cells": 0, "groups": 0}
-
-    _tick(progress, 0.2, "Loading master_catalog…")
-    full = pd.read_sql_table("master_catalog", con=engine)
-    full["join_key"] = full["join_key"].astype(str).str.strip()
-
-    def add_gradient(v):
-        parts = [p.strip() for p in str(v or "").split("|")
-                 if p.strip() and p.strip().lower() != "nan"]
-        if "Gradient" not in parts:
-            parts.append("Gradient")
-        return "|".join(sorted(set(parts)))
-
-    cells = 0
-    for gkey, fields in assignments.items():
-        barcodes = set(barcodes_by_group.get(gkey, []))
-        if not barcodes:
-            continue
-        mask = full["join_key"].isin(barcodes)
-        for field, value in fields.items():
-            if field == GRADIENT_MARKER:
-                if "Glasses_lens_effect" not in full.columns:
-                    full["Glasses_lens_effect"] = ""
-                full.loc[mask, "Glasses_lens_effect"] = \
-                    full.loc[mask, "Glasses_lens_effect"].apply(add_gradient)
-            else:
-                if field not in full.columns:
-                    full[field] = ""
-                full.loc[mask, field] = value
-            cells += int(mask.sum())
-
-    _tick(progress, 0.8, "Writing back…")
-    full.to_sql("master_catalog", con=engine, if_exists="replace", index=False)
-    _tick(progress, 1.0, "Done.")
-    return {"cells": cells, "groups": len(assignments)}
 
 
 # ==========================================================================

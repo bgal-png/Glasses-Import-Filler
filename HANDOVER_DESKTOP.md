@@ -13,8 +13,18 @@ Written Fri 2026-08-28. Everything below is committed and pushed to `main`.
 | `scripts/export_snapshot.py` + `publish-snapshot.yml` | ✅ written, **not yet run** |
 | `app_manufacturer.py` — now a thin UI over the core | ⚠️ **please sanity-check once** (see below) |
 
-Tabs: 🪄 Auto-Filler · 🔍 Barcode Checker · 🏭 Catalogue · 🎨 Colours · ✏️ Rename · 📒 Registry.
-The last four only appear when a `DB_URL` is set in Settings.
+Tabs: 🪄 Auto-Filler · 🔍 Barcode Checker · 🏭 Catalogue · ✏️ Rename · 📒 Registry.
+The last three only appear when a `DB_URL` is set in Settings.
+
+**Verified in real use (2026-08-31):** Auto-Filler end to end — opened a real
+target file, filled it, saved, and the output kept its formatting — plus the
+Barcode Checker. Catalogue / Rename / Registry are written and unit-tested but
+have not been driven by hand yet.
+
+**Removed:** the 🎨 Colours tab (fill missing colours from product photos). It
+was never used successfully in the web version either — the photo filenames
+never matched — and the underlying job turned out not to be needed, so the tab,
+its shared logic and the equivalent Streamlit section were all deleted.
 
 ## ⚠️ One thing to verify first
 
@@ -98,15 +108,9 @@ python test_admin_core.py
 
 ## Still to do (phase 3)
 
-1. **Run it for real** — everything so far is headless verification. The first
-   real launch will surface layout/UX things worth changing.
-2. **Release flow** — bump `desktop/version.py`, tag `desktop-v1.0.0`, attach
+1. **Drive the three admin tabs by hand** — Catalogue, Rename and Registry are
+   unit-tested but nobody has clicked through them yet.
+2. **Snapshot setup** (the section above) so startup stops re-downloading the
+   whole catalogue from Supabase on every launch.
+3. **Release flow** — bump `desktop/version.py`, tag `desktop-v1.0.0`, attach
    `GlassesFiller.exe` to a GitHub Release. Only then does self-update work.
-3. **Open question — the colour tool's photo matching.** It matches
-   model + colour code inside the filename, which handles the formats we tested.
-   You mentioned your real photo filenames vary and often don't match; when you
-   have a folder of the actual files, the "no matching photo" count on screen
-   will tell us how well it does, and I can widen the matcher (a name↔barcode
-   mapping upload is the fallback).
-4. **Optional:** ship a per-manufacturer thumbnail cache so the colour grid
-   scrolls instantly on large batches.

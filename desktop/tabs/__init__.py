@@ -9,7 +9,6 @@ from tabs.base import BaseTab
 from tabs.filler_tab import FillerTab
 from tabs.barcode_tab import BarcodeTab
 from tabs.catalogue_tab import CatalogueTab
-from tabs.colours_tab import ColoursTab
 from tabs.rename_tab import RenameTab
 from tabs.registry_tab import RegistryTab
 
@@ -17,12 +16,11 @@ ALL_TABS = [
     FillerTab,      # 🪄 read-only
     BarcodeTab,     # 🔍 read-only
     CatalogueTab,   # 🏭 admin
-    ColoursTab,     # 🎨 admin
     RenameTab,      # ✏️ admin
     RegistryTab,    # 📒 admin
 ]
 
 __all__ = [
-    "BaseTab", "FillerTab", "BarcodeTab", "CatalogueTab", "ColoursTab",
+    "BaseTab", "FillerTab", "BarcodeTab", "CatalogueTab",
     "RenameTab", "RegistryTab", "ALL_TABS",
 ]
