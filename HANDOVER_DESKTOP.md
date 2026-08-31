@@ -1,116 +1,86 @@
-# Desktop app — where we got to, and what's left for you
+# Desktop app — status
 
-Written Fri 2026-08-28. Everything below is committed and pushed to `main`.
+Last updated 2026-08-31.
 
-## What's done (code complete, tested)
+## Working and verified in real use
 
 | Piece | State |
 |---|---|
-| `filler_core.py` — the fill engine, extracted UI-free | ✅ tested end-to-end without a DB |
-| `admin_core.py` — every write operation, UI-free | ✅ unit-tested |
-| `desktop/` — PySide6 app, 5 tabs, dark mode, self-update | ✅ builds headless, all tabs wired |
-| `data_source.py` — ETag + pickle snapshot cache | ✅ 21 assertions passing |
-| `scripts/export_snapshot.py` + `publish-snapshot.yml` | ✅ written, **not yet run** |
-| `app_manufacturer.py` — now a thin UI over the core | ⚠️ **please sanity-check once** (see below) |
+| 🪄 Auto-Filler | ✅ open → fill → save; output keeps its formatting |
+| 🔍 Barcode Checker | ✅ file or pasted list |
+| Snapshot data layer | ✅ live; second launch is instant from local cache |
+| `filler_core.py` / `admin_core.py` | ✅ UI-free, unit-tested without a DB |
+| `.exe` build | ✅ 85 MB, runs, all tabs build (throwaway build — not released) |
 
-Tabs: 🪄 Auto-Filler · 🔍 Barcode Checker · 🏭 Catalogue · ✏️ Rename · 📒 Registry.
-The last three only appear when a `DB_URL` is set in Settings.
+## Written but never clicked through
 
-**Verified in real use (2026-08-31):** Auto-Filler end to end — opened a real
-target file, filled it, saved, and the output kept its formatting — plus the
-Barcode Checker. Catalogue / Rename / Registry are written and unit-tested but
-have not been driven by hand yet.
-
-**Removed:** the 🎨 Colours tab (fill missing colours from product photos). It
-was never used successfully in the web version either — the photo filenames
-never matched — and the underlying job turned out not to be needed, so the tab,
-its shared logic and the equivalent Streamlit section were all deleted.
-
-## ⚠️ One thing to verify first
-
-I rewrote `app_manufacturer.py` to call the extracted engine instead of holding
-the logic inline. The engine code was moved verbatim and I verified it fills
-correctly against a real 14,077-row catalogue, but **the web filler itself
-hasn't been run since**. Please do one normal fill on Streamlit Cloud and check
-the output looks the same as before. If anything's off, `git revert 4c83ad1`
-puts the old inline version back and nothing else breaks.
-
-## What I could not do (needs your GitHub account)
-
-### 1. Create the private data repo
-New **private** repo, e.g. `bgal-png/Glasses-Filler-Data`. Empty is fine.
-This is where the catalogue snapshot gets published. It must be private —
-`master_catalog` is supplier master data and this code repo is public.
-
-### 2. Two tokens (different scopes on purpose)
-
-**a) Write token — for the Action that publishes the snapshot**
-GitHub → Settings → Developer settings → Personal access tokens →
-Fine-grained tokens → Generate new token
-- Repository access: only `Glasses-Filler-Data`
-- Permissions: **Contents: Read and write**
-
-**b) Read-only token — for the desktop app**
-Same place, a second token
-- Repository access: only `Glasses-Filler-Data`
-- Permissions: **Contents: Read-only**
-
-This one goes into the .exe, so read-only matters: worst case a leak means
-someone can read the product snapshot, not touch the database.
-
-### 3. Three secrets on `Glasses-Import-Filler`
-Settings → Secrets and variables → Actions:
-
-| Secret | Value |
+| Tab | Notes |
 |---|---|
-| `SNAPSHOT_REPO` | `bgal-png/Glasses-Filler-Data` |
-| `SNAPSHOT_TOKEN` | the **write** token from 2a |
-| `DB_URL` | already there |
+| 🏭 Catalogue | ingest + typed-confirmation delete. Writes to the live catalogue — try it on one manufacturer first. |
+| ✏️ Rename | barcode → name list |
+| 📒 Registry | store filled files, check barcodes against them |
 
-### 4. Publish the first snapshot
-Actions → **Publish catalogue snapshot** → Run workflow.
-It then runs automatically after every Safilo/Luxottica auto-ingest and daily
-at 06:45 UTC. Check the data repo afterwards — it should contain
-`master_catalog.csv.gz`, `package_data.csv.gz`, `origin_data.csv.gz`,
-`ingest_log.csv.gz` and `manifest.json`.
+## Still outstanding
 
-### 5. Point the app at it
-Run the app, ⚙️ Settings:
-- Snapshot repo: `bgal-png/Glasses-Filler-Data`
-- Snapshot token: the **read-only** token from 2b
-- Database URL: your `DB_URL` — only on your machine, unlocks the admin tabs
-- Anthropic API key: optional, enables AI shape recognition
+1. **One normal fill on the Streamlit filler.** `app_manufacturer.py` was rewritten
+   to call the extracted engine (commit `4c83ad1`). The engine is tested three
+   ways, but the web app hasn't been run since. `git revert 4c83ad1` restores the
+   old inline version if anything looks wrong.
+2. **Drive the three admin tabs by hand.**
+3. **Build + Release**, when you want a distributable .exe:
+   - bump `__version__` in `desktop/version.py`
+   - `"C:\gv\Scripts\pyinstaller.exe" desktop\GlassesFiller.spec`
+   - tag `desktop-v<x.y.z>`, create a GitHub Release, attach `GlassesFiller.exe`
+   - only then does in-app self-update work
+4. **`desktop/defaults.py`** before handing the .exe to colleagues, so they need no
+   setup. Gitignored — never commit a real token:
+   ```python
+   SNAPSHOT_REPO = "bgal-png/Glasses-Filler-Data"
+   SNAPSHOT_TOKEN = "github_pat_…"   # the READ-ONLY token
+   ```
+   Colleagues then get Auto-Filler + Barcode Checker only, with no database
+   credentials anywhere.
 
-To bake the read-only snapshot settings into builds for colleagues, create
-`desktop/defaults.py` (gitignored):
+## How the data flows
 
-```python
-SNAPSHOT_REPO = "bgal-png/Glasses-Filler-Data"
-SNAPSHOT_TOKEN = "github_pat_…"   # the READ-ONLY one
+```
+catalogue file ─► ingest (rules engine) ─► Supabase master_catalog
+                                                  │
+                        publish-snapshot Action ───┘   (after every auto-ingest,
+                                 │                      daily 06:45 UTC, or manual)
+                                 ▼
+                  private repo  bgal-png/Glasses-Filler-Data
+                        master_catalog.csv.gz + 3 more + manifest.json
+                                 │  ETag conditional request
+                                 ▼
+                  desktop app ── %LOCALAPPDATA%\GlassesFiller  (parsed pickle cache)
 ```
 
-Then colleagues get a working app with no setup, and no admin tabs.
+Unchanged data downloads nothing and parses nothing. Offline falls back to the
+cached copy and says so in the status bar.
 
-## Running and building
+**Consequence to remember:** the filler reads the *snapshot*, not the database.
+After a **manual** admin write the app now reminds you to re-run
+*Publish catalogue snapshot*; automatic ingests trigger it themselves.
+
+## Credentials
+
+| Setting | Where it lives | Grants |
+|---|---|---|
+| `SNAPSHOT_TOKEN` (write) | GitHub Actions secret | push snapshots to the data repo |
+| snapshot read-only token | app Settings / `defaults.py` | read the snapshot |
+| `DB_URL` | app Settings, your machine only | read/write the live database; unlocks the admin tabs |
+| Anthropic key | app Settings, optional | AI shape recognition |
+
+## Commands
 
 ```
 "C:\gv\Scripts\python.exe" desktop\main.py
 "C:\gv\Scripts\pyinstaller.exe" desktop\GlassesFiller.spec
-```
 
-Tests:
-```
 "C:\gv\Scripts\python.exe" desktop\main.py --selftest --force-admin
 "C:\gv\Scripts\python.exe" desktop\test_data_source.py
+"C:\gv\Scripts\python.exe" desktop\test_integration.py
 python test_filler_core.py
 python test_admin_core.py
 ```
-
-## Still to do (phase 3)
-
-1. **Drive the three admin tabs by hand** — Catalogue, Rename and Registry are
-   unit-tested but nobody has clicked through them yet.
-2. **Snapshot setup** (the section above) so startup stops re-downloading the
-   whole catalogue from Supabase on every launch.
-3. **Release flow** — bump `desktop/version.py`, tag `desktop-v1.0.0`, attach
-   `GlassesFiller.exe` to a GitHub Release. Only then does self-update work.
