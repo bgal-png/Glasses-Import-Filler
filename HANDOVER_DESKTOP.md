@@ -7,8 +7,8 @@ Written Fri 2026-08-28. Everything below is committed and pushed to `main`.
 | Piece | State |
 |---|---|
 | `filler_core.py` — the fill engine, extracted UI-free | ✅ tested end-to-end without a DB |
-| `admin_core.py` — every write operation, UI-free | ✅ 25 assertions passing |
-| `desktop/` — PySide6 app, 6 tabs, dark mode, self-update | ✅ builds headless, all tabs wired |
+| `admin_core.py` — every write operation, UI-free | ✅ unit-tested |
+| `desktop/` — PySide6 app, 5 tabs, dark mode, self-update | ✅ builds headless, all tabs wired |
 | `data_source.py` — ETag + pickle snapshot cache | ✅ 21 assertions passing |
 | `scripts/export_snapshot.py` + `publish-snapshot.yml` | ✅ written, **not yet run** |
 | `app_manufacturer.py` — now a thin UI over the core | ⚠️ **please sanity-check once** (see below) |
