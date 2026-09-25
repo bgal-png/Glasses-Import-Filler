@@ -37,7 +37,6 @@ from datetime import datetime, timezone
 
 import pandas as pd
 from sqlalchemy import create_engine
-import db_url as db_url_tools
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -46,6 +45,7 @@ from googleapiclient.http import MediaIoBaseDownload
 # Local imports
 _sys_path_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _sys_path_root)
+import db_url as db_url_tools  # noqa: E402
 from dictionaries import MANUFACTURER_CONFIG  # noqa: E402
 from ingest import load_single_catalog, perform_upsert, record_ingest  # noqa: E402
 
