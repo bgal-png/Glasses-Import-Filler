@@ -244,10 +244,12 @@ def load_catalogue(settings, progress: ProgressFn = None, force_refresh: bool = 
 
 def _load_from_database(db_url: str, progress: ProgressFn = None) -> CatalogueData:
     from sqlalchemy import create_engine
+    import db_url as db_url_tools
 
     _tick(progress, 0.05, "Connecting to the database…")
     out = CatalogueData(source="database")
-    engine = create_engine(db_url, pool_pre_ping=True, pool_recycle=300)
+    engine = create_engine(db_url_tools.normalise(db_url),
+                           pool_pre_ping=True, pool_recycle=300)
 
     _tick(progress, 0.2, "Loading master catalogue…")
     try:

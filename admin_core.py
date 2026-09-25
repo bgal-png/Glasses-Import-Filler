@@ -33,7 +33,9 @@ _ENGINES: dict = {}
 
 def make_engine(db_url: str):
     from sqlalchemy import create_engine
-    return create_engine(db_url, pool_pre_ping=True, pool_recycle=300)
+    import db_url as db_url_tools
+    return create_engine(db_url_tools.normalise(db_url),
+                         pool_pre_ping=True, pool_recycle=300)
 
 
 def get_engine(db_url: str):

@@ -37,6 +37,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 from sqlalchemy import create_engine
+import db_url as db_url_tools
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -141,7 +142,10 @@ def main(mfg: str) -> int:
     for f in files:
         _log(f"  - {f['name']} ({f.get('size', '?')} bytes, id={f['id']})")
 
-    engine = create_engine(db_url, pool_pre_ping=True, pool_recycle=300)
+    for w in db_url_tools.warnings(db_url):
+        _log(f"NOTE: {w}")
+    engine = create_engine(db_url_tools.normalise(db_url),
+                           pool_pre_ping=True, pool_recycle=300)
     config = MANUFACTURER_CONFIG[mfg]
 
     failures = []

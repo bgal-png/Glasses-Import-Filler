@@ -33,6 +33,9 @@ from datetime import datetime, timezone
 import pandas as pd
 from sqlalchemy import create_engine
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import db_url as db_url_tools  # noqa: E402
+
 # Tables the desktop app needs. master_catalog is the big one; the rest are tiny.
 TABLES = ["master_catalog", "package_data", "origin_data", "ingest_log"]
 
@@ -48,6 +51,10 @@ def main() -> int:
     if not db_url:
         print("FATAL: DB_URL environment variable is not set.", file=sys.stderr)
         return 2
+
+    for w in db_url_tools.warnings(db_url):
+        print(f"NOTE: {w}", file=sys.stderr)
+    db_url = db_url_tools.normalise(db_url)
 
     os.makedirs(args.out, exist_ok=True)
     engine = create_engine(db_url, pool_pre_ping=True)

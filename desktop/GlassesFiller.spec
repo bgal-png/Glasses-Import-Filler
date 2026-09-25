@@ -26,6 +26,7 @@ a = Analysis(
         # Imported lazily inside functions, so PyInstaller can't see them.
         "sqlalchemy.dialects.postgresql",
         "psycopg2",
+        "db_url",
         "anthropic",
         "openpyxl.cell._writer",
     ],
