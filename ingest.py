@@ -73,6 +73,7 @@ _MARCOLIN_MATERIAL_MAP = {
     "TITANIUM": "Titanium",
     "ALUMINUM": "Metal",
     "NYLON": "Plastic",
+    "VARNISHED METAL": "Metal",
 }
 
 _MARCOLIN_LENS_MATERIAL_MAP = {
@@ -329,6 +330,234 @@ def _load_marcolin_new(df):
 
         # ---- Assembled name ----
         name_parts = [p for p in (brand, style, color_code) if p and p.lower() != "nan"]
+        out["Assembled_Name"] = " ".join(name_parts)
+
+        out["Producing_company"] = "Marcolin"
+        rows.append(out)
+
+    result_df = pd.DataFrame(rows)
+    return result_df, unmapped, skipped
+
+
+# ==========================================================================
+# MARCOLIN - "MATERIAL INFO" export (a 3rd Marcolin format)
+# ==========================================================================
+# Same house as _load_marcolin_new but a completely different vocabulary:
+# FORM DESCRIPTION instead of SHAPE, RIM DESCRIPTION instead of TYPOLOGY,
+# EAN/UPC CODE instead of UPC, and the type encoded in CODE SUN/OPT rather
+# than MAIN MATERIAL. Brand arrives as a two-letter code.
+#
+# Two things this file does NOT carry, so they are deliberately NOT output -
+# the barcode upsert must not blank richer values already held for the same
+# item (same reasoning as _load_safilo_catalog):
+#   * Temple_Colour         - there is one combined COLOR DESCRIPTION
+#   * Glasses_lens_material - LENSES DESCRIPTION is the effect and LENS BASE
+#                             the curvature; neither is a material
+#
+# The brand codes were decoded by joining 2,739 of this file's barcodes against
+# master_catalog rather than guessed, and follow the house rule that sub-brands
+# collapse to the parent (Guess Jeans -> Guess, adidas Sport -> Adidas).
+_MARCOLIN_MI_BRAND_MAP = {
+    "GU": "Guess",
+    "GJ": "Guess",
+    "GM": "Guess",
+    "MM": "Max Mara",
+    "MO": "Max&Co.",
+    "OR": "Adidas",
+    "SP": "Adidas",
+}
+
+# CODE SUN/OPT: the first two digits carry the type (the legend ships in the
+# file itself, above the header row).
+_MARCOLIN_MI_TYPE_MAP = {
+    "00": "Frames",
+    "01": "Sunglasses",
+    "05": "Sunglasses",   # ski mask
+}
+
+
+def _marcolin_mi_colours(raw, is_sun):
+    """Split COLOR DESCRIPTION into (frame_raw, lens_raw).
+
+    Sunglasses carry "<frame> / <lens>", and the frame half may itself contain
+    a slash ("gold/other / bordeaux"), so split on the LAST one. Optical frames
+    have no lens colour - their second half matched none of the colours we
+    store, checked against 383 overlapping rows - so there the whole string is
+    the frame colour.
+    """
+    s = str(raw or "").strip()
+    if not s or s.lower() == "nan":
+        return "", ""
+    if is_sun and "/" in s:
+        head, _, tail = s.rpartition("/")
+        return head.strip(), tail.strip()
+    return s, ""
+
+
+def _load_marcolin_mi(df):
+    unmapped = set()
+    skipped = set()
+    rows = []
+
+    for _, src in df.iterrows():
+        barcode = str(src.get("EAN/UPC CODE", "")).strip()
+        if not barcode or barcode.lower() == "nan":
+            continue
+        join_key = re.sub(r"\.0$", "", barcode).lstrip("0")
+        if not join_key or join_key == "nan":
+            continue
+
+        out = {"Barcode": barcode, "join_key": join_key}
+
+        # ---- Brand (two-letter code) ----
+        code = str(src.get("BRAND", "")).strip().upper()
+        brand = _MARCOLIN_MI_BRAND_MAP.get(code, "")
+        if not brand and code and code != "NAN":
+            unmapped.add(f"Marcolin(MI) -> Brand: '{code}'")
+            brand = code  # keep original, flag for review
+        out["Brand"] = brand
+        out["Manufacturer"] = brand
+
+        # ---- Type from CODE SUN/OPT ----
+        type_code = str(src.get("CODE SUN/OPT", "")).strip()[:2]
+        g_type = _MARCOLIN_MI_TYPE_MAP.get(type_code, "")
+        if not g_type and type_code and type_code.lower() not in ("", "na"):
+            unmapped.add(f"Marcolin(MI) -> Glasses_type: CODE SUN/OPT '{type_code}'")
+        out["Glasses_type"] = g_type
+        is_sun = g_type == "Sunglasses"
+
+        # ---- Dimensions ----
+        size = _marcolin_round(src.get("SIZE"))
+        out["Glasses_size_lens_width"] = size
+        out["Combination"] = size
+        out["Glasses_size_bridge"] = _marcolin_round(src.get("NOSE-BRIDGE SIZE"))
+        out["Glasses_size_temple_length"] = _marcolin_round(src.get("TEMPLE LENGHT"))
+        out["Glasses_size_lens_height"] = _marcolin_round(src.get("B Measurement"))
+
+        # ---- Material (front drives it; "ACETATE / METAL" takes the first
+        #      word, as in the other Marcolin handlers) ----
+        front_mat = str(src.get("DESCRIPTION FRONT", "")).strip().upper()
+        mat_key = front_mat.split("/")[0].strip()
+        material = _MARCOLIN_MATERIAL_MAP.get(mat_key, "")
+        if not material and mat_key and mat_key not in ("", "NO FRONT", "NONE", "NAN"):
+            unmapped.add(f"Marcolin(MI) -> Glasses_main_material: '{front_mat}'")
+            material = front_mat  # keep original, flag for review
+        out["Glasses_main_material"] = material
+
+        # ---- Shape ----
+        shape = str(src.get("FORM DESCRIPTION", "")).strip()
+        if not shape or shape.upper() == "NAN":
+            out["Glasses_shape"] = ""
+        elif shape.upper() in _MARCOLIN_SHAPE_MAP:
+            out["Glasses_shape"] = _MARCOLIN_SHAPE_MAP[shape.upper()]
+        else:
+            out["Glasses_shape"] = shape
+            unmapped.add(f"Marcolin(MI) -> Glasses_shape: '{shape}'")
+
+        # ---- Rim ----
+        rim = str(src.get("RIM DESCRIPTION", "")).strip()
+        if not rim or rim.upper() == "NAN":
+            out["Glasses_frame_type"] = ""
+        elif rim.upper() in _MARCOLIN_RIM_MAP:
+            out["Glasses_frame_type"] = _MARCOLIN_RIM_MAP[rim.upper()]
+        else:
+            out["Glasses_frame_type"] = rim
+            unmapped.add(f"Marcolin(MI) -> Glasses_frame_type: '{rim}'")
+
+        # ---- Flex ----
+        out["Glasses_other_info"] = (
+            "Flex" if str(src.get("FLEX", "")).strip().upper() == "SI" else "")
+
+        # ---- Gender ----
+        g = str(src.get("GENDER", "")).strip().upper()
+        if not g or g == "NAN":
+            out["Glasses_gendre"] = ""
+        elif g in _MARCOLIN_GENDER_MAP:
+            out["Glasses_gendre"] = _MARCOLIN_GENDER_MAP[g]
+        else:
+            out["Glasses_gendre"] = g
+            unmapped.add(f"Marcolin(MI) -> Glasses_gendre: '{g}'")
+
+        # ---- Colours (one combined column; see _marcolin_mi_colours) ----
+        frame_raw, lens_raw = _marcolin_mi_colours(src.get("COLOR DESCRIPTION"), is_sun)
+        # "gradient brown" is an effect plus a colour; peel the effect off so
+        # the classifier sees a colour it knows.
+        lens_gradient = "gradient" in lens_raw.lower()
+        if lens_gradient:
+            lens_raw = re.sub(r"\bgradient\b", "", lens_raw, flags=re.I).strip()
+        if frame_raw:
+            res = classify_color(frame_raw, "frame")
+            out["Frame_Colour"] = res if res else frame_raw
+            if not res:
+                unmapped.add(f"Marcolin(MI) -> Frame_Colour: '{frame_raw}'")
+        else:
+            out["Frame_Colour"] = ""
+        if lens_raw:
+            res = classify_color(lens_raw, "lens")
+            out["Glasses_lens_Colour"] = res if res else lens_raw
+            if not res:
+                unmapped.add(f"Marcolin(MI) -> Glasses_lens_Colour: '{lens_raw}'")
+        else:
+            out["Glasses_lens_Colour"] = ""
+
+        # ---- Filter category (+ polarized flag), sunglasses only ----
+        filt, pol_from_filter = _marcolin_filter_category(src.get("LENSES CATEGORY"))
+        raw_filt = str(src.get("LENSES CATEGORY", "")).strip()
+        if is_sun:
+            if not filt and raw_filt and raw_filt.lower() != "nan":
+                # House rule: never leave it empty - show the original so it is
+                # visible and fixable rather than silently blank.
+                filt = raw_filt
+                unmapped.add(f"Marcolin(MI) -> Sunglasses_filter: '{raw_filt}'")
+            out["Sunglasses_filter"] = filt
+
+        # ---- Lens effect ----
+        eff = set()
+        lens_desc = str(src.get("LENSES DESCRIPTION", "")).strip().upper()
+        if "POLAR" in lens_desc or pol_from_filter:
+            eff.add("Polarized")
+        if "PHOTOCROM" in lens_desc or "PHOTOCHROM" in lens_desc:
+            eff.add("Photochromic")
+        if lens_gradient:
+            eff.add("Gradient")
+        out["Glasses_lens_effect"] = "|".join(sorted(eff))
+
+        # ---- RX ----
+        out["SunGlasses_RX_lenses"] = (
+            "Yes" if str(src.get("REXABLE", "")).strip().upper() == "SI" else "")
+
+        # ---- Origin ----
+        origin = str(src.get("ORIGIN", "")).strip().upper()
+        out["Item_origin_country"] = _MARCOLIN_ORIGIN_MAP.get(
+            origin, origin if origin and origin != "NAN" else "")
+
+        # ---- Weight (kg -> g) ----
+        nw = str(src.get("NET WEIGHT", "")).strip()
+        if nw and nw.lower() != "nan":
+            try:
+                out["Glasses_weight_g"] = str(round(float(nw.replace(",", ".")) * 1000))
+            except Exception:
+                pass
+
+        # ---- Model + colour code (MODEL is the style, SKU the colour) ----
+        model = str(src.get("MODEL", "")).strip()
+        sku = str(src.get("SKU", "")).strip()
+        color_code = "" if sku.lower() == "nan" else sku
+        out["Extracted_Model"] = model
+        out["Extracted_Color"] = color_code
+        out["Glasses_color_code"] = color_code
+
+        # ---- Clip-on (two columns; "Not Included" is still a clip-on item) ----
+        clip = ""
+        clipon = str(src.get("CLIPON", "")).strip().lower()
+        clipin = str(src.get("CLIPIN", "")).strip().lower()
+        if clipon.startswith("clipon") or clipin.startswith("clipin"):
+            clip = "Sun clip-on"
+        out["Extracted_Clip_on"] = clip
+        out["Clip_on_Alert"] = bool(clip and "Polarized" in out["Glasses_lens_effect"])
+
+        # ---- Assembled name ----
+        name_parts = [p for p in (brand, model, color_code) if p and p.lower() != "nan"]
         out["Assembled_Name"] = " ".join(name_parts)
 
         out["Producing_company"] = "Marcolin"
@@ -1501,6 +1730,11 @@ def load_single_catalog(mfg_name, config_settings, file_path):
     # "marcolin"; detected by its signature columns.
     if mfg_name == "marcolin" and {"MAIN MATERIAL", "SIZE/COLOR", "MADE IN"}.issubset(set(df.columns)):
         return _load_marcolin_tomford(df)
+
+    # Marcolin "MATERIAL INFO" export (3rd format, Sept 2026): its own
+    # vocabulary, brand as a two-letter code, type in CODE SUN/OPT.
+    if mfg_name == "marcolin" and {"CODE SUN/OPT", "RIM DESCRIPTION", "EAN/UPC CODE"}.issubset(set(df.columns)):
+        return _load_marcolin_mi(df)
 
     # Safilo catalog export (2nd Safilo format: optical frames / opt+clip-on /
     # sunglasses) — detected by its signature columns. Additive top-up handler.
