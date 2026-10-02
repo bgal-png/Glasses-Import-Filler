@@ -81,6 +81,9 @@ def process_catalogue(engine, mfg: str, file_path: str, progress: ProgressFn = N
     _tick(progress, 0.6, "Expanding by brand…")
     expanded = pd.concat([df.copy() for _ in config["brands"]], ignore_index=True) \
         if config.get("brands") else df
+    # pandas happens to carry .attrs through concat today; re-attach it so the
+    # fill_only_if_empty rule cannot be lost silently by a future pandas.
+    expanded.attrs = dict(df.attrs)
 
     _tick(progress, 0.75, "Upserting into master_catalog…")
     message = perform_upsert(expanded, engine)

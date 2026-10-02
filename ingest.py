@@ -564,6 +564,12 @@ def _load_marcolin_mi(df):
         rows.append(out)
 
     result_df = pd.DataFrame(rows)
+    # This export has one combined COLOR DESCRIPTION where the older Marcolin
+    # master had separate FRONT and TEMPLE colours, so our Frame_Colour is a
+    # single colour where the catalogue may already hold a two-tone value
+    # ("Blue|Havana"). Fill it for products we do not have yet, never overwrite
+    # a colour already stored - see perform_upsert.
+    result_df.attrs["fill_only_if_empty"] = ("Frame_Colour",)
     return result_df, unmapped, skipped
 
 
@@ -2263,6 +2269,20 @@ def perform_upsert(new_data_df, engine):
 
         common_indices = new_data_df.index.intersection(existing_df.index)
         updated_count = len(common_indices)
+
+        # Columns a format flagged as lower-fidelity than what we may already
+        # hold: keep them for products we have never seen, but never let them
+        # overwrite a stored value. DataFrame.update ignores NaN, so blanking
+        # the incoming cell is what "leave the existing one alone" looks like.
+        soft = tuple(getattr(new_data_df, "attrs", {}).get("fill_only_if_empty", ()))
+        for col in soft:
+            if col not in new_data_df.columns or col not in existing_df.columns:
+                continue
+            current = existing_df[col].reindex(common_indices)
+            already_set = current.notna() & (current.astype(str).str.strip() != "")
+            keep = common_indices[already_set.to_numpy()]
+            if len(keep):
+                new_data_df.loc[keep, col] = float("nan")
 
         existing_df.update(new_data_df)
 

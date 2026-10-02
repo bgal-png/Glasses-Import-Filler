@@ -196,6 +196,9 @@ def main(mfg: str) -> int:
                 else:
                     # Mirror app_admin's "expand by brands" behavior
                     expanded = pd.concat([df.copy() for _ in config["brands"]], ignore_index=True)
+                    # pandas happens to carry .attrs through concat today; re-attach
+                    # it so the fill_only_if_empty rule cannot be lost silently.
+                    expanded.attrs = dict(df.attrs)
                     _log(f"  After brand expansion: {len(expanded):,} rows")
                     _log(f"  Upserting to master_catalog…")
                     msg = perform_upsert(expanded, engine)
